@@ -573,14 +573,19 @@ class Handler(BaseHTTPRequestHandler):
                     status_label = 'Account check failed; retrying'
                 elif exchange_check_pending:
                     status_label = exchange_status
-                elif snapshot.get('nextPurchaseStatus') == 'Waiting for deposit':
-                    status_label = 'Waiting for deposit'
+                elif not balance_matches:
+                    status_label = 'Waiting for account check'
+                elif str(snapshot.get('nextPurchaseStatus','')).startswith(('Waiting','Submitting','Checking')):
+                    status_label = snapshot['nextPurchaseStatus']
                 elif not self.settings.get('live'):
                     status_label = 'Simulation'
                 else:
                     status_label = 'Bot active'
+                status_warning = worker_error or bool(self.worker and not self.worker.healthy())
+                status_tone = 'error' if status_warning else 'active' if status_label == 'Bot active' else 'waiting'
                 self._json(200, {
                     "botStatusLabel": status_label,
+                    "botStatusTone": status_tone,
                     "botStatusWarning": worker_error or bool(self.worker and not self.worker.healthy()),
                     "lastAccountCheckAt": checked_at,
                     "staleAfterSeconds": max(120, self.settings.get('check_interval_seconds',300)*2),

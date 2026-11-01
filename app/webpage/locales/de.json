@@ -90,8 +90,6 @@
   "Create account and continue": "Konto erstellen und fortfahren",
   "Back to dashboard": "Zum Dashboard",
   "Change the initial password before saving.": "Ändere das ursprüngliche Passwort vor dem Speichern.",
-  "Current password (for account changes)": "Aktuelles Passwort (bei Kontoänderungen)",
-  "New password (leave empty to keep)": "Neues Passwort (leer lassen zum Beibehalten)",
   "Confirm new password": "Neues Passwort bestätigen",
   "Leave API fields empty to keep saved keys for the current exchange.": "Lasse die API-Felder leer, um die gespeicherten Schlüssel der aktuellen Börse beizubehalten.",
   "Use balance and trading permissions; add withdrawal permission only if needed.": "Erlaube Guthabenabfragen und Handel; Auszahlungen nur bei Bedarf.",
@@ -412,5 +410,7 @@
   "Requires live trading. The saved threshold is retained.": "Erfordert echten Handel. Die gespeicherte Schwelle bleibt erhalten.",
   "Enable automatic withdrawals to edit this threshold.": "Aktiviere automatische Auszahlungen, um diese Schwelle zu bearbeiten.",
   "Automatic withdrawals require live trading; you can configure them now.": "Automatische Auszahlungen erfordern echten Handel; du kannst sie bereits konfigurieren.",
-  "BTC price: {price}. BTC per purchase: {quantity}. Threshold: {threshold}. Assumes unchanged price and fees. Monthly deposit: {amount}. Deposit: day {day}, {time} ({zone}).": "BTC-Kurs: {price}. BTC pro Kauf: {quantity}. Schwelle: {threshold}. Setzt unveränderten Kurs und unveränderte Gebühren voraus. Monatliche Einzahlung: {amount}. Einzahlung: Tag {day}, {time} ({zone})."
+  "BTC price: {price}. BTC per purchase: {quantity}. Threshold: {threshold}. Assumes unchanged price and fees. Monthly deposit: {amount}. Deposit: day {day}, {time} ({zone}).": "BTC-Kurs: {price}. BTC pro Kauf: {quantity}. Schwelle: {threshold}. Setzt unveränderten Kurs und unveränderte Gebühren voraus. Monatliche Einzahlung: {amount}. Einzahlung: Tag {day}, {time} ({zone}).",
+  "Current password": "Aktuelles Passwort",
+  "New password": "Neues Passwort"
 }

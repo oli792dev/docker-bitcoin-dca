@@ -28,6 +28,9 @@ function renderPurchaseCountdown(){
  renderCountdown("withdrawalCountdown",estimatedWithdrawalTimestamp);
  if(estimatedWithdrawalTimestamp===null)$("withdrawalCountdown").textContent=t("Not estimated");
 }
+function updateStatusLight(tone){
+ $('botStatusLight').className='status-light status-'+(['active','waiting','error'].includes(tone)?tone:'waiting');
+}
 async function refreshPurchaseSchedule(){
  const request=++scheduleRequest;sectionFeedback("scheduleFeedback","Updating schedule…");
  try{
@@ -37,7 +40,7 @@ async function refreshPurchaseSchedule(){
   const schedule=await response.json();if(request!==scheduleRequest)return;const target=Date.parse(schedule.nextPurchaseAt),serverTime=Date.parse(schedule.serverTime);
   scheduleClockOffset=Number.isFinite(serverTime)?serverTime-Date.now():0;
   $('botStatusLabel').textContent=t(schedule.botStatusLabel||'Bot active');
-  $('botStatusLabel').classList.toggle('stale',Boolean(schedule.botStatusWarning));
+  updateStatusLight(schedule.botStatusTone||(schedule.botStatusWarning?'error':'waiting'));
   const detail=schedule.forecastDetails;
   $('forecastProgress').textContent=detail?t('About {btc} BTC · {buys} purchases remaining'.replace('{btc}',Number(detail.remainingBtc).toLocaleString(locale,{maximumFractionDigits:8})).replace('{buys}',detail.remainingPurchases)):'';
   $('forecastAssumptions').hidden=!detail;
@@ -72,7 +75,7 @@ async function refreshPurchaseSchedule(){
   $("withdrawalCountdownStatus").textContent=t(estimatedWithdrawalTimestamp===null?$("estimatedWithdrawalStatus").textContent:(schedule.estimatedWithdrawalStatus||"Estimate at the current BTC price, deposit and purchase interval"));
   renderPurchaseCountdown();
   sectionFeedback("scheduleFeedback","");
- }catch(e){if(request===scheduleRequest){$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");sectionFeedback("scheduleFeedback","Could not refresh the schedule. Previous values are still shown.",true)}}
+ }catch(e){if(request===scheduleRequest){$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");updateStatusLight("error");sectionFeedback("scheduleFeedback","Could not refresh the schedule. Previous values are still shown.",true)}}
 }
 let monthlyDepositDirty=false,monthlyDepositSaving=false;
 $("monthlyDeposit").addEventListener("input",()=>{monthlyDepositDirty=true});

@@ -141,6 +141,7 @@ class ScheduleBalanceTests(unittest.TestCase):
         with patch.object(web_ui,'read_dashboard_snapshot',return_value={}),patch.object(web_ui.time,'monotonic',return_value=100):
             handler.do_GET()
         self.assertEqual(handler._json.call_args.args[1]['nextPurchaseStatus'],'Waiting for startup delay')
+        self.assertEqual(handler._json.call_args.args[1]['botStatusTone'],'waiting')
         self.assertEqual(handler._json.call_args.args[1]['estimatedWithdrawalStatus'],'Waiting for startup delay')
         with patch.object(web_ui,'read_dashboard_snapshot',return_value={}),patch.object(web_ui.time,'monotonic',return_value=200):
             handler.do_GET()
@@ -155,6 +156,7 @@ class ScheduleBalanceTests(unittest.TestCase):
         with patch.object(web_ui,'read_dashboard_snapshot',return_value=snapshot):handler.do_GET()
         data=handler._json.call_args.args[1]
         self.assertEqual(data['botStatusLabel'],'Account check failed; retrying')
+        self.assertEqual(data['botStatusTone'],'error')
         self.assertTrue(data['botStatusWarning'])
         self.assertEqual(data['lastAccountCheckAt'],snapshot['updatedAt'])
         self.assertEqual(data['staleAfterSeconds'],600)

@@ -222,3 +222,6 @@ console.log('German dashboard passed: labels, pagination, numbers and stable led
 
 
 assert(!html.includes('id="accountFreshness"'));assert(html.indexOf('class="bot-status"')<html.indexOf('id="openSettings"'));assert(html.includes('Status:</span>'));
+
+for(const tone of ['active','waiting','error']){vm.runInContext(`updateStatusLight('${tone}')`,germanContext);assert.equal(germanElements.botStatusLight.className,'status-light status-'+tone)}
+vm.runInContext("updateStatusLight('unexpected')",germanContext);assert.equal(germanElements.botStatusLight.className,'status-light status-waiting');
