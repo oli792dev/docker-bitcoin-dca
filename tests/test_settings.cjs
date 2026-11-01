@@ -22,9 +22,9 @@ vm.runInNewContext(script,context);
 function allText(el){return el.textContent+' '+el.children.map(allText).join(' ')}
 async function event(id,name='click'){if(id==='confirm'&&!elements.passwordConfirmation.hidden&&!elements.sensitivePassword.value)elements.sensitivePassword.value='current-long-password';return elements[id].listeners[name]({preventDefault(){},submitter:elements[id]})}
 (async()=>{
- assert.equal(elements.settingsTabs.children.length,4);assert.equal(elements.botConfiguration.hidden,false);assert.equal(elements.dashboardOptions.hidden,true);
+ assert.equal(elements.settingsTabs.children.length,4);assert.deepEqual(elements.settingsTabs.children.map(x=>x.textContent),['Bot Configuration','Exchange','Dashboard','Login']);assert.equal(elements.liveTradingCard.parentElement,elements.purchaseFields);assert.equal(elements.automaticWithdrawalsCard.parentElement,elements.purchaseFields);assert.equal(elements.botConfiguration.hidden,false);assert.equal(elements.dashboardOptions.hidden,true);
  elements.buy_amount.value='.001';await event('dashboardOptionsTab');assert.equal(elements.botConfiguration.hidden,true);assert.equal(elements.dashboardOptions.hidden,false);assert.equal(elements.buy_amount.value,'.001');
- elements.dashboardOptionsTab.listeners.keydown({key:'ArrowRight',preventDefault(){}});assert.equal(elements.exchangeConnection.hidden,false);assert.equal(elements.exchangeConnectionTab.focused,true);
+ elements.botConfigurationTab.listeners.keydown({key:'ArrowRight',preventDefault(){}});assert.equal(elements.exchangeConnection.hidden,false);assert.equal(elements.exchangeConnectionTab.focused,true);
  elements.exchangeConnectionTab.listeners.keydown({key:'End',preventDefault(){}});assert.equal(elements.dashboardCredentials.hidden,false);
  elements.dashboardCredentialsTab.listeners.keydown({key:'Home',preventDefault(){}});assert.equal(elements.botConfiguration.hidden,false);
  elements.botConfiguration.contains=target=>target===elements.deposit_time;await event('dashboardOptionsTab');elements.settingsForm.listeners.invalid({target:elements.deposit_time});assert.equal(elements.botConfiguration.hidden,false);
