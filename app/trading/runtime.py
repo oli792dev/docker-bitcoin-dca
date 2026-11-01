@@ -273,6 +273,14 @@ class Runtime:
                 LOG.info('Expected monthly deposit saved: amount=%s %s; forecast only; purchase schedule unchanged', amount or 'unset', values['quote'])
             return {'monthlyDeposit': amount}
 
+    def save_report_from(self, payload):
+        if not isinstance(payload,dict) or set(payload)!={'from'}:
+            raise ValueError('Invalid report start request.')
+        if self.worker.stop.is_set(): raise ValueError('Container is stopping; try again later.')
+        value=self.store.save_report_from(payload['from'])
+        LOG.info('Period Analysis start date saved: from=%s; purchase schedule unchanged',value)
+        return {'from':value}
+
     def test_connection(self, payload):
         # Read-only and serialized so a connection test cannot race a financial action.
         with self.lock:

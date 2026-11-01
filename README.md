@@ -54,7 +54,7 @@ Expected monthly deposit affects only the withdrawal forecast; it does not trans
 
 ## Reports and Parqet
 
-Period Analysis shows purchases, confirmed fiat deposits, withdrawals and fees. From defaults to the first container-start timestamp saved in the volume; To resets to now. Existing volumes establish this timestamp on their first start with this feature.
+Period Analysis shows purchases, confirmed fiat deposits, withdrawals and fees. From initially uses the volume-saved first container start; subsequent changes are also volume-saved. To resets to now. Existing volumes establish this timestamp on their first start with this feature.
 
 The Parqet CSV exports one consolidated Buy row for the complete cycle after the previous confirmed withdrawal through the last confirmed withdrawal in the selected range. It uses actual purchase costs and trading fees in EUR and net withdrawn BTC after network fees. Deposits, later purchases and Simulation activity are excluded. A real purchase and confirmed withdrawal are required. Re-importing an export can create duplicates.
 

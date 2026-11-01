@@ -11,7 +11,7 @@ class Element{
  set innerHTML(v){this.children=[]} addEventListener(event,handler){this.handlers[event]=handler}
 }
 const elements={},get=id=>{assert(!["balance","balanceValue"].includes(id),"Removed portfolio element must not be accessed");return elements[id]??=new Element()};get('pageSize').value=html.match(/<option selected>(\d+)<\/option>/)[1];
-get('firstStartedAt').value='2020-10-01T12:34:56Z';
+get('reportFrom').value='2020-10-01T12:34:56Z';
 const records=Array.from({length:45},(_,i)=>({activityId:String(i),datetime:'2026-10-22T12:00:00Z',type:'Buy',identifier:'BTC',shares:'.001',currency:i<22?'EUR':'USD',price:i<22?'80000':'100000',amount:i<22?'80':'100',fee:i<22?'.2':'.25'}));
 const stored=new Map([['bitcoinDcaMonthlyDeposit','999']]);let expiryCallback;let configuredMonthlyDeposit='',forecastSaveFails=false;const forecastSaves=[];
 const requests=[];let waitingDeposit=false,reportFails=false,scheduleFails=false,checks=0,eurOnly=false,priceUnavailable=false,invalidUsdRate=false,withdrawalUnavailable=false,configuredDisplayCurrency="EUR",withdrawalExchange="KRAKEN",withdrawalTarget="Example wallet",withdrawalNetwork="BTC";
@@ -19,6 +19,7 @@ const response=data=>({ok:true,json:async()=>data});
 const context={document:{getElementById:get,createElement:()=>new Element()},localStorage:{getItem:key=>stored.get(key)??null,setItem:(key,value)=>stored.set(key,value)},Intl,Date,URL,console,alert(){throw Error('Withdrawal must not use a browser alert')},confirm:()=>false,setInterval(){},setTimeout(fn,ms){if(ms===120000){expiryCallback=fn;return 1}queueMicrotask(fn)},clearTimeout(){},window:{location:{reload(){throw Error('Unexpected reload')}}},fetch:async(url,options)=>{
  requests.push(url);const parsed=new URL(url,'http://example.test');
  if(parsed.pathname==='/api/schedule'&&scheduleFails)throw Error('Schedule offline');
+ if(parsed.pathname==='/api/settings/report-period')return response({from:JSON.parse(options.body).from});
  if(parsed.pathname==='/api/settings/forecast'){const data=JSON.parse(options.body);forecastSaves.push(data);if(forecastSaveFails)return {ok:false,json:async()=>({error:'Forecast save failed'})};configuredMonthlyDeposit=data.monthlyDeposit;return response({monthlyDeposit:configuredMonthlyDeposit})}
  if(parsed.pathname==='/api/schedule')return response({expectedMonthlyDeposit:configuredMonthlyDeposit,quote:'EUR',exchange:'KRAKEN',quoteBalance:'72.7719',balanceUpdatedAt:'2026-10-29T12:00:00Z',nextPurchaseAt:waitingDeposit?null:new Date(Date.now()+3600000).toISOString(),nextPurchaseStatus:waitingDeposit?'Waiting for deposit':'Scheduled',serverTime:new Date().toISOString(),timezone:'Europe/Berlin'});
  if(parsed.pathname==='/api/withdrawals')return response([{timestamp:Date.parse('2026-10-20T12:00:00Z')},{timestamp:Date.parse('2026-10-23T12:00:00Z')}]);
@@ -120,12 +121,17 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  get('pageSize').value='20';get('start').value='2026-10-01T00:00';get('end').value='2026-10-29T12:00';get('interval').value='';
  vm.runInContext('saveReportView()',context);
  get('pageSize').value='10';get('start').value='';get('end').value='';vm.runInContext('restoreReportView()',context);
- assert.equal(get('pageSize').value,'20');assert.equal(get('start').value,vm.runInContext('localInput(Date.parse($("firstStartedAt").value))',context));
+ assert.equal(get('pageSize').value,'20');assert.equal(get('start').value,vm.runInContext('localInput(Date.parse($("reportFrom").value))',context));
  assert.equal(get('end').value,vm.runInContext('localInput(Date.now())',context),'Saved end dates must not override the current time');
  stored.set('bitcoinDcaReportView',JSON.stringify({interval:'1,2',start:'2026-10-01T00:00',end:'2026-10-02T00:00',pageSize:'20'}));
  vm.runInContext('restoreReportView()',context);
  assert.equal(get('interval').value,'');assert.equal(get('end').value,vm.runInContext('localInput(Date.now())',context));
 
+ get('start').value='2026-10-04T11:12:13';await get('start').handlers.change();
+ assert.equal(requests.at(-1),'/api/settings/report-period');
+ const persistedFrom=get('reportFrom').value;get('start').value='';vm.runInContext('restoreReportView()',context);
+ assert.equal(get('start').value,vm.runInContext('localInput(Date.parse($("reportFrom").value))',context));
+ assert.equal(Date.parse(persistedFrom),Date.parse('2026-10-04T11:12:13'));
  let decision=vm.runInContext('confirmWithdrawal({destination:"Example wallet",availableBtc:".01",feeBtc:".0001",netBtc:".0099"})',context);
  assert(get('confirmationDialog').open);assert.equal(get('confirmGross').textContent,'0.01 BTC');assert.equal(get('confirmFee').textContent,'0.0001 BTC');assert.equal(get('confirmNet').textContent,'0.0099 BTC');
  get('confirmationDialog').close('cancel');assert.equal(await decision,false);

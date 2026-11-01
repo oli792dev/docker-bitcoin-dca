@@ -238,7 +238,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.runtime:
             self._json(404, {'error': 'Settings unavailable.'})
             return
-        operation = {'/api/setup/account': 'Initial account creation', '/api/settings/test': 'Exchange connection test', '/api/settings': 'Settings update', '/api/settings/forecast': 'Forecast settings update'}[path]
+        operation = {'/api/setup/account': 'Initial account creation', '/api/settings/test': 'Exchange connection test', '/api/settings': 'Settings update', '/api/settings/forecast': 'Forecast settings update', '/api/settings/report-period': 'Period Analysis preferences update'}[path]
         if path != '/api/setup/account' and not self._require_authentication():
             LOG.info('%s rejected: authentication required', operation)
             return
@@ -257,6 +257,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(b'{}')
             elif path == '/api/settings/forecast':
                 self._json(200, self.runtime.save_forecast_deposit(payload))
+            elif path == '/api/settings/report-period':
+                self._json(200, self.runtime.save_report_from(payload))
             elif path == '/api/settings/test':
                 self._json(200, self.runtime.test_connection(payload))
             else:
@@ -295,8 +297,8 @@ class Handler(BaseHTTPRequestHandler):
         if not settings.get('parqet_enabled', True): hidden += ['#download', '#parqet-actions', '#exportMessage', '#parqet-note', '#manual-export-note']
         if not settings.get('withdrawals_enabled', False): hidden += ['#automatic-withdrawal-note']
         styles = '<style>' + ','.join(hidden) + '{display:none!important}</style>' if hidden else ''
-        first_start = getattr(self.runtime.store, 'first_started_at', '') if self.runtime else ''
-        page = HTML.replace('__FIRST_STARTED_AT__', html.escape(first_start, quote=True)).replace('</head>', styles + '</head>')
+        first_start = self.runtime.store.report_from() if self.runtime and hasattr(self.runtime.store,'report_from') else ''
+        page = HTML.replace('__REPORT_FROM__', html.escape(first_start, quote=True)).replace('</head>', styles + '</head>')
         if not settings.get('withdrawals_enabled', False):
             page = page.replace('Schedule and automatic withdrawal</strong>', 'Purchase schedule</strong>')
         if not settings.get('parqet_enabled', True):
@@ -309,7 +311,7 @@ class Handler(BaseHTTPRequestHandler):
             from app.core.configuration import runtime_settings
             self.settings = runtime_settings(self.runtime.store.snapshot()['settings'])
         parsed = urlparse(self.path)
-        if parsed.path in ('/api/setup/account', '/api/settings', '/api/settings/test', '/api/settings/forecast'):
+        if parsed.path in ('/api/setup/account', '/api/settings', '/api/settings/test', '/api/settings/forecast', '/api/settings/report-period'):
             self._settings_post(parsed.path)
             return
         if parsed.path == "/login":

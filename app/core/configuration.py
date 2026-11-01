@@ -12,6 +12,7 @@ from app.data.storage import write_json_atomic, installation_started_at
 import threading
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 LOG = logging.getLogger('bitcoin-dca.settings')
@@ -150,6 +151,27 @@ class ConfigStore:
 
     def snapshot(self):
         with self.lock: return copy.deepcopy(self.data)
+
+    def report_from(self):
+        with self.lock:
+            path=self.path.with_name('report-preferences.json')
+            if not path.exists(): return self.first_started_at
+            value=json.loads(path.read_text())['from']
+            parsed=datetime.fromisoformat(value)
+            if parsed.tzinfo is None: raise ValueError('Invalid report start date.')
+            return value
+
+    def save_report_from(self, value):
+        try:
+            if not isinstance(value,str): raise ValueError()
+            parsed=datetime.fromisoformat(value.replace('Z','+00:00'))
+            if parsed.tzinfo is None: raise ValueError()
+            normalized=parsed.astimezone(timezone.utc).isoformat(timespec='seconds')
+        except (ValueError,TypeError,OverflowError):
+            raise ValueError('Invalid report start date.') from None
+        with self.lock:
+            write_json_atomic(self.path.with_name('report-preferences.json'),{'from':normalized})
+        return normalized
 
     def public(self):
         data = self.snapshot()

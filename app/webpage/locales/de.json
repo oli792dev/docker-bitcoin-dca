@@ -417,5 +417,8 @@
   "Buy (Simulation)": "Kauf (Simulation)",
   "No real bot purchase was found since the previous confirmed withdrawal. The Parqet export requires a real purchase and a withdrawal; purchases made in Simulation are excluded.": "Seit der vorherigen bestätigten Auszahlung wurde kein echter Bot-Kauf gefunden. Der Parqet-Export erfordert einen echten Kauf und eine Auszahlung; Simulationen werden ausgeschlossen.",
   "Deposits": "Einzahlungen",
-  "{count} deposits": "{count} Einzahlungen"
+  "{count} deposits": "{count} Einzahlungen",
+  "Could not save report start date.": "Das Startdatum des Berichts konnte nicht gespeichert werden.",
+  "Invalid report start date.": "Ungültiges Startdatum des Berichts.",
+  "Invalid report start request.": "Ungültige Anfrage für das Startdatum des Berichts."
 }

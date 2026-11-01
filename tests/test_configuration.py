@@ -471,6 +471,26 @@ class ConfigurationTests(unittest.TestCase):
         self.assertNotIn('</script><script>alert(1)', page)
         self.assertIn('\\u003c/script', page)
 
+    def test_report_start_is_volume_saved_without_changing_settings_or_worker(self):
+        self.ready()
+        first=self.store.first_started_at
+        self.assertEqual(self.store.report_from(),first)
+        self.api_factory.reset_mock();self.app.worker.reconfigure.clear()
+        settings=self.store.snapshot()
+        saved=self.app.save_report_from({'from':'2026-10-01T12:34:56+02:00'})
+        self.assertEqual(saved,{'from':'2026-10-01T10:34:56+00:00'})
+        reloaded=config.ConfigStore(self.store.path)
+        self.assertEqual(reloaded.report_from(),saved['from'])
+        self.assertEqual(reloaded.first_started_at,first)
+        self.assertEqual(self.store.snapshot(),settings)
+        self.api_factory.assert_not_called();self.assertFalse(self.app.worker.reconfigure.is_set())
+        for value in ('invalid','2026-10-01T12:34',None):
+            with self.assertRaises(ValueError):self.app.save_report_from({'from':value})
+        self.assertEqual(reloaded.report_from(),saved['from'])
+        with patch.object(config,'write_json_atomic',side_effect=OSError('disk full')):
+            with self.assertRaises(OSError):self.app.save_report_from({'from':'2026-10-02T00:00:00Z'})
+        self.assertEqual(reloaded.report_from(),saved['from'])
+
     def test_forecast_deposit_starts_empty_and_is_saved_in_volume_without_exchange_calls(self):
         self.ready()
         self.assertEqual(self.store.snapshot()['settings']['expected_monthly_deposit'],'')

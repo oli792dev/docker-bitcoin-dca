@@ -111,13 +111,27 @@ function sectionFeedback(id,message,error=false){const el=$(id);el.textContent=t
 function readReportView(){try{return JSON.parse(localStorage.getItem("bitcoinDcaReportView")||"null")}catch(e){return null}}
 function saveReportView(){try{localStorage.setItem("bitcoinDcaReportView",JSON.stringify({pageSize:$("pageSize").value}))}catch(e){}}
 function restoreReportView(){
- const now=Date.now(),first=Date.parse($("firstStartedAt").value);
+ const now=Date.now(),first=Date.parse($("reportFrom").value);
  $("start").value=localInput(Number.isFinite(first)?first:now-1000);
  $("end").value=localInput(now);$("interval").value="";
  const saved=readReportView();if(!saved||typeof saved!=="object")return;
  if(["5","10","20","50","100","500","1000"].includes(String(saved.pageSize)))$("pageSize").value=String(saved.pageSize);
 }
 
+let reportFromSave=Promise.resolve();
+function saveReportFrom(){
+ const timestamp=parseInput($('start'));
+ if(!Number.isFinite(timestamp))return Promise.resolve();
+ const value=new Date(timestamp).toISOString();
+ reportFromSave=reportFromSave.catch(()=>{}).then(async()=>{
+  const response=await fetch('/api/settings/report-period',{method:'POST',
+   headers:{'Content-Type':'application/json','X-DCA-Action':'settings'},body:JSON.stringify({from:value}),keepalive:true});
+  const result=await response.json();
+  if(!response.ok)throw new Error(result.error||'Could not save report start date.');
+  $('reportFrom').value=result.from;
+ }).catch(error=>sectionFeedback('intervalFeedback','Could not save report start date.',true));
+ return reportFromSave;
+}
 let reportRequest=0,scheduleRequest=0;
 function knownNumber(value){return value!==null&&value!==undefined&&String(value).trim()!==""&&Number.isFinite(Number(value))}
 function activityBtc(value){return knownNumber(value)?btc(value):"—"}
@@ -145,8 +159,8 @@ async function loadIntervals(){
  for(let i=1;i<withdrawals.length;i++){const a=withdrawals[i-1],b=withdrawals[i],o=document.createElement("option");o.value=a.timestamp+","+b.timestamp;o.textContent=t(dateLabel(a.timestamp)+" → "+dateLabel(b.timestamp));select.appendChild(o)}
  select.value="";
 }
-$("interval").addEventListener("change",()=>{applySelectedInterval();saveReportView();currentPage=1;loadAnalytics()});
-["start","end"].forEach(id=>$(id).addEventListener("change",()=>{$("interval").value="";saveReportView()}));
+$("interval").addEventListener("change",()=>{applySelectedInterval();saveReportFrom();saveReportView();currentPage=1;loadAnalytics()});
+["start","end"].forEach(id=>$(id).addEventListener("change",()=>{$("interval").value="";saveReportView();if(id==="start")return saveReportFrom()}));
 function activityStatus(row){
  if(row.type==="Deposit")return row.depositStatus==="confirmed"?{label:"Confirmed ✓",tone:"confirmed"}:{label:"—",tone:"muted"};
  if(row.simulated)return {label:"Simulation",tone:"muted"};
@@ -330,7 +344,7 @@ refreshPurchaseSchedule();
 
 (async()=>{
  try{await loadIntervals()}catch(e){
-  $("interval").value="";$("start").value=localInput(Date.parse($("firstStartedAt").value)||Date.now()-1000);$("end").value=localInput(Date.now());
+  $("interval").value="";$("start").value=localInput(Date.parse($("reportFrom").value)||Date.now()-1000);$("end").value=localInput(Date.now());
   sectionFeedback("intervalFeedback","Withdrawal intervals unavailable. Custom dates remain available.",true);
  }
  restoreReportView();await loadAnalytics();
