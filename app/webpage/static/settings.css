@@ -44,7 +44,7 @@ __DESIGN_CSS__
 .settings-active header{flex:0 0 auto;margin-bottom:16px}
 .settings-active #settingsForm{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;overflow:hidden;gap:12px}
 .settings-active #settingsNavigationHeading,.settings-active #settingsTabs,.settings-active .settings-footer{flex:0 0 auto}
-.settings-content{min-height:0;overflow-y:auto;overscroll-behavior-y:contain;scrollbar-width:thin;padding:2px 4px 4px;flex:1 1 auto}
+.settings-content{min-height:0;overflow-y:auto;overscroll-behavior-y:contain;scrollbar-width:thin;scrollbar-gutter:stable;padding:2px 16px 4px 4px;flex:1 1 auto}
 .settings-footer{display:grid;gap:8px;padding-top:12px;border-top:1px solid var(--line);background:var(--panel)}
 .settings-footer #status{padding:0;min-height:0;font-size:.85rem;max-height:96px;overflow:auto}
 @media(max-width:600px){.settings-active main{padding-top:12px;padding-bottom:max(12px,env(safe-area-inset-bottom))}.settings-active #settingsForm{gap:10px}.settings-footer{padding-top:10px}}
