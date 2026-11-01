@@ -316,7 +316,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn('id="connectionStatus"',page)
         self.app.save({'current_password':PASSWORD,'settings':CREDENTIALS})
         page=settings_ui.settings_page(self.store)
-        self.assertIn('<h2>Login Credentials</h2>',page)
+        self.assertIn('aria-label="Login credentials"',page)
         self.assertIn('id="dashboardOptions"',page)
         self.assertIn('role="switch"',page)
 
@@ -396,10 +396,11 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(self.app.settings['startup_last_buy_at'],last)
         self.assertTrue(self.app.settings['startup_schedule_log_pending'])
 
-    def test_credential_pages_have_independent_save_scope(self):
+    def test_credentials_are_directly_available_and_partial_save_preserves_settings(self):
         self.ready()
-        page=settings_ui.settings_page(self.store,embedded=True,editor='dashboard')
-        self.assertIn('"editor": "dashboard"',page)
+        page=settings_ui.settings_page(self.store,embedded=True)
+        self.assertIn('aria-label="Login credentials"',page)
+        self.assertNotIn('editDashboardCredentials',page)
         self.assertNotIn('Account recovery',page)
         before=self.store.snapshot()['settings']
         self.app.save({'current_password':PASSWORD,'settings':{},'username':'renamed','current_password':PASSWORD})

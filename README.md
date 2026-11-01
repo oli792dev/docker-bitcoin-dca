@@ -18,7 +18,7 @@ docker compose up -d --build
 
 Set `WEB_UI_TLS_HOSTS` in Compose or `.env` to the IP address/hostname you use, then open `https://<docker-host-ip>:6890`. Trust the generated local CA on your devices; see [HTTPS setup](docs/architecture.md#https-and-session-security). The setup wizard first creates your username and password (12+ characters), then configures the exchange, API access and purchases. The web UI is always enabled. Bot settings and credentials come only from the saved web configuration; new installations start in dry run.
 
-Settings, beside Log out, groups Bot Configuration, Dashboard, Exchange and Login Credentials into tabs. Credentials and API access/withdrawal targets have separate editors. Bot Configuration groups purchase settings and the withdrawal threshold, each with a short explanation. Trading and dashboard groups the live-trading, automatic/manual withdrawal and Parqet switches with display currency. Disabled features also hide their controls and notes.
+Settings, beside Log out, groups Bot Configuration, Exchange, Dashboard and Login into tabs. API access, withdrawal targets and login credentials are edited directly in their tabs. Bot Configuration contains live trading, purchases, deposit timing and automatic withdrawals. Dashboard contains appearance, display currency and optional manual withdrawal/Parqet controls. Sensitive changes require your current password.
 
 | Exchange | API permissions | Bitcoin withdrawal destination |
 | --- | --- | --- |
@@ -35,7 +35,7 @@ Compose manages the web server, volumes and restart policy. Docker settings are 
 
 ### Purchase schedule
 
-The bot refreshes the available fiat balance, BTC price and exchange order rules. Estimated order cost includes trading fees, without an additional planning buffer.
+The bot refreshes the available fiat balance, BTC price and exchange order rules. Estimated order cost includes trading fees, without an additional planning buffer. The last affordable purchase uses the remaining fiat budget, subject to exchange precision and actual execution costs.
 
 **Purchase interval = time from the last purchase to the next deposit date and time ÷ (affordable purchases + 1).**
 
@@ -58,7 +58,7 @@ Submitted withdrawals block further withdrawals until resolved. Uncertain Kraken
 The web UI is fully responsive on desktop, tablet and mobile. Card rows and tables scroll horizontally only when needed.
 
 - **Configuration:** exchange, purchase settings and withdrawal target.
-- **Schedule:** exchange balances, purchase timing and estimated automatic withdrawal timing. **Expected monthly deposit** is a volume-saved forecast assumption; it adds funds on each deposit day and recalculates future intervals using actual calendar months. It does not initiate deposits or change trading.
+- **Schedule:** exchange balances, purchase timing and estimated automatic withdrawal timing. **Expected monthly deposit** is a volume-saved forecast assumption; it adds funds on each deposit day and recalculates future intervals using actual calendar months. It does not initiate deposits or change trading. Forecasts continue while waiting for deposits; overdue deposits are assumed to arrive now and labeled accordingly.
 - **Period Analysis:** date filters, summary, activity status (confirmed, pending, failed or simulated) and CSV export. Activities cannot be deleted through the UI.
 
 Choose Light, Dark or Automatic / System in Settings. The interface supports keyboard navigation and reduced motion. View preferences are saved in this browser; the To field resets to now on page load. Refreshes preserve existing values; withdrawal confirmations show the destination, gross BTC, fee and net BTC.

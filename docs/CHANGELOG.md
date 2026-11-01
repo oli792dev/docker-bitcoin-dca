@@ -4,12 +4,16 @@ Release history based on the published [GitHub Releases](https://github.com/oli7
 
 ## Unreleased
 
+- Simplified Settings tabs: removed redundant panels/headings and made login credentials, exchange API access and withdrawal targets directly editable.
+- Increased the final affordable purchase to use remaining fiat while reserving estimated trading fees and respecting exchange precision.
+- Kept automatic withdrawal forecasts available while waiting for deposits; overdue funding assumptions are labeled explicitly.
+
 - Fixed final purchases slipping into the following month: affordable buys now fall before the deposit deadline and overdue residual funds remain due.
 - Added persistent deposit-wait tracking and Waiting for deposit in purchase date/countdown fields; incoming available funds resume purchasing.
 - Removed the 0.5% planning buffer while retaining fee estimates and exchange minimum checks.
 - Removed the redundant scheduled status suffix from the Next purchase heading.
 
-- Added keyboard-accessible Settings tabs while retaining draft inputs and separate credential editors.
+- Added keyboard-accessible Settings tabs while retaining draft inputs.
 - Added a persistent deposit time in the configured timezone; purchase intervals and withdrawal forecasts now use the full deposit date and time, including month-length and daylight-saving handling.
 
 - Added volume-saved Light, Dark and Automatic / System appearance in dashboard settings, applied consistently to sign-in, dashboard and settings.

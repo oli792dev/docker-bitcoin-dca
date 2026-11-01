@@ -5,24 +5,16 @@ import os
 import time
 import uuid
 from datetime import datetime, timezone, timedelta
-from decimal import Decimal, ROUND_CEILING, ROUND_DOWN
+from decimal import Decimal, ROUND_DOWN
 from zoneinfo import ZoneInfo
 from app.core.deposit_calendar import deposit_at
 import threading
-from functools import wraps
+from app.trading.account import ACCOUNT_LOCK as BOT_LOCK, serialized
+from app.core.planning import plan_order, purchase_interval, ceil_to_places
 from app.exchanges.exchange_errors import DefinitiveRejection, UncertainWithdrawalError
 from app.core.logging_utils import log_transition, clear_transition
 from app.trading.withdrawals import reconcile_withdrawals
 from app.trading.funding import observe_deposit
-
-BOT_LOCK = threading.RLock()
-
-def serialized(function):
-    @wraps(function)
-    def locked(*args, **kwargs):
-        with BOT_LOCK:
-            return function(*args, **kwargs)
-    return locked
 
 import requests
 from app.data.activity import append_activity_records, read_dashboard_snapshot, write_dashboard_snapshot, ledger_balance, withdrawal_records, write_json_atomic, get_activity_record, latest_real_buy
@@ -214,11 +206,6 @@ def persist_simulated_buy(api, settings, amount, price, quote_amount, estimated_
     }
     record = {"id": event_id, "simulated": True, "exchange": settings["exchange"], "row": row}
     return append_activity_records([record])
-
-
-def ceil_to_places(value, places):
-    quantum = Decimal(1).scaleb(-int(places))
-    return value.quantize(quantum, rounding=ROUND_CEILING)
 
 
 def maybe_withdraw_btc(api, state, settings, manual_request=None):
@@ -464,13 +451,6 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
     next_deposit, deposit_overdue, deposit_received = observe_deposit(state, settings, now, cycle_start, next_deposit, balance)
     if deposit_received:
         LOG.info('Available %s funding received after the expected deposit time; resuming purchases.', quote)
-    if balance_after_simulated_spend <= 0:
-        update_dashboard_snapshot(settings,balance,Decimal(str(read_dashboard_snapshot().get('price','0'))),exchange_btc)
-        update_dashboard_schedule(None,'Waiting for deposit')
-        if settings['live']: state['deposit_tracking']['waiting'] = True
-        save_state(state_path, state)
-        log_transition(LOG, api, 'purchase-wait', 'no-funds', logging.INFO, 'Waiting for available %s funds.', quote)
-        return check_interval
     # Fee lookup precedes the fresh market-rule check; it is cached by the adapter.
     fee_rate = cycle_data['fee_rate'] if cycle_data else api.estimate_taker_fee(symbol, Decimal(1))
     price = cycle_data['price'] if cycle_data else api.price(symbol)
@@ -482,20 +462,19 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
         log_transition(LOG, api, "purchase-wait", "market-" + str(market.get("status")), logging.INFO, "Market %s is %s; waiting.", symbol, market.get("status"))
         save_state(state_path, state)
         return check_interval
-    min_quote = Decimal(market["minOrderInQuoteAsset"])
-    min_btc = Decimal(market["minOrderInBaseAsset"])
-    quantity_decimals = int(market["quantityDecimals"])
-    notional_decimals = int(market["notionalDecimals"])
-    order_amount = ceil_to_places(max(settings["buy_amount"], min_btc, min_quote / price), quantity_decimals)
-    order_quote = ceil_to_places(order_amount * price, notional_decimals)
-    spendable = balance_after_simulated_spend
-    available = balance if settings["live"] else balance_after_simulated_spend
-    affordable_budget = min(spendable, available)
-    estimated_fee = order_quote * fee_rate
-    planned_cost = order_quote + estimated_fee
-    possible_buys = int(affordable_budget // planned_cost)
+    affordable_budget = balance_after_simulated_spend
+    available = affordable_budget
+    plan = plan_order(market, settings['buy_amount'], price, fee_rate, affordable_budget)
+    order_amount, order_quote, estimated_fee, planned_cost = plan.quantity, plan.quote, plan.fee, plan.cost
+    possible_buys = plan.affordable
+    forecast_plan = {'orderAmount':str(order_amount), 'plannedCost':str(planned_cost),
+                     'baseOrderAmount':str(plan.base_quantity),'basePlannedCost':str(plan.base_cost),
+                     'useRemainingBudget':plan.remaining_budget,'budget':str(affordable_budget),
+                     'marketRules':{key:market[key] for key in ('minOrderInBaseAsset','minOrderInQuoteAsset','quantityDecimals','notionalDecimals')},
+                     'feeRate':str(fee_rate),
+                     'intervalSeconds':check_interval,'nextDepositAt':next_deposit.isoformat()}
     if possible_buys < 1:
-        update_dashboard_schedule(None, "Waiting for deposit")
+        update_dashboard_schedule(None, "Waiting for deposit", forecast_plan)
         if settings["live"]: state["deposit_tracking"]["waiting"] = True
         save_state(state_path, state)
         log_transition(LOG, api, "purchase-wait", "insufficient-funds", logging.INFO, "Waiting: available balance %s %s; minimum order %s %s.", affordable_budget, quote, order_quote, quote)
@@ -520,8 +499,7 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
         last_buy = last_buy.replace(tzinfo=last_buy.tzinfo or timezone.utc).astimezone(timezone.utc)
     clear_transition(api, "purchase-wait")
     interval_anchor = last_buy if last_buy is not None else now.astimezone(timezone.utc)
-    seconds_to_deposit = max(60, (next_deposit.astimezone(timezone.utc) - interval_anchor).total_seconds())
-    interval_seconds = max(60, int(seconds_to_deposit / (possible_buys + 1)))
+    interval_seconds = purchase_interval(interval_anchor, next_deposit, possible_buys)
     LOG.info(
         "Recalculated DCA schedule: balance=%s %s; spendable=%s %s; "
         "price=%s %s/%s; estimated order=%s %s (%s %s); "
@@ -546,11 +524,8 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
     state['schedule']={'fingerprint':fingerprint,'dueAt':due.isoformat()}
     save_state(state_path,state)
     remaining=max(0,int((due.astimezone(timezone.utc)-now.astimezone(timezone.utc)).total_seconds()))
-    update_dashboard_schedule(due, 'Scheduled' if remaining else 'Due now', {
-        "orderAmount": str(order_amount), "plannedCost": str(planned_cost),
-        "budget": str(affordable_budget), "intervalSeconds": interval_seconds,
-        "nextDepositAt": next_deposit.isoformat(),
-    })
+    forecast_plan.update(intervalSeconds=interval_seconds,nextDepositAt=next_deposit.isoformat())
+    update_dashboard_schedule(due, 'Scheduled' if remaining else 'Due now', forecast_plan)
     startup_alignment = settings.pop('startup_schedule_log_pending', False)
     log_label = 'Restart alignment' if startup_alignment else 'Purchase schedule'
     local_zone = ZoneInfo(settings['timezone'])
@@ -634,6 +609,8 @@ def manual_withdrawal_service(api, settings):
 
     @serialized
     def handle(action, session, token=None):
+        if action not in ("preview", "confirm"):
+            raise ValueError("Unknown withdrawal action.")
         if not settings["live"]:
             raise ValueError("Manual Bitcoin withdrawals require LIVE_TRADING=true.")
         api.validate_withdrawal_settings(settings)

@@ -33,61 +33,7 @@ from app.data.reporting import parqet_aggregate_rows, parqet_csv
 from app.webpage.scroll_ui import SCROLL_CSS, SCROLL_SCRIPT
 from app.webpage.design_system import DESIGN_CSS, apply_appearance
 
-def withdrawal_forecast(settings, snapshot, monthly_deposit, now):
-    """Project monthly deposits and purchases at a constant BTC price and order cost."""
-    from decimal import ROUND_CEILING
-    if not settings.get("withdrawals_enabled"):
-        return None, "Automatic withdrawals disabled"
-    if not settings.get("live"):
-        return None, "Unavailable in simulation mode"
-    try:
-        monthly_deposit = Decimal(str(monthly_deposit))
-        if not monthly_deposit.is_finite() or monthly_deposit < 0:
-            return None, "Enter a non-negative monthly deposit"
-        balance = Decimal(str(snapshot["btcBalance"]))
-        price = Decimal(str(snapshot["price"]))
-        threshold = Decimal(str(settings["withdraw_threshold"]))
-        if price <= 0:
-            return None, "Waiting for a market price"
-        if balance * price >= threshold:
-            return now.isoformat(), "Threshold reached; awaiting automatic withdrawal check"
-        plan = snapshot["withdrawalForecastPlan"]
-        amount = Decimal(plan["orderAmount"])
-        cost = Decimal(plan["plannedCost"])
-        budget = Decimal(plan["budget"])
-        interval = max(60, int(plan["intervalSeconds"]))
-        due = max(now, datetime.fromisoformat(snapshot["nextPurchaseAt"].replace("Z", "+00:00")))
-        deposit = datetime.fromisoformat(plan["nextDepositAt"]).astimezone(ZoneInfo(settings.get("timezone", "UTC")))
-        if amount <= 0 or cost <= 0 or budget < 0:
-            return None, "Waiting for a purchase schedule"
-        needed = int(((threshold / price - balance) / amount).to_integral_value(rounding=ROUND_CEILING))
-        last_buy = None
-        for _ in range(1200):
-            slots = max(0, int((deposit.astimezone(timezone.utc) - due.astimezone(timezone.utc)).total_seconds() // interval) + 1)
-            buys = min(int(budget // cost), slots)
-            if needed <= buys:
-                target = (due.astimezone(timezone.utc) + timedelta(seconds=(needed - 1) * interval)).astimezone(due.tzinfo)
-                return target.isoformat(), "Estimate at the current price, fees and expected monthly deposits"
-            if buys:
-                last_buy = (due.astimezone(timezone.utc) + timedelta(seconds=(buys - 1) * interval)).astimezone(due.tzinfo)
-                budget -= cost * buys
-                needed -= buys
-            if monthly_deposit == 0:
-                return None, "Enter an expected monthly deposit to project further purchases"
-            budget += monthly_deposit
-            start = deposit
-            year, month = (start.year + 1, 1) if start.month == 12 else (start.year, start.month + 1)
-            deposit = deposit_at(year, month, settings["deposit_day"], settings.get("deposit_time", "00:00"), start.tzinfo)
-            possible = int(budget // cost)
-            if possible:
-                anchor = last_buy or start
-                interval = max(60, int((deposit.astimezone(timezone.utc) - anchor.astimezone(timezone.utc)).total_seconds() / (possible + 1)))
-                due = max(start.astimezone(timezone.utc), anchor.astimezone(timezone.utc) + timedelta(seconds=interval)).astimezone(start.tzinfo)
-            else:
-                due = deposit + timedelta(seconds=1)
-        return None, "Estimate exceeds the 100-year forecast horizon"
-    except (KeyError, TypeError, ValueError, InvalidOperation, OverflowError):
-        return None, "Waiting for a purchase schedule"
+from app.trading.forecast import withdrawal_forecast
 
 
 LOG = logging.getLogger("bitcoin-dca.web")
@@ -462,8 +408,8 @@ async function refreshPurchaseSchedule(){
   if(schedule.configuredBuyAmount!==undefined){
    const minimumMode=Number(schedule.configuredBuyAmount)===0;
    const effective=Number(schedule.effectiveBuyAmount);
-   $("buyAmount").textContent=minimumMode?(effective>0?btc(effective):"—"):btc(schedule.configuredBuyAmount);
-   $("buyAmountNote").textContent=minimumMode?"(exchange minimum)"+(effective>0?"":" · waiting for account check"):"";
+   $("buyAmount").textContent=schedule.finalPurchase&&effective>0?btc(effective):minimumMode?(effective>0?btc(effective):"—"):btc(schedule.configuredBuyAmount);
+   $("buyAmountNote").textContent=schedule.finalPurchase?"Final purchase · uses remaining fiat":minimumMode?"(exchange minimum)"+(effective>0?"":" · waiting for account check"):"";
   }
   $("quoteBalanceLabel").textContent="Available "+schedule.quote+" balance on exchange";
   const balanceKnown=schedule.quoteBalance!==null&&schedule.quoteBalance!==undefined&&Number.isFinite(Number(schedule.quoteBalance));
@@ -483,8 +429,8 @@ async function refreshPurchaseSchedule(){
   const withdrawalTarget=Date.parse(schedule.estimatedWithdrawalAt);
   estimatedWithdrawalTimestamp=Number.isFinite(withdrawalTarget)?withdrawalTarget:null;
   $("estimatedWithdrawalAt").textContent=estimatedWithdrawalTimestamp===null?"Not estimated":new Date(estimatedWithdrawalTimestamp).toLocaleString("en-GB",{timeZone:schedule.timezone||"UTC",timeZoneName:"short"});
-  $("estimatedWithdrawalStatus").textContent=estimatedWithdrawalTimestamp===null?(schedule.estimatedWithdrawalStatus||"Waiting for account check"):"Estimate at the current BTC price, deposit and purchase interval";
-  $("withdrawalCountdownStatus").textContent=estimatedWithdrawalTimestamp===null?$("estimatedWithdrawalStatus").textContent:"Estimate at the current BTC price, deposit and purchase interval";
+  $("estimatedWithdrawalStatus").textContent=estimatedWithdrawalTimestamp===null?(schedule.estimatedWithdrawalStatus||"Waiting for account check"):(schedule.estimatedWithdrawalStatus||"Estimate at the current BTC price, deposit and purchase interval");
+  $("withdrawalCountdownStatus").textContent=estimatedWithdrawalTimestamp===null?$("estimatedWithdrawalStatus").textContent:(schedule.estimatedWithdrawalStatus||"Estimate at the current BTC price, deposit and purchase interval");
   renderPurchaseCountdown();
   sectionFeedback("scheduleFeedback","");
  }catch(e){if(request===scheduleRequest)sectionFeedback("scheduleFeedback","Could not refresh the schedule. Previous values are still shown.",true)}
@@ -638,10 +584,10 @@ async function loadAnalytics(){
  $("settingExchange").textContent=ex;$("settingQuoteCurrency").textContent=quote;$("tradingMode").textContent=d.configuration.liveTrading?"Live":"Dry run";
  const amountSnapshot=d.snapshot||{};
  const effectiveMinimum=amountSnapshot.exchange===d.exchange&&amountSnapshot.quote===quote?Number((amountSnapshot.withdrawalForecastPlan||{}).orderAmount):NaN;
- $("buyAmount").textContent=Number(d.configuration.buyAmount)===0
+ $("buyAmount").textContent=d.snapshot.withdrawalForecastPlan?.useRemainingBudget&&effectiveMinimum>0?btc(effectiveMinimum):Number(d.configuration.buyAmount)===0
   ?(Number.isFinite(effectiveMinimum)&&effectiveMinimum>0?btc(effectiveMinimum):"—")
   :btc(d.configuration.buyAmount);
- $("buyAmountNote").textContent=Number(d.configuration.buyAmount)===0?"(exchange minimum)"+(Number.isFinite(effectiveMinimum)&&effectiveMinimum>0?"":" · waiting for account check"):"";
+ $("buyAmountNote").textContent=d.snapshot.withdrawalForecastPlan?.useRemainingBudget?"Final purchase · uses remaining fiat":Number(d.configuration.buyAmount)===0?"(exchange minimum)"+(Number.isFinite(effectiveMinimum)&&effectiveMinimum>0?"":" · waiting for account check"):"";
  $("depositDay").textContent=String(d.configuration.depositDay);$("depositTime").textContent=(d.configuration.depositTime||"00:00")+" · "+(d.configuration.timezone||"UTC");$("withdrawEnabled").textContent=d.configuration.withdrawalsEnabled?"Enabled":"Disabled";
  $("threshold").textContent=money(Number(d.configuration.withdrawalThreshold)*fxRate,displayCurrency);$("thresholdNote").textContent="Threshold in "+quote+", shown in "+displayCurrency;
  $("buyCount").textContent=d.summary.buyCount;$("buyBtc").textContent=btc(d.summary.boughtBtc);
@@ -1203,7 +1149,7 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 if parsed.path in ('/configure', '/settings') or not data['complete'] or data['account'].get('password_change_required'):
                     LOG.info('Settings opened' if data['complete'] else 'First-run bot configuration opened')
-                    self._send(200, settings_page(self.runtime.store, embedded=parse_qs(parsed.query).get("embedded") == ["1"], editor=parse_qs(parsed.query).get("editor", [None])[0], editor_exchange=parse_qs(parsed.query).get("exchange", [None])[0]), 'text/html; charset=utf-8')
+                    self._send(200, settings_page(self.runtime.store, embedded=parse_qs(parsed.query).get("embedded") == ["1"]), 'text/html; charset=utf-8')
                     return
         if parsed.path == "/" and not self._has_valid_session():
             self._send(200, self._login_page(), "text/html; charset=utf-8")
@@ -1284,6 +1230,7 @@ class Handler(BaseHTTPRequestHandler):
                     "exchange": self.settings["exchange"],
                     "quoteBalance": snapshot.get("quoteBalance") if balance_matches else None,
                     "configuredBuyAmount": str(self.settings.get("buy_amount", 0)),
+                    "finalPurchase": bool((snapshot.get("withdrawalForecastPlan") or {}).get("useRemainingBudget")) if balance_matches else False,
                     "effectiveBuyAmount": (snapshot.get("withdrawalForecastPlan") or {}).get("orderAmount") if balance_matches else None,
                     "btcBalance": snapshot.get("btcBalance") if balance_matches else None,
                     "estimatedWithdrawalAt": forecast_at,

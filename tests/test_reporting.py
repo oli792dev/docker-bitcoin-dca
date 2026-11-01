@@ -61,12 +61,26 @@ class MonthlyForecastTests(unittest.TestCase):
             "nextDepositAt":"2026-11-01T00:00:00+00:00"}}
     def test_monthly_funding_extends_past_current_budget(self):
         target,reason=withdrawal_forecast(self.settings,self.snapshot,"202",self.now)
-        self.assertEqual(datetime.fromisoformat(target),datetime(2026,11,20,16,tzinfo=timezone.utc))
-        self.assertIn("monthly",reason)
+        self.assertEqual(datetime.fromisoformat(target),datetime(2026,11,16,tzinfo=timezone.utc))
+        self.assertIn("deposit",reason)
         self.settings["deposit_time"]="09:30"
         self.snapshot["withdrawalForecastPlan"]["nextDepositAt"]="2026-11-01T09:30:00+00:00"
         target,_=withdrawal_forecast(self.settings,self.snapshot,"202",self.now)
-        self.assertEqual(datetime.fromisoformat(target),datetime(2026,11,20,22,20,tzinfo=timezone.utc))
+        self.assertEqual(datetime.fromisoformat(target),datetime(2026,11,16,9,30,tzinfo=timezone.utc))
+    def test_waiting_for_deposit_forecasts_without_a_scheduled_purchase(self):
+        self.snapshot['nextPurchaseAt']=None
+        self.snapshot['withdrawalForecastPlan']['budget']='0'
+        self.snapshot['nextPurchaseStatus']='Waiting for deposit'
+        self.settings['withdraw_threshold']=D(300)
+        target,reason=withdrawal_forecast(self.settings,self.snapshot,'202',self.now)
+        self.assertEqual(datetime.fromisoformat(target),datetime(2026,11,16,tzinfo=timezone.utc))
+        self.assertNotIn('purchase schedule',reason)
+        self.assertIsNone(self.snapshot['nextPurchaseAt'])
+        self.snapshot['withdrawalForecastPlan']['nextDepositAt']='2026-10-01T09:30:00+00:00'
+        target,reason=withdrawal_forecast(self.settings,self.snapshot,'202',self.now)
+        self.assertGreater(datetime.fromisoformat(target),self.now)
+        self.assertIn('assumes overdue deposit arrives now',reason)
+
     def test_no_assumed_funding_means_no_date_beyond_budget(self):
         self.assertIsNone(withdrawal_forecast(self.settings,self.snapshot,"0",self.now)[0])
     def test_existing_balance_and_funded_purchases(self):

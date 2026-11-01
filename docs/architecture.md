@@ -79,7 +79,7 @@ Setup and Settings log account creation, configuration completion, changed field
 
 ## Settings and activity UI
 
-First-run account creation is separate from bot configuration; the second step does not repeat Dashboard Credentials. Later, Settings opens in a dashboard dialog. Trading and dashboard groups the large live/withdrawal/export switches and display currency; connection-test results appear beside its button. Reporting currency changes do not reschedule purchases.
+First-run account creation is separate from bot configuration; the second step does not repeat Dashboard Credentials. Later, Settings opens in a dashboard dialog. Bot Configuration contains live trading and automatic withdrawals; Dashboard contains appearance, reporting and optional UI features; connection-test results appear beside its button. Reporting currency changes do not reschedule purchases.
 
 Only executed live fills are stored as buys; these display Confirmed. Simulations remain Simulated. Withdrawals display Confirmed only after exchange-history reconciliation, with pending, failed, cancelled and legacy-unverified outcomes kept distinct. This is exchange confirmation, not independent blockchain verification.
 
@@ -127,7 +127,7 @@ The web design follows the principles of Apple's [Color](https://developer.apple
 
 ## Settings sections and deposit time
 
-Settings uses keyboard-accessible tabs for Bot Configuration, Dashboard, Exchange and Login Credentials. Tabs retain drafts and share one review/save action. Setup omits Login Credentials and opens Exchange first; independent credential editors retain their separate save scope. Invalid fields reveal their tab before native validation focuses them.
+Settings uses keyboard-accessible tabs for Bot Configuration, Exchange, Dashboard and Login. Tabs retain drafts and share one review/save action. Setup omits Login Credentials and opens Exchange first; credentials and withdrawal targets are directly editable in their tabs. Invalid fields reveal their tab before native validation focuses them.
 
 `deposit_day` and the volume-saved `deposit_time` (`HH:MM`, default `00:00`) define monthly deposit boundaries in the configured timezone. Both purchase intervals and withdrawal forecasts use those instants. Short months clamp to the last calendar day. For daylight-saving transitions, nonexistent times move forward by the gap; repeated times use the first occurrence. Every later month rebuilds the original configured wall time, and duration arithmetic uses UTC. Changing the time refreshes scheduling without recreating the exchange adapter.
 

@@ -232,7 +232,8 @@ class ReviewTests(unittest.TestCase):
             state=json.loads(json.dumps(state))
             api.balance.return_value=D('0')
             bot.run_once(api,self.settings,300)
-            self.assertEqual(schedule.call_args.args,(None,'Waiting for deposit'))
+            self.assertEqual(schedule.call_args.args[:2],(None,'Waiting for deposit'))
+            self.assertEqual(D(schedule.call_args.args[2]['budget']),D(0))
             self.assertEqual(datetime.fromisoformat(state['deposit_tracking']['dueAt']).month,11)
             state=json.loads(json.dumps(state))
             api.balance.return_value=D('200')
@@ -352,6 +353,34 @@ class ReviewTests(unittest.TestCase):
         with patch.object(worker,'HEALTH_PATH',self.root/'health.json'):
             account.start();self.assertTrue(succeeded.wait(2));self.assertEqual(len(calls),2)
             account.stop.set();account.thread.join(2)
+
+
+class FinalPurchaseBudgetTests(unittest.TestCase):
+    def test_last_order_absorbs_residual_and_reserves_fee_within_precision(self):
+        from app.core.planning import plan_order
+        market=dict(minOrderInBaseAsset='.00006',minOrderInQuoteAsset='0',quantityDecimals=8,notionalDecimals=2)
+        plan=plan_order(market,D('.00006'),D('70000'),D('.0025'),D('4.6605'))
+        self.assertEqual(plan.affordable,1)
+        self.assertGreater(plan.quantity,plan.base_quantity)
+        self.assertTrue(plan.remaining_budget)
+        self.assertLessEqual(plan.cost,D('4.6605'))
+        self.assertLess(D('4.6605')-plan.cost,D('.02'))
+        # Earlier orders retain the configured BTC quantity.
+        earlier=plan_order(market,D('.00006'),D('70000'),D('.0025'),D('20'))
+        self.assertEqual(earlier.quantity,D('.00006'))
+        self.assertFalse(earlier.remaining_budget)
+        unfunded=plan_order(market,D('.00006'),D('70000'),D('.0025'),D('.45'))
+        self.assertEqual(unfunded.affordable,0)
+
+    def test_invalid_exchange_values_cannot_produce_an_executable_plan(self):
+        from app.core.planning import plan_order
+        market=dict(minOrderInBaseAsset='.00006',minOrderInQuoteAsset='0',quantityDecimals=8,notionalDecimals=2)
+        for price in ['0','NaN','Infinity','-1']:
+            with self.subTest(price=price),self.assertRaises(ValueError):
+                plan_order(market,'0',price,'.0025','10')
+        for places in [-1,19,True]:
+            with self.subTest(places=places),self.assertRaises(ValueError):
+                plan_order({**market,'quantityDecimals':places},'0','70000','.0025','10')
 
 
 if __name__=='__main__':unittest.main()

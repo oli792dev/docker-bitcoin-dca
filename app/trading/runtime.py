@@ -14,9 +14,9 @@ IDENTITY_FIELDS = ('exchange', 'quote', 'kraken_api_key', 'kraken_api_secret', '
 
 class Runtime:
     def __init__(self, store=None, state_path=None):
-        from app.trading.bot import BOT_LOCK
+        from app.trading.account import ACCOUNT_LOCK
         from app.trading.worker import Worker
-        self.lock = BOT_LOCK
+        self.lock = ACCOUNT_LOCK
         self.store = store or ConfigStore()
         self.state_path = Path(state_path) if state_path is not None else STATE_PATH
         self.settings = runtime_settings(self.store.snapshot()['settings'])
