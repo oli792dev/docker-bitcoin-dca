@@ -171,7 +171,7 @@ class KrakenTransportTests(unittest.TestCase):
                 patch.object(activity, 'ACTIVITY_PATH', Path(directory) / 'activity.json'), \
                 patch.object(bot, 'read_state', return_value={}), patch.object(bot, 'save_state'), \
                 patch.object(bot, 'update_dashboard_snapshot'), patch.object(bot, 'update_dashboard_schedule'):
-            bot.run_once(self.api, settings, 300)
+            with patch.object(self.api,'fiat_deposits',return_value=[]): bot.run_once(self.api, settings, 300)
         self.assertEqual(self.api.session.post.call_count, 1)
         self.assertTrue(self.api.session.post.call_args.args[0].endswith('/BalanceEx'))
         self.assertIsNone(self.api._balance_cache)

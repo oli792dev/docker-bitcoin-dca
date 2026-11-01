@@ -270,6 +270,39 @@ class Kraken:
                 )
         return Decimal(0)
 
+    def fiat_deposits(self, currency, start_ms=0, end_ms=None):
+        """Booked fiat deposits, with stable ledger IDs and complete pagination."""
+        params = {'asset':currency, 'type':'deposit', 'start':str(int(start_ms)//1000),
+                  'end':str(int(end_ms)//1000 if end_ms is not None else int(time.time())), 'ofs':0}
+        result = {}; expected_count = None
+        for _ in range(200):
+            page = self.private('Ledgers', dict(params))
+            if not isinstance(page,dict) or not isinstance(page.get('ledger'),dict):
+                raise KrakenAPIError('Kraken deposit ledger could not be verified')
+            count = page.get('count')
+            if not isinstance(count,int) or count < 0 or any(not isinstance(v,dict) for v in page['ledger'].values()):
+                raise KrakenAPIError('Invalid Kraken deposit ledger page')
+            if expected_count is not None and count != expected_count:
+                raise KrakenAPIError('Kraken deposit ledger changed while paging; retrying next check')
+            expected_count = count
+            rows = page['ledger']
+            if set(rows) & set(result):
+                raise KrakenAPIError('Kraken deposit ledger page did not advance')
+            result.update(rows)
+            params['ofs'] += len(rows)
+            if params['ofs'] >= count: break
+            if not rows: raise KrakenAPIError('Kraken deposit ledger is incomplete')
+        else: raise KrakenAPIError('Kraken deposit ledger page limit reached')
+        deposits = []
+        for ledger_id,item in result.items():
+            if item.get('type') != 'deposit' or _canonical_asset(item.get('asset','')) != currency: continue
+            # Internal wallet transfers are not bank deposits.
+            if item.get('subtype'): continue
+            deposits.append({'id':ledger_id,'timestamp':int(Decimal(str(item['time']))*1000),
+                             'symbol':currency,'amount':str(item['amount']),
+                             'fee':str(item.get('fee','0')),'status':'completed'})
+        return deposits
+
     def btc_withdrawals(self, start_ms=0, end_ms=None):
         params = {
             "asset": "XBT",

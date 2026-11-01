@@ -58,7 +58,7 @@ class BitcoinOnlyTests(unittest.TestCase):
     def test_live_purchase_uses_bitcoin_interface_and_market(self):
         # Even a legacy caller's base setting cannot select another asset.
         self.settings['base'] = 'ETH'
-        api = Mock()
+        api = Mock(); api.fiat_deposits.return_value=[]
         api.balance.return_value = Decimal('100')
         api.estimate_taker_fee.return_value = Decimal('.0025')
         api.market.return_value = {'status': 'trading', 'minOrderInQuoteAsset': '5',
@@ -71,13 +71,13 @@ class BitcoinOnlyTests(unittest.TestCase):
                 patch.object(bot, 'update_dashboard_snapshot'):
             self.assertEqual(bot.run_once(api, self.settings, 300), 30)
         api.market.assert_called_once_with('BTC-EUR', refresh=True)
-        api.price.assert_called_once_with('BTC-EUR')
+        self.assertEqual([call.args[0] for call in api.price.call_args_list],['BTC-EUR','BTC-USD'])
         self.assertEqual(api.buy_btc.call_args.args[:2], ('EUR', Decimal('.0001')))
         api.buy_base.assert_not_called()
 
     def test_dry_run_records_only_bitcoin_without_submitting_orders(self):
         self.settings['live'] = False
-        api = Mock()
+        api = Mock(); api.fiat_deposits.return_value=[]
         api.balance.return_value = Decimal('100')
         api.estimate_taker_fee.return_value = Decimal('.0025')
         api.market.return_value = {'status': 'trading', 'minOrderInQuoteAsset': '5',
@@ -98,7 +98,7 @@ class BitcoinOnlyTests(unittest.TestCase):
         api.estimate_taker_fee.assert_called_once_with('BTC-EUR', Decimal('1'))
 
     def test_pending_other_market_blocks_bitcoin_purchase(self):
-        api = Mock()
+        api = Mock(); api.fiat_deposits.return_value=[]
         state = {'pending_order': {'symbol': 'ETH-EUR', 'exchange': 'KRAKEN'}}
         with patch.object(bot, 'read_state', return_value=state), \
                 patch.object(bot, 'update_dashboard_schedule'):
@@ -143,7 +143,7 @@ class BitcoinOnlyTests(unittest.TestCase):
         self.assertEqual(adapter.private.call_args.args[1]['asset'], 'XBT')
 
     def test_saved_non_bitcoin_withdrawal_is_not_retried_or_recorded(self):
-        api = Mock()
+        api = Mock(); api.fiat_deposits.return_value=[]
         state = {'pending_withdrawal': {'asset': 'ETH'},
                  'pending_withdrawal_context': {'result': {'id': 'old-withdrawal'}}}
         with self.assertRaises(ValueError):

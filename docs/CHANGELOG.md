@@ -4,10 +4,13 @@ Unreleased changes followed by historical version notes, newest first. Dates use
 
 ## Unreleased
 
-- Show observed fiat deposits in activity history without changing BTC totals or Parqet exports.
+- Refresh dashboard BTC prices with regular account checks instead of browser-triggered requests.
+- Document deposit-history read permissions and correct Bitvavo private-request signing.
+
+- Verify fiat deposits against Kraken’s booked ledger and Bitvavo’s completed deposit history; display confirmed entries without changing BTC totals or Parqet exports.
 - Remove the initial status-check text and consolidate insufficient-funds status into Waiting for deposit.
 
-- Recognize observed early funding on the deposit day and persist the next monthly budget deadline.
+- Recognize API-confirmed early funding on the deposit day and persist the next monthly budget deadline.
 - Keep normal order submission and confirmation green as Bot active; simplify German trading mode and Kraken withdrawal target labels.
 
 - Added a labeled traffic-light status beside Settings: green for active operation, amber for waiting/simulation, red for failures; no separate account-age message.

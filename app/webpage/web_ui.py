@@ -3,7 +3,6 @@ import html
 from app.webpage.i18n import localize_page, translate
 import json
 import logging
-import re
 from app.webpage.templates import load_page
 import requests
 import ssl
@@ -11,8 +10,7 @@ from app.webpage.tls import TLSHandshakeError
 from datetime import datetime, timezone, timedelta
 from app.core.deposit_calendar import deposit_at
 from zoneinfo import ZoneInfo
-from decimal import Decimal, InvalidOperation
-from html.parser import HTMLParser
+from decimal import Decimal
 from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
@@ -21,8 +19,7 @@ from threading import RLock
 import time
 import traceback
 from app.core.security import AttemptLimiter, PasswordConfirmationError
-from concurrent.futures import ThreadPoolExecutor
-from app.webpage import price_cache
+from app.exchanges import market_prices
 from app.exchanges.exchange_errors import UncertainWithdrawalError
 from app.webpage.favicon_assets import FAVICON_ICO, FAVICON_PNG, APPLE_TOUCH_ICON_PNG, FAVICON_MASK_SVG
 from app.data.analytics import report as build_report
@@ -67,67 +64,6 @@ LOGIN_HTML = LOGIN_HTML.replace("__DESIGN_CSS__", DESIGN_CSS)
 def _login_page(error="", appearance="system", language="en"):
     page = apply_appearance(LOGIN_HTML.replace("{{ERROR}}", html.escape(translate(error,language))), appearance)
     return localize_page(page,language)
-
-
-class _PageTextParser(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.parts = []
-
-    def handle_data(self, data):
-        if data and data.strip():
-            self.parts.append(data.strip())
-
-
-def _kraken_public_btc_price(currency):
-    currency = currency.upper()
-    if currency not in ("EUR", "USD"):
-        raise ValueError("Display currency and QUOTE_CURRENCY must be EUR or USD")
-    url = f"https://www.kraken.com/convert/btc/{currency.lower()}"
-    response = requests.get(
-        url,
-        headers={
-            "User-Agent": "Mozilla/5.0 (compatible; BitcoinDCA/1.0)",
-            "Accept": "text/html,application/xhtml+xml",
-        },
-        timeout=15,
-    )
-    response.raise_for_status()
-    parser = _PageTextParser()
-    parser.feed(response.text)
-    page_text = " ".join(" ".join(parser.parts).split())
-    number = r"([0-9][0-9,]*(?:\.[0-9]+)?)"
-    patterns = (
-        rf"1\s*BTC\s*=\s*{number}\s*{currency}\b",
-        rf"1(?:\.00)?\s*BTC\s*=\s*[$€]\s*{number}",
-    )
-    for pattern in patterns:
-        match = re.search(pattern, page_text, flags=re.IGNORECASE)
-        if match:
-            try:
-                price = Decimal(match.group(1).replace(",", ""))
-            except InvalidOperation:
-                continue
-            if price.is_finite() and price > 0:
-                return price
-    raise RuntimeError(f"Could not find the BTC/{currency} price on Kraken’s public converter page")
-
-
-def _public_market_price(display_currency, quote_currency, currencies=()):
-    display_currency=display_currency.upper()
-    quote_currency=quote_currency.upper()
-    needed={display_currency,quote_currency,*currencies}
-    if not needed <= {'EUR','USD'}:
-        raise ValueError('Display and historical fiat currencies must be EUR or USD')
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures={c:executor.submit(price_cache.get_price,c,_kraken_public_btc_price) for c in needed}
-        prices={c:f.result() for c,f in futures.items()}
-    target=prices[display_currency][0]
-    return {'currency':display_currency,'quoteCurrency':quote_currency,'price':str(target),
-            'conversionRate':str(target/prices[quote_currency][0]),
-            'conversionRates':{c:str(target/v[0]) for c,v in prices.items()},
-            'source':'Kraken public conversion page','updatedAt':int(min(v[1] for v in prices.values())),
-            'stale':any(v[2] for v in prices.values())}
 
 
 def _period(query):
@@ -538,17 +474,16 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/market-price":
             currency = query.get("currency", ["EUR"])[0].upper()
             try:
-                market = _public_market_price(currency, self.settings["quote"], query.get("currencies",[""])[0].split(",") if query.get("currencies",[""])[0] else ())
+                market = market_prices.snapshot_market_price(read_dashboard_snapshot(), self.settings["exchange"], currency, self.settings["quote"], query.get("currencies",[""])[0].split(",") if query.get("currencies",[""])[0] else ())
                 self._json(200, market)
             except ValueError as exc:
                 self._json(400, {"error": str(exc)})
             except (RuntimeError, requests.RequestException) as exc:
-                LOG.warning("Kraken reference price unavailable: %s", exc)
-                LOG.debug("Reference price fetch failure", exc_info=True)
+                LOG.debug("Saved account price unavailable: %s", exc)
                 self._json(503, {"error": str(exc)})
             except Exception:
-                LOG.exception("Kraken public price page fetch failed")
-                self._json(502, {"error": "Could not fetch the current BTC price from Kraken’s public page. Check container internet access."})
+                LOG.exception("Saved account price could not be read")
+                self._json(502, {"error": "Could not read the current BTC price from the last account check."})
             return
         try:
             if parsed.path == "/api/schedule":
@@ -584,7 +519,13 @@ class Handler(BaseHTTPRequestHandler):
                     status_label = 'Bot active'
                 status_warning = worker_error or bool(self.worker and not self.worker.healthy())
                 status_tone = 'error' if status_warning else 'active' if status_label == 'Bot active' else 'waiting'
+                try:
+                    account_price = market_prices.snapshot_market_price(snapshot, self.settings['exchange'],
+                        self.settings.get('display_currency','EUR'), self.settings['quote'])
+                except (ValueError, RuntimeError, KeyError):
+                    account_price = None
                 self._json(200, {
+                    "accountMarketPrice": account_price,
                     "botStatusLabel": status_label,
                     "botStatusTone": status_tone,
                     "botStatusWarning": worker_error or bool(self.worker and not self.worker.healthy()),

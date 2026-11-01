@@ -34,7 +34,7 @@ class Bitvavo:
         signed_path = path + ("?" + urlencode(params) if params else "")
         if private:
             timestamp = str(int(time.time() * 1000))
-            message = timestamp + method + signed_path + payload
+            message = timestamp + method + "/v2" + signed_path + payload
             signature = hmac.new(self.secret.encode(), message.encode(), hashlib.sha256).hexdigest()
             headers.update({
                 "Bitvavo-Access-Key": self.key,
@@ -128,6 +128,35 @@ class Bitvavo:
             "clientOrderId": client_order_id,
         }
         return self.request("POST", "/order", body=body, private=True)
+
+    def fiat_deposits(self, currency, start_ms=0, end_ms=None):
+        """Fiat history includes an explicit completed/canceled status."""
+        windows=[(int(start_ms),int(end_ms) if end_ms is not None else int(time.time()*1000))]
+        result=[]
+        for _ in range(200):
+            if not windows: break
+            start,end=windows.pop()
+            rows=self.request('GET','/depositHistory',params={
+                'symbol':currency,'start':start,'end':end,'limit':1000},private=True)
+            if not isinstance(rows,list) or any(not isinstance(item,dict) for item in rows):
+                raise ValueError('Bitvavo deposit history could not be verified')
+            if len(rows)<1000:
+                result.extend(rows);continue
+            if start>=end: raise ValueError('Bitvavo deposit history exceeds the limit at one timestamp')
+            middle=(start+end)//2
+            windows.extend([(start,middle),(middle+1,end)])
+        if windows: raise ValueError('Bitvavo deposit-history page limit reached')
+        deposits=[];occurrences={}
+        for item in result:
+            if item.get('symbol')!=currency or item.get('status')!='completed': continue
+            # Fiat history has no transaction ID. Preserve identical entries using their occurrence number.
+            fingerprint=hashlib.sha256(json.dumps({k:item.get(k) for k in
+                ('timestamp','symbol','amount','fee','address')},sort_keys=True).encode()).hexdigest()
+            occurrences[fingerprint]=occurrences.get(fingerprint,0)+1
+            deposits.append({'id':fingerprint+':'+str(occurrences[fingerprint]),
+                'timestamp':int(item['timestamp']),'symbol':currency,'amount':str(item['amount']),
+                'fee':str(item.get('fee','0')),'status':'completed'})
+        return deposits
 
     def btc_withdrawals(self, start_ms=0, end_ms=None):
         # Split saturated time windows so equal timestamps are never skipped.

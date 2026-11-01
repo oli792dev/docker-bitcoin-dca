@@ -27,10 +27,12 @@ Settings, beside Log out, has Bot Configuration, Exchange, Dashboard and Login t
 
 | Exchange | API permissions | Bitcoin withdrawal destination |
 | --- | --- | --- |
-| [Bitvavo](https://docs.bitvavo.com/docs/get-started/) | View access; Trade digital assets for live buys; Withdraw digital assets for withdrawals | Address and network saved and verified on Bitvavo |
-| [Kraken](https://support.kraken.com/articles/360000919966-how-to-create-an-api-key) | Query Funds; Query Open/Closed Orders & Trades; Modify Orders for live buys; Withdraw Funds for withdrawals | Exact label of a saved Bitcoin withdrawal method, not the address itself |
+| [Bitvavo](https://docs.bitvavo.com/docs/get-started/) | Read-only / View access (including deposit history); Trade digital assets for live buys; Withdraw digital assets for withdrawals | Address and network saved and verified on Bitvavo |
+| [Kraken](https://support.kraken.com/articles/360000919966-how-to-create-an-api-key) | Query Funds; Data → Query ledger entries (deposit history); Query Open/Closed Orders & Trades; Modify Orders for live buys; Withdraw Funds for withdrawals | Exact label of a saved Bitcoin withdrawal method, not the address itself |
 
-**Test connection** reads balances without trading; progress and results appear beside the button. API access and internet are required even for dry runs. Exchange, credential, currency and trading-mode changes are blocked while transactions remain unresolved.
+Fiat deposit checks use Kraken’s [deposit ledger](https://docs.kraken.com/api-reference/account-data/get-ledgers-info) (Data → Query ledger entries) or Bitvavo’s [deposit history](https://docs.bitvavo.com/docs/rest-api/get-deposit-history/) (Read-only / View access). Both support fiat deposits. Enable this read permission on existing keys too; failed checks pause new automatic transactions until verification succeeds. No deposit or withdrawal permission is needed just to read deposits.
+
+**Test connection** reads balances and deposit history without trading; progress and results appear beside the button. API access and internet are required even for dry runs. Exchange, credential, currency and trading-mode changes are blocked while transactions remain unresolved.
 
 Settings persist as `config.json` in the named volume `bitcoin-dca-webui-data`; passwords are hashed; API credentials are stored in this private file. Empty API fields keep saved credentials. Protect this file and backups; never commit credentials or `.env`. All runtime state and activity also live in this volume; no host state directory is required. Reuse the same volume on redeployment. After setup and each restart, automatic API checks block new transactions until open exchange orders and Bitcoin withdrawals are closed. Unavailable status keeps the bot paused and is retried.
 
@@ -46,7 +48,7 @@ The bot refreshes the available fiat balance, BTC price and exchange order rules
 
 Set the deposit day and time in Bot Configuration; both use the configured timezone (default time: 00:00). The next purchase is the last purchase time plus that interval. At startup, the bot uses recorded real purchases, falling back to saved execution state. Without previous execution history, the first purchase is due after the startup delay. Unchanged planning inputs retain the saved due time; changed funds, costs or deposit boundaries cause recalculation.
 
-The extra time slot puts the final affordable buy before the deposit boundary. Observed fiat inflows on the deposit day, including before its configured time, move the budget deadline to the next month. Delayed deposits show Waiting for deposit; usable residual fiat is spent first, and new available funding resumes purchases. Small remnants below an executable order may remain.
+The extra time slot puts the final affordable buy before the deposit boundary. API-confirmed fiat deposits on the deposit day, including before its configured time, move the budget deadline to the next month. Delayed deposits show Waiting for deposit; usable residual fiat is spent first, and new available funding resumes purchases. Small remnants below an executable order may remain.
 
 Live orders are submitted once and verified before another purchase. Open orders and uncertain submissions remain pending across restarts; completed partial fills are recorded at their actual executed amount. Network requests and queued actions can delay execution.
 
@@ -64,13 +66,13 @@ The web UI is fully responsive. Dashboard card rows and tables scroll horizontal
 
 - **Status:** beside Settings, green means active, amber waiting/simulation, and red an account-check or connection failure.
 - **Configuration:** exchange, purchase settings and withdrawal target.
-- **Activity:** observed fiat balance increases appear as deposits; they do not affect report purchase totals or Parqet exports. These are balance observations, not verified bank-transfer records.
+- **Activity:** API-confirmed fiat deposits appear with the exchange timestamp and amount. Deposits never affect BTC totals or Parqet exports.
 - **Schedule:** exchange balances, purchase timing and estimated automatic withdrawal timing. **Expected monthly deposit** is a volume-saved forecast assumption; it adds funds on each deposit day and recalculates future intervals using actual calendar months. It does not initiate deposits or change trading. Forecasts continue while waiting for deposits, show approximate remaining BTC/purchases, and offer expandable assumptions. Overdue deposits are assumed to arrive now and labelled accordingly.
 - **Period Analysis:** date filters, summary, activity status (confirmed, pending, failed or simulated) and CSV export. Activities cannot be deleted through the UI.
 
 Under Settings → Dashboard, choose English/German and Light, Dark or Automatic / System. Language also controls date and number formatting; technical logs remain English. The interface supports keyboard navigation and reduced motion. View preferences are saved in this browser; the To field resets to now on page load. Refreshes preserve existing values; messages can be dismissed. Withdrawal confirmations show the destination, gross BTC, fee and net BTC. Inactive withdrawal thresholds are disabled without erasing their saved value.
 
-Display currency is set to EUR or USD in Settings. Reference BTC prices come from Kraken’s public [BTC/EUR](https://www.kraken.com/convert/btc/eur) and [BTC/USD](https://www.kraken.com/convert/btc/usd) pages, including when trading on Bitvavo. Saved or cached prices are labelled.
+Display currency is set to EUR or USD in Settings. BTC prices refresh with balances during account checks (default: every five minutes), independently of browser visits. The purchase-currency price comes from the selected exchange; Kraken ticker data supplies the other display currency. The dashboard shows the last check time.
 
 **Download Parqet CSV** exports one consolidated Buy row for the last confirmed withdrawal in the selected range:
 
@@ -90,7 +92,7 @@ See [Architecture and operation](docs/architecture.md) for container components,
 - **Available funds drive scheduling.** The bot does not reserve funds for other uses or identify actual monthly deposits. Run one instance per account and persistent state; other trading tools can affect balances.
 - **Local history is not a full account statement.** Unrelated trades and transfers are not imported. BTC totals use gross withdrawal debits; exported BTC uses the net amount received.
 - **Unresolved transactions require care.** Orders with uncertain outcomes block new purchases. Withdrawals qualify for export only after a unique exchange-history confirmation; the bot does not independently verify the blockchain. Older records may remain unverified. In-memory sessions and confirmation previews are lost on restart; pending submissions persist.
-- **Reporting depends on external services.** Kraken page changes or outages can affect reference prices; historical USD/EUR conversion uses Frankfurter. Unavailable rates can prevent exports. Reporting supports EUR and USD; displayed conversions use current reference rates.
+- **Reporting depends on external services.** Exchange API outages can delay price updates; historical USD/EUR conversion uses Frankfurter. Unavailable rates can prevent exports. Reporting supports EUR and USD; displayed conversions use current reference rates.
 - **Exports consolidate a time interval.** They do not match individual Bitcoin units or track previous exports. Review each CSV before importing.
 
 ## Disclaimer

@@ -41,6 +41,13 @@ async function refreshPurchaseSchedule(){
   scheduleClockOffset=Number.isFinite(serverTime)?serverTime-Date.now():0;
   $('botStatusLabel').textContent=t(schedule.botStatusLabel||'Bot active');
   updateStatusLight(schedule.botStatusTone||(schedule.botStatusWarning?'error':'waiting'));
+  if(schedule.accountMarketPrice){
+   const market=schedule.accountMarketPrice;
+   balanceDisplayPrice=Number(market.price);balanceDisplayCurrency=market.currency;
+   $('spot').textContent=money(market.price,market.currency)+'/BTC';
+   $('spotUpdated').textContent=t('Last checked '+new Date(Number(market.updatedAt)*1000).toLocaleString(locale));
+   renderExchangeBtcValue();
+  }
   const detail=schedule.forecastDetails;
   $('forecastProgress').textContent=detail?t('About {btc} BTC · {buys} purchases remaining'.replace('{btc}',Number(detail.remainingBtc).toLocaleString(locale,{maximumFractionDigits:8})).replace('{buys}',detail.remainingPurchases)):'';
   $('forecastAssumptions').hidden=!detail;
@@ -142,7 +149,7 @@ async function loadIntervals(){
 $("interval").addEventListener("change",()=>{applySelectedInterval();saveReportView();currentPage=1;loadAnalytics()});
 ["start","end"].forEach(id=>$(id).addEventListener("change",()=>{$("interval").value="";saveReportView()}));
 function activityStatus(row){
- if(row.type==="Deposit")return {label:"—",tone:"muted"};
+ if(row.type==="Deposit")return row.depositStatus==="confirmed"?{label:"Confirmed ✓",tone:"confirmed"}:{label:"—",tone:"muted"};
  if(row.simulated)return {label:"Simulated",tone:"muted"};
  if(row.type==="Buy")return row.purchaseStatus&&row.purchaseStatus!=="confirmed"?{label:"Unverified",tone:"muted"}:{label:"Confirmed ✓",tone:"confirmed"};
  if(row.type!=="TransferOut")return {label:"—",tone:"muted"};
@@ -161,11 +168,11 @@ function renderActivities(){
  for(const row of activityRows){
   const rate=Number.isFinite(activityRates[row.currency])?activityRates[row.currency]:1,currency=Number.isFinite(activityRates[row.currency])?displayCurrency:row.currency;
   const status=activityStatus(row);
-  const tr=document.createElement("tr"),type=row.simulated?"Simulated buy (dry run)":(row.type==="TransferOut"?"Withdrawal":row.type),vals=[Number.isFinite(Date.parse(row.datetime))?dateLabel(Date.parse(row.datetime)):"—",t(type||"—"),row.type==="Deposit"?"—":activityBtc(row.shares),row.type==="Deposit"?"—":activityMoney(row.price,rate,currency,"/BTC"),activityMoney(row.amount,rate,currency),row.type==="Deposit"?"—":(row.simulated&&knownNumber(row.fee)?"~":"")+activityMoney(row.fee,rate,currency),t(status.label)];
+  const tr=document.createElement("tr"),type=row.simulated?"Simulated buy (dry run)":(row.type==="TransferOut"?"Withdrawal":row.type),vals=[Number.isFinite(Date.parse(row.datetime))?dateLabel(Date.parse(row.datetime)):"—",t(type||"—"),row.type==="Deposit"?"—":activityBtc(row.shares),row.type==="Deposit"?"—":activityMoney(row.price,rate,currency,"/BTC"),activityMoney(row.amount,rate,currency),(row.type==="Deposit"&&!row.depositStatus)?"—":(row.simulated&&knownNumber(row.fee)?"~":"")+activityMoney(row.fee,rate,currency),t(status.label)];
   vals.forEach((v,i)=>{const td=document.createElement("td");td.textContent=v;if(i>=2&&i<=5)td.className="num";if(i===6)td.className="activity-status status-"+status.tone;tr.appendChild(td)});
   body.appendChild(tr)
  }
- if(!total){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=7;td.textContent=t("No BTC activity in this period.");td.className="notice";tr.appendChild(td);body.appendChild(tr)}
+ if(!total){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=7;td.textContent=t("No activity in this period.");td.className="notice";tr.appendChild(td);body.appendChild(tr)}
  const occupiedRows=activityRows.length||(!total?1:0);
  for(let i=occupiedRows;i<pageSize;i++){
   const tr=document.createElement("tr");tr.className="activity-placeholder";tr.ariaHidden="true";
@@ -200,7 +207,7 @@ async function loadAnalytics(){
   fxRate=Number(market.conversionRate);livePrice=Number(market.price);currencyRates=Object.fromEntries(Object.entries(market.conversionRates||{[quote]:fxRate})
    .map(([currency,rate])=>[currency,Number(rate)]).filter(([,rate])=>Number.isFinite(rate)&&rate>0));
   currencyRates[displayCurrency]=1;
-  $("spotUpdated").textContent=t((market.stale?"Cached Kraken price · fetched ":"Kraken public price page · fetched ")+new Date(Number(market.updatedAt)*1000).toLocaleTimeString(locale));
+  $("spotUpdated").textContent=t("Last checked "+new Date(Number(market.updatedAt)*1000).toLocaleString(locale));
  }catch(priceError){
   if(request!==reportRequest)return;
   displayCurrency=quote;fxRate=1;
@@ -224,7 +231,7 @@ async function loadAnalytics(){
   $("profitLoss").textContent=t(money(profitLoss,displayCurrency));
   $("profitLoss").className="value "+(profitLoss>=0?"positive":"negative");
  }else{$("profitLoss").textContent=t("—");$("profitLoss").className="value"}
- $("settingExchange").textContent=t(ex);$("settingQuoteCurrency").textContent=t(quote);$("tradingMode").textContent=t(d.configuration.liveTrading?"Live":"Dry run");
+ $("settingExchange").textContent=t(ex);$("settingQuoteCurrency").textContent=t(quote);$("tradingMode").textContent=t(d.configuration.liveTrading?"Live":"Simulated");
  const amountSnapshot=d.snapshot||{};
  const effectiveMinimum=amountSnapshot.exchange===d.exchange&&amountSnapshot.quote===quote?Number((amountSnapshot.withdrawalForecastPlan||{}).orderAmount):NaN;
  $("buyAmount").textContent=t(d.snapshot.withdrawalForecastPlan?.useRemainingBudget&&effectiveMinimum>0?btc(effectiveMinimum):Number(d.configuration.buyAmount)===0

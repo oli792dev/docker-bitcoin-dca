@@ -45,5 +45,5 @@ def report(settings, groups, snapshot, records):
                         'withdrawThreshold':str(settings['withdraw_threshold'])},
             'summary':summary,'summaryByCurrency':{c:{k:str(v) for k,v in m.items()} for c,m in money.items()},
             'activities':[{**r['row'],'activityId':r['id'],'simulated':bool(r.get('simulated')),
-                           'exchange':r.get('exchange',''),'withdrawalStatus':r.get('withdrawalStatus'),
+                           'exchange':r.get('exchange',''),'depositStatus':r.get('depositStatus'),'withdrawalStatus':r.get('withdrawalStatus'),
                            'purchaseStatus':(r.get('purchaseStatus','confirmed') if r['row'].get('type')=='Buy' and not r.get('simulated') else None)} for r in records]}

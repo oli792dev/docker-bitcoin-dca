@@ -227,3 +227,5 @@ for(const tone of ['active','waiting','error']){vm.runInContext(`updateStatusLig
 vm.runInContext("updateStatusLight('unexpected')",germanContext);assert.equal(germanElements.botStatusLight.className,'status-light status-waiting');
 
 assert.equal(vm.runInContext('activityStatus({type:"Deposit"}).label',context),"—");
+
+assert.equal(vm.runInContext('activityStatus({type:"Deposit",depositStatus:"confirmed"}).label',context),"Confirmed ✓");

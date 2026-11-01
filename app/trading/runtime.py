@@ -278,13 +278,15 @@ class Runtime:
         with self.lock:
             if self.worker.stop.is_set(): raise ValueError('Container is stopping; connection test was not started.')
             values = validate(payload, self.store.snapshot()['settings'])
-            LOG.info('Exchange connection test started: exchange=%s; quote currency=%s; read-only balance access', values['exchange'], values['quote'])
+            LOG.info('Exchange connection test started: exchange=%s; quote currency=%s; read-only balance and deposit-history access', values['exchange'], values['quote'])
             started = time.monotonic()
             api = create_exchange(runtime_settings(values))
             try:
                 api.balance(values['quote'])
                 api.balance('BTC')
+                end_ms=int(time.time()*1000)
+                api.fiat_deposits(values['quote'],end_ms-86400000,end_ms)
                 LOG.info('Exchange connection test succeeded: exchange=%s; duration=%.2fs; no orders or withdrawals submitted', values['exchange'], time.monotonic() - started)
-                return {'message': 'Connection successful. Account balances are accessible; no order or withdrawal was submitted.'}
+                return {'message': 'Connection successful. Account balances and deposit history are accessible; no order or withdrawal was submitted.'}
             finally:
                 if hasattr(api, 'session'): api.session.close()

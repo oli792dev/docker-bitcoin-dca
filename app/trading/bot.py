@@ -15,6 +15,8 @@ from app.exchanges.exchange_errors import DefinitiveRejection, UncertainWithdraw
 from app.core.logging_utils import log_transition, clear_transition
 from app.trading.withdrawals import reconcile_withdrawals
 from app.trading.funding import observe_deposit
+from app.trading.deposits import sync_deposits
+from app.exchanges.market_prices import collect_prices
 
 import requests
 from app.data.activity import append_activity_records, read_dashboard_snapshot, write_dashboard_snapshot, ledger_balance, withdrawal_records, write_json_atomic, get_activity_record, latest_real_buy
@@ -75,7 +77,7 @@ def read_state(path, cycle_key):
             fresh["last_withdrawal"] = state["last_withdrawal"]
         if state.get("last_order_at"):
             fresh["last_order_at"] = state["last_order_at"]
-        for key in ("deposit_tracking", "schedule", "last_order_quote"):
+        for key in ("deposit_tracking", "deposit_history", "schedule", "last_order_quote"):
             if key in state: fresh[key] = state[key]
         if "withdrawal_armed" in state:
             fresh["withdrawal_armed"] = state["withdrawal_armed"]
@@ -150,7 +152,7 @@ def persist_bot_withdrawal(api, withdrawal, result, settings, context):
     return append_activity_records([record])
 
 
-def update_dashboard_snapshot(settings, quote_balance, price, btc_balance=None):
+def update_dashboard_snapshot(settings, quote_balance, price, btc_balance=None, market_prices=None):
     tracked_btc = ledger_balance()
     previous = read_dashboard_snapshot()
     write_dashboard_snapshot({
@@ -159,6 +161,7 @@ def update_dashboard_snapshot(settings, quote_balance, price, btc_balance=None):
         "trackedBtc": format(tracked_btc, "f"),
         "btcBalance": str(btc_balance) if btc_balance is not None else None,
         "price": format(price, "f"),
+        "marketPrices": market_prices or {settings["quote"]:format(price,"f")},
         "value": format(tracked_btc * price, "f"),
         "quoteBalance": format(quote_balance, "f"),
         "withdrawThreshold": format(settings["withdraw_threshold"], "f"),
@@ -432,6 +435,10 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
         if wait is not None:
             return wait
         return run_once(api, settings, check_interval, schedule_only=True)
+    deposits, inserted_deposits = sync_deposits(api, settings, state, now, cycle_start)
+    save_state(state_path, state)
+    if inserted_deposits:
+        LOG.info('Confirmed fiat deposits recorded: count=%s; currency=%s; exchange=%s', inserted_deposits, quote, settings['exchange'])
     try:
         maybe_withdraw_btc(api, state, settings)
     except requests.RequestException as exc:
@@ -448,22 +455,16 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
     balance_after_simulated_spend = (
         max(Decimal(0), balance - spent) if not settings["live"] else balance
     )
-    next_deposit, deposit_overdue, deposit_received = observe_deposit(state, settings, now, cycle_start, next_deposit, balance)
-    if state.get('observed_deposit'):
-        # Insert before advancing the durable observation; a retry uses the same ledger ID.
-        record = state['observed_deposit']
-        append_activity_records([record])
-        state.pop('observed_deposit')
-        save_state(state_path, state)
-        LOG.info('Fiat deposit observed: amount=%s %s; exchange=%s', record['row']['amount'], quote, settings['exchange'])
+    next_deposit, deposit_overdue, deposit_received = observe_deposit(state, settings, now, cycle_start, next_deposit, balance, deposits)
     if deposit_received:
         LOG.info('Available %s funding received for the deposit cycle; resuming purchases.', quote)
     # Fee lookup precedes the fresh market-rule check; it is cached by the adapter.
     fee_rate = cycle_data['fee_rate'] if cycle_data else api.estimate_taker_fee(symbol, Decimal(1))
     price = cycle_data['price'] if cycle_data else api.price(symbol)
     market = cycle_data['market'] if cycle_data else api.market(symbol, refresh=True)
-    cycle_data = {'balance':balance,'price':price,'market':market,'fee_rate':fee_rate,'btc_balance':exchange_btc}
-    update_dashboard_snapshot(settings, balance, price, exchange_btc)
+    market_prices = cycle_data['market_prices'] if cycle_data else collect_prices(api, settings, price)
+    cycle_data = {'market_prices':market_prices,'balance':balance,'price':price,'market':market,'fee_rate':fee_rate,'btc_balance':exchange_btc}
+    update_dashboard_snapshot(settings, balance, price, exchange_btc, market_prices)
     if market.get("status") != "trading":
         update_dashboard_schedule(None, f"Waiting for market status: {market.get('status')}")
         log_transition(LOG, api, "purchase-wait", "market-" + str(market.get("status")), logging.INFO, "Market %s is %s; waiting.", symbol, market.get("status"))
