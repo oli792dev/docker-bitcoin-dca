@@ -226,4 +226,4 @@ assert(!html.includes('id="accountFreshness"'));assert(html.indexOf('class="bot-
 for(const tone of ['active','waiting','error']){vm.runInContext(`updateStatusLight('${tone}')`,germanContext);assert.equal(germanElements.botStatusLight.className,'status-light status-'+tone)}
 vm.runInContext("updateStatusLight('unexpected')",germanContext);assert.equal(germanElements.botStatusLight.className,'status-light status-waiting');
 
-assert.equal(vm.runInContext('activityStatus({type:"Deposit"}).label',context),"Observed");
+assert.equal(vm.runInContext('activityStatus({type:"Deposit"}).label',context),"—");

@@ -142,7 +142,7 @@ async function loadIntervals(){
 $("interval").addEventListener("change",()=>{applySelectedInterval();saveReportView();currentPage=1;loadAnalytics()});
 ["start","end"].forEach(id=>$(id).addEventListener("change",()=>{$("interval").value="";saveReportView()}));
 function activityStatus(row){
- if(row.type==="Deposit")return {label:"Observed",tone:"muted"};
+ if(row.type==="Deposit")return {label:"—",tone:"muted"};
  if(row.simulated)return {label:"Simulated",tone:"muted"};
  if(row.type==="Buy")return row.purchaseStatus&&row.purchaseStatus!=="confirmed"?{label:"Unverified",tone:"muted"}:{label:"Confirmed ✓",tone:"confirmed"};
  if(row.type!=="TransferOut")return {label:"—",tone:"muted"};
