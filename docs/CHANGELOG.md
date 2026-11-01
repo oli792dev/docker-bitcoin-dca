@@ -4,6 +4,10 @@ Release history based on the published [GitHub Releases](https://github.com/oli7
 
 ## Unreleased
 
+- Standardized dismissible-message spacing: 12 pixels above messages and between text and close buttons, including manual withdrawals and Parqet exports.
+
+- Moved the single labeled bot status beside Settings and removed the account-check age message.
+
 - Added a compact bot/account-check status and explicit age indicators for retained account data.
 - Marked unsaved Settings drafts and added an in-page discard confirmation for close/Escape; saved drafts close normally.
 - Disabled inactive automatic-withdrawal thresholds with explanations while retaining their saved values and allowing dry-run configuration.

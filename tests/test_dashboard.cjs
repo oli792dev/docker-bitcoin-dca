@@ -220,6 +220,5 @@ assert.equal(vm.runInContext('activityRows[0].type',germanContext),'Buy');
 assert.equal(vm.runInContext('activityRows[0].currency',germanContext),'EUR');
 console.log('German dashboard passed: labels, pagination, numbers and stable ledger values');
 
-vm.runInContext('accountCheckedAt=Date.now()-15*60000;staleAfterSeconds=600;scheduleOffline=true;renderFreshness()',germanContext);
-assert.equal(germanElements.accountFreshness.textContent,'Daten sind 15 Minuten alt');
-console.log('Account freshness passed: stale retained values are explicitly dated');
+
+assert(!html.includes('id="accountFreshness"'));assert(html.indexOf('class="bot-status"')<html.indexOf('id="openSettings"'));assert(html.includes('Status:</span>'));
