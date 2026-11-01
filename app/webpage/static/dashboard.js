@@ -223,7 +223,6 @@ async function loadAnalytics(){
   depositTotal+=Number(values.amount)*currencyRates[currency];
  }
  $('depositVolume').textContent=depositConversionAvailable?money(depositTotal,displayCurrency):'—';
- $('depositCount').textContent=t((d.summary.depositCount||0)+' deposits');
  const converted={buyVolume:0,tradeFees:0,withdrawalFees:0};
  let moneyAvailable=true;
  for(const [currency,values] of Object.entries(d.summaryByCurrency||{})){
@@ -249,7 +248,7 @@ async function loadAnalytics(){
  $("threshold").textContent=t(money(Number(d.configuration.withdrawalThreshold)*fxRate,displayCurrency));$("thresholdNote").textContent=t("Threshold in "+quote+", shown in "+displayCurrency);
  $("buyCount").textContent=t(d.summary.buyCount);$("buyBtc").textContent=t(btc(d.summary.boughtBtc));
  $("buyVolume").textContent=t(moneyAvailable?money(converted.buyVolume,displayCurrency):"—");$("avgPrice").textContent=t(moneyAvailable?"Average: "+money(Number(d.summary.boughtBtc)>0?converted.buyVolume/Number(d.summary.boughtBtc):0,displayCurrency)+"/BTC":"Conversion unavailable");
- $("tradeFees").textContent=t(moneyAvailable?money(converted.tradeFees,displayCurrency):"—");$("withdrawBtc").textContent=t(btc(d.summary.withdrawnBtc));$("withdrawCount").textContent=t(d.summary.withdrawalCount+" confirmed · "+(d.summary.pendingWithdrawalCount||0)+" pending");
+ $("tradeFees").textContent=t(moneyAvailable?money(converted.tradeFees,displayCurrency):"—");$("withdrawBtc").textContent=t(btc(d.summary.withdrawnBtc));
  $("withdrawFees").textContent=t(moneyAvailable?money(converted.withdrawalFees,displayCurrency):"—");$("netBtc").textContent=t(btc(d.summary.netBtc));
  activityRates=currencyRates;activityRows=d.activities;activityTotal=d.pagination.total;activityPages=d.pagination.pages;currentPage=d.pagination.page;renderActivities();
  }catch(e){if(request===reportRequest)showError(e.message)}

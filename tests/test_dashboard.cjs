@@ -38,7 +38,7 @@ const context={document:{getElementById:get,createElement:()=>new Element()},loc
 const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
 (async()=>{
  vm.createContext(context);vm.runInContext(script,context);await settle();
- assert.equal(get('depositVolume').textContent,'€200.00');assert.equal(get('depositCount').textContent,'1 deposits');
+ assert.equal(get('depositVolume').textContent,'€200.00');assert(!html.includes('id="depositCount"'));assert(!html.includes('id="withdrawCount"'));
  assert(html.indexOf('id="depositVolume"')<html.indexOf('id="buyCount"'));
  assert(!html.includes('id="nextPurchaseStatus"'));waitingDeposit=true;await vm.runInContext('refreshPurchaseSchedule()',context);
  assert.equal(get('nextPurchaseAt').textContent,'Waiting for deposit');assert.equal(get('nextPurchaseCountdown').textContent,'Waiting for deposit');
