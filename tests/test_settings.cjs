@@ -9,17 +9,26 @@ class Element{
  replaceChildren(){this.children=[]}
  addEventListener(name,fn){this.listeners[name]=fn}
  setAttribute(name,value){this[name]=value}
+ focus(){this.focused=true}
+ contains(target){return this===target||this.children.some(child=>child.contains(target))}
  showModal(){this.open=true}
  close(){this.open=false}
 }
 const elements={};for(const match of page.matchAll(/<(\w+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)){const el=new Element(match[1]);el.id=match[3];el.type=(match[2].match(/type="([^"]+)"/)||[])[1]||'';if(match[2].includes('data-setting'))el.dataset.setting='';elements[el.id]=el}
 const requests=[],location={href:''};let reject=false;
-const context={document:{documentElement:{dataset:{}},getElementById:id=>elements[id],createElement:tag=>new Element(tag),querySelectorAll:()=>Object.values(elements).filter(el=>'setting'in el.dataset)},location,
+const context={document:{documentElement:{dataset:{}},getElementById:id=>elements[id],createElement:tag=>new Element(tag),querySelectorAll:()=>Object.values(elements).filter(el=>'setting'in el.dataset)},setTimeout:fn=>{fn()},location,
  fetch:async(url,options)=>{requests.push({url,body:JSON.parse(options.body)});return {ok:!reject,json:async()=>reject?{error:'Connection failed'}:{message:'Connected',saved:true}}}};
 vm.runInNewContext(script,context);
 function allText(el){return el.textContent+' '+el.children.map(allText).join(' ')}
 async function event(id,name='click'){if(id==='confirm'&&!elements.passwordConfirmation.hidden&&!elements.sensitivePassword.value)elements.sensitivePassword.value='current-long-password';return elements[id].listeners[name]({preventDefault(){},submitter:elements[id]})}
 (async()=>{
+ assert.equal(elements.settingsTabs.children.length,4);assert.equal(elements.botConfiguration.hidden,false);assert.equal(elements.dashboardOptions.hidden,true);
+ elements.buy_amount.value='.001';await event('dashboardOptionsTab');assert.equal(elements.botConfiguration.hidden,true);assert.equal(elements.dashboardOptions.hidden,false);assert.equal(elements.buy_amount.value,'.001');
+ elements.dashboardOptionsTab.listeners.keydown({key:'ArrowRight',preventDefault(){}});assert.equal(elements.exchangeConnection.hidden,false);assert.equal(elements.exchangeConnectionTab.focused,true);
+ elements.exchangeConnectionTab.listeners.keydown({key:'End',preventDefault(){}});assert.equal(elements.dashboardCredentials.hidden,false);
+ elements.dashboardCredentialsTab.listeners.keydown({key:'Home',preventDefault(){}});assert.equal(elements.botConfiguration.hidden,false);
+ elements.botConfiguration.contains=target=>target===elements.deposit_time;await event('dashboardOptionsTab');elements.settingsForm.listeners.invalid({target:elements.deposit_time});assert.equal(elements.botConfiguration.hidden,false);
+ elements.buy_amount.value='0';assert.equal(elements.deposit_time.type,'time');assert.equal(elements.deposit_time.value,'00:00');elements.deposit_time.value='09:30';
  assert.equal(elements.withdraw_thresholdLabel.textContent,'Automatic withdrawal threshold (EUR)');elements.quote.value='USD';await event('quote','change');assert.equal(elements.withdraw_thresholdLabel.textContent,'Automatic withdrawal threshold (USD)');
  assert(page.includes('<small id="displayCurrencyHint" class="hint">Display currency affects reporting only; purchases use the purchase currency.</small>'));assert(page.includes('aria-describedby="displayCurrencyHint"'));
  assert.equal(elements.kraken_api_key.value,'');assert.equal(elements.kraken_api_key.placeholder,'Saved · leave empty to keep');
@@ -39,7 +48,7 @@ async function event(id,name='click'){if(id==='confirm'&&!elements.passwordConfi
  await event('settingsForm','submit');assert.equal(elements.review.open,true);assert.equal(requests.length,count,'Review must not save yet');
  const text=allText(elements.reviewValues);assert.match(text+allText(elements.unchangedReviewValues),/LIVE|Dry run/);assert.match(text,/1200 EUR/);assert.match(text,/1000 EUR/);assert.match(text,/Before/);assert.match(text,/After/);assert.equal(elements.unchangedReview.hidden,false);assert.match(allText(elements.unchangedReviewValues),/BTC per purchase/);assert(!text.includes('fictional-key'));assert(!text.includes('fictional-secret'));assert.match(text,/Will be updated \(hidden\)/);
  await event('cancel');assert.equal(elements.review.open,false);await event('confirm');assert.equal(requests.filter(r=>r.url==='/api/settings').length,0,'Cancelled review must not submit');assert.equal(requests.at(-1).body.event,'settings_save_cancelled');
- await event('settingsForm','submit');await event('confirm');assert.equal(requests.at(-1).url,'/api/settings');assert.equal(requests.at(-1).body.settings.withdrawals_enabled,true);assert.equal(requests.at(-1).body.settings.display_currency,'USD');assert.equal(requests.at(-1).body.settings.timezone,'Asia/Tokyo');assert.equal(requests.at(-1).body.settings.appearance,'dark');
+ await event('settingsForm','submit');await event('confirm');assert.equal(requests.at(-1).url,'/api/settings');assert.equal(requests.at(-1).body.settings.withdrawals_enabled,true);assert.equal(requests.at(-1).body.settings.display_currency,'USD');assert.equal(requests.at(-1).body.settings.timezone,'Asia/Tokyo');assert.equal(requests.at(-1).body.settings.appearance,'dark');assert.equal(requests.at(-1).body.settings.deposit_time,'09:30');
  await event('editDashboardCredentials');assert.equal(location.href,'/settings?editor=dashboard');vm.runInContext('setDashboardEditor(true)',context);assert.equal(elements.dashboardEditor.hidden,false);
  elements.password.value='new-long-password';elements.passwordConfirm.value='different';const before=requests.length;await event('settingsForm','submit');assert.equal(requests.length,before);assert.match(elements.status.textContent,/do not match/);
  vm.runInContext('setDashboardEditor(false)',context);assert.equal(elements.dashboardEditor.hidden,true);assert.equal(elements.password.value,'');
@@ -64,7 +73,7 @@ class SetupElement extends Element{append(...children){for(const child of childr
 for(const match of setupPage.matchAll(/<(\w+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)){const el=new SetupElement(match[1]);el.id=match[3];el.type=(match[2].match(/type="([^"]+)"/)||[])[1]||'';if(match[2].includes('data-setting'))el.dataset.setting='';setupElements[el.id]=el}
 const setupRequests=[];vm.runInNewContext(setupPage.match(/<script>([\s\S]*?)<\/script>/)[1],{document:{getElementById:id=>setupElements[id],createElement:tag=>new SetupElement(tag),querySelectorAll:()=>Object.values(setupElements).filter(el=>'setting'in el.dataset)},location:{href:''},fetch:async(url,options)=>{setupRequests.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>({})}}});
 assert.equal(setupElements.timezone.value,'Pacific/Chatham');assert.equal(setupElements.timezone.children.at(-1).value,'Pacific/Chatham');
-assert.equal(setupElements.dashboardCredentials,undefined);assert.equal(setupElements.username,undefined);
+assert.equal(setupElements.settingsTabs.children.length,3);assert.equal(setupElements.exchangeConnection.hidden,false);assert.equal(setupElements.botConfiguration.hidden,true);assert.equal(setupElements.dashboardCredentials,undefined);assert.equal(setupElements.username,undefined);
 setupElements.settingsForm.listeners.submit({preventDefault(){}});assert.equal(setupElements.review.open,true);assert.match(setupElements.reviewDescription.textContent,/New configuration/);assert(!allText(setupElements.reviewValues).includes('Before'));
 assert.equal(setupRequests.length,0,'Step two reviews settings without editing account credentials');
 console.log('First-run step two passed without credential fields');
@@ -94,7 +103,7 @@ assert(scrollClasses.has('has-overflow'));assert(scrollClasses.has('has-more-rig
 area.scrollLeft=480;scrollEvents.scroll();assert(!scrollClasses.has('has-more-right'));assert(scrollClasses.has('is-scrolling'));finishScroll();assert(!scrollClasses.has('is-scrolling'));
 area.clientWidth=900;resizeScroll();assert(!scrollClasses.has('has-overflow'));
 assert(page.includes('grid-template-rows:repeat(2,auto);grid-auto-flow:column'));
-assert.equal((page.match(/class="horizontal-scroll"/g)||[]).length,7);
+assert.equal((page.match(/class="horizontal-scroll(?: settings-tabs)?"/g)||[]).length,8);
 console.log('Settings scrolling passed: two-row layout, overflow, edge fade, resize and scroll feedback');
 
 // All native dialogs lock their own page and restore its exact scroll position.

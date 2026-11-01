@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import secrets
 from app.data.storage import write_json_atomic
 import threading
@@ -17,7 +18,7 @@ LOG = logging.getLogger('bitcoin-dca.settings')
 CONFIG_PATH = Path('/webui-data/config.json')
 
 SECRET_FIELDS = tuple(f'{exchange}_api_{part}' for exchange in ('kraken', 'bitvavo') for part in ('key', 'secret'))
-DEFAULTS = dict(exchange='KRAKEN', quote='EUR', buy_amount='0', deposit_day=1,
+DEFAULTS = dict(exchange='KRAKEN', quote='EUR', buy_amount='0', deposit_day=1, deposit_time='00:00',
                 startup_delay_seconds=60, order_status_check_seconds=30, check_interval_seconds=300,
                 timezone='Europe/Berlin', live=False, withdrawals_enabled=False,
                 withdraw_threshold='1000', withdraw_address='', withdraw_network='BTC', kraken_withdraw_key='',
@@ -91,6 +92,8 @@ def validate(values, previous=None, require_credentials=True):
             if key == 'expected_monthly_deposit':
                 raise ValueError('Expected monthly deposit must be a finite non-negative amount.') from None
             raise ValueError(f'{key} must be a finite positive amount (purchase amount may be zero).') from None
+    if not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d', result['deposit_time']):
+        raise ValueError('Deposit time must use HH:MM, from 00:00 to 23:59.')
     if not 1 <= result['deposit_day'] <= 31 or not 0 <= result['startup_delay_seconds'] <= 86400:
         raise ValueError('Deposit day must be 1–31; startup delay must be 0–86400 seconds.')
     if not 60 <= result['check_interval_seconds'] <= 86400 or not 1 <= result['order_status_check_seconds'] <= 3600:

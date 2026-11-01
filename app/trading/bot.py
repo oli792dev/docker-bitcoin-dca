@@ -7,12 +7,13 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal, ROUND_CEILING, ROUND_DOWN
 from zoneinfo import ZoneInfo
-import calendar
+from app.core.deposit_calendar import deposit_at
 import threading
 from functools import wraps
 from app.exchanges.exchange_errors import DefinitiveRejection, UncertainWithdrawalError
 from app.core.logging_utils import log_transition, clear_transition
 from app.trading.withdrawals import reconcile_withdrawals
+from app.trading.funding import observe_deposit
 
 BOT_LOCK = threading.RLock()
 
@@ -30,14 +31,14 @@ from app.data.storage import STATE_PATH, prepare_storage
 LOG = logging.getLogger("bitcoin-dca")
 
 
-def cycle_dates(now, deposit_day):
+def cycle_dates(now, deposit_day, deposit_time="00:00"):
     """Return this deposit cycle's key and next deposit instant in configured local time."""
     def deposit_date(year, month):
-        day = min(deposit_day, calendar.monthrange(year, month)[1])
-        return datetime(year, month, day, tzinfo=now.tzinfo)
+        return deposit_at(year, month, deposit_day, deposit_time, now.tzinfo)
 
     this_month = deposit_date(now.year, now.month)
-    if now >= this_month:
+    reached = now.astimezone(timezone.utc) >= this_month.astimezone(timezone.utc) if now.tzinfo else now >= this_month
+    if reached:
         start = this_month
         if now.month == 12:
             next_deposit = deposit_date(now.year + 1, 1)
@@ -66,7 +67,7 @@ def read_state(path, cycle_key):
         return {"cycle": cycle_key, "spent": "0"}
     state = json.loads(path.read_text())
     if state.get("cycle") != cycle_key:
-        # Reset dry-run simulated spending at the configured monthly boundary.
+        # Reset simulation spending, retaining the prior unfunded budget boundary.
         fresh = {"cycle": cycle_key, "spent": "0"}
         if state.get("configuration_account"):
             fresh["configuration_account"] = state["configuration_account"]
@@ -82,6 +83,8 @@ def read_state(path, cycle_key):
             fresh["last_withdrawal"] = state["last_withdrawal"]
         if state.get("last_order_at"):
             fresh["last_order_at"] = state["last_order_at"]
+        for key in ("deposit_tracking", "schedule", "last_order_quote"):
+            if key in state: fresh[key] = state[key]
         if "withdrawal_armed" in state:
             fresh["withdrawal_armed"] = state["withdrawal_armed"]
         return fresh
@@ -432,7 +435,7 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
     symbol = f"BTC-{quote}"
     state_path = STATE_PATH
     now = local_now(settings["timezone"])
-    cycle_key, _cycle_start, next_deposit = cycle_dates(now, settings["deposit_day"])
+    cycle_key, cycle_start, next_deposit = cycle_dates(now, settings["deposit_day"], settings.get("deposit_time", "00:00"))
     state = read_state(state_path, cycle_key)
     state["cycle"] = cycle_key
     spent = Decimal(state.get("spent", "0"))
@@ -458,9 +461,14 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
     balance_after_simulated_spend = (
         max(Decimal(0), balance - spent) if not settings["live"] else balance
     )
+    next_deposit, deposit_overdue, deposit_received = observe_deposit(state, settings, now, cycle_start, next_deposit, balance)
+    if deposit_received:
+        LOG.info('Available %s funding received after the expected deposit time; resuming purchases.', quote)
     if balance_after_simulated_spend <= 0:
         update_dashboard_snapshot(settings,balance,Decimal(str(read_dashboard_snapshot().get('price','0'))),exchange_btc)
-        update_dashboard_schedule(None,'Waiting for available quote-currency funds')
+        update_dashboard_schedule(None,'Waiting for deposit')
+        if settings['live']: state['deposit_tracking']['waiting'] = True
+        save_state(state_path, state)
         log_transition(LOG, api, 'purchase-wait', 'no-funds', logging.INFO, 'Waiting for available %s funds.', quote)
         return check_interval
     # Fee lookup precedes the fresh market-rule check; it is cached by the adapter.
@@ -472,6 +480,7 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
     if market.get("status") != "trading":
         update_dashboard_schedule(None, f"Waiting for market status: {market.get('status')}")
         log_transition(LOG, api, "purchase-wait", "market-" + str(market.get("status")), logging.INFO, "Market %s is %s; waiting.", symbol, market.get("status"))
+        save_state(state_path, state)
         return check_interval
     min_quote = Decimal(market["minOrderInQuoteAsset"])
     min_btc = Decimal(market["minOrderInBaseAsset"])
@@ -483,14 +492,27 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
     available = balance if settings["live"] else balance_after_simulated_spend
     affordable_budget = min(spendable, available)
     estimated_fee = order_quote * fee_rate
-    # 0.5% estimation buffer protects the budget, not the execution price of a market order.
-    planned_cost = ceil_to_places((order_quote + estimated_fee) * Decimal('1.005'), notional_decimals)
+    planned_cost = order_quote + estimated_fee
     possible_buys = int(affordable_budget // planned_cost)
     if possible_buys < 1:
-        update_dashboard_schedule(None, "Waiting until the balance covers an order")
+        update_dashboard_schedule(None, "Waiting for deposit")
+        if settings["live"]: state["deposit_tracking"]["waiting"] = True
+        save_state(state_path, state)
         log_transition(LOG, api, "purchase-wait", "insufficient-funds", logging.INFO, "Waiting: available balance %s %s; minimum order %s %s.", affordable_budget, quote, order_quote, quote)
         return check_interval
 
+    if deposit_overdue and state.get('deposit_tracking', {}).get('unverifiedBoundary'):
+        tracking = state['deposit_tracking']
+        tracking['unverifiedBoundary'] = False
+        if possible_buys > 1:
+            # On upgrades or lost observations, a large initial balance may already
+            # include this month's deposit. Do not rapidly liquidate an unknown budget.
+            next_deposit = cycle_dates(now, settings['deposit_day'], settings.get('deposit_time','00:00'))[2]
+            tracking['dueAt'] = next_deposit.isoformat()
+            tracking['firstPurchaseDue'] = True
+            deposit_overdue = False
+            LOG.info('No prior fiat observation at the deposit boundary; treating available funds as the current-cycle budget.')
+    if settings["live"]: state["deposit_tracking"]["waiting"] = False
     last_buy = settings.get('startup_last_buy_at')
     if last_buy is None and state.get('last_order_at'):
         last_buy = datetime.fromisoformat(state['last_order_at'])
@@ -499,7 +521,7 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
     clear_transition(api, "purchase-wait")
     interval_anchor = last_buy if last_buy is not None else now.astimezone(timezone.utc)
     seconds_to_deposit = max(60, (next_deposit.astimezone(timezone.utc) - interval_anchor).total_seconds())
-    interval_seconds = max(60, int(seconds_to_deposit / possible_buys))
+    interval_seconds = max(60, int(seconds_to_deposit / (possible_buys + 1)))
     LOG.info(
         "Recalculated DCA schedule: balance=%s %s; spendable=%s %s; "
         "price=%s %s/%s; estimated order=%s %s (%s %s); "
@@ -509,13 +531,18 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
         order_amount, "BTC", order_quote, quote, next_deposit.isoformat(),
         possible_buys, int(interval_seconds / 60),
     )
-    fingerprint = ['last-purchase-interval-v2',str(affordable_budget),str(planned_cost),next_deposit.isoformat(),
+    fingerprint = ['before-deposit-interval-v3',str(affordable_budget),str(planned_cost),next_deposit.isoformat(),
                    last_buy.isoformat() if last_buy else None]
     previous_plan = state.get('schedule',{})
-    if previous_plan.get('fingerprint')==fingerprint:
+    if deposit_received or state.get("deposit_tracking", {}).get("firstPurchaseDue"):
+        due = now
+    elif previous_plan.get('fingerprint')==fingerprint:
         due = datetime.fromisoformat(previous_plan['dueAt'])
     else:
         due = interval_anchor + timedelta(seconds=interval_seconds) if last_buy else now
+    if deposit_overdue:
+        # Spend usable remnants of the old budget instead of moving them a month away.
+        due = min(due, now)
     state['schedule']={'fingerprint':fingerprint,'dueAt':due.isoformat()}
     save_state(state_path,state)
     remaining=max(0,int((due.astimezone(timezone.utc)-now.astimezone(timezone.utc)).total_seconds()))
@@ -610,7 +637,7 @@ def manual_withdrawal_service(api, settings):
         if not settings["live"]:
             raise ValueError("Manual Bitcoin withdrawals require LIVE_TRADING=true.")
         api.validate_withdrawal_settings(settings)
-        cycle, _, _ = cycle_dates(local_now(settings["timezone"]), settings["deposit_day"])
+        cycle, _, _ = cycle_dates(local_now(settings["timezone"]), settings["deposit_day"], settings.get("deposit_time", "00:00"))
         state = read_state(STATE_PATH, cycle)
         if (state.get("pending_order") or state.get("pending_withdrawal") or
             any(r.get('exchange')==settings['exchange'] and r.get('withdrawalStatus')=='submitted'

@@ -7,7 +7,7 @@ import requests
 import ssl
 from app.webpage.tls import TLSHandshakeError
 from datetime import datetime, timezone, timedelta
-import calendar
+from app.core.deposit_calendar import deposit_at
 from zoneinfo import ZoneInfo
 from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
@@ -66,10 +66,10 @@ def withdrawal_forecast(settings, snapshot, monthly_deposit, now):
             slots = max(0, int((deposit.astimezone(timezone.utc) - due.astimezone(timezone.utc)).total_seconds() // interval) + 1)
             buys = min(int(budget // cost), slots)
             if needed <= buys:
-                target = due + timedelta(seconds=(needed - 1) * interval)
+                target = (due.astimezone(timezone.utc) + timedelta(seconds=(needed - 1) * interval)).astimezone(due.tzinfo)
                 return target.isoformat(), "Estimate at the current price, fees and expected monthly deposits"
             if buys:
-                last_buy = due + timedelta(seconds=(buys - 1) * interval)
+                last_buy = (due.astimezone(timezone.utc) + timedelta(seconds=(buys - 1) * interval)).astimezone(due.tzinfo)
                 budget -= cost * buys
                 needed -= buys
             if monthly_deposit == 0:
@@ -77,13 +77,12 @@ def withdrawal_forecast(settings, snapshot, monthly_deposit, now):
             budget += monthly_deposit
             start = deposit
             year, month = (start.year + 1, 1) if start.month == 12 else (start.year, start.month + 1)
-            deposit = start.replace(year=year, month=month,
-                                   day=min(settings["deposit_day"], calendar.monthrange(year, month)[1]))
+            deposit = deposit_at(year, month, settings["deposit_day"], settings.get("deposit_time", "00:00"), start.tzinfo)
             possible = int(budget // cost)
             if possible:
                 anchor = last_buy or start
-                interval = max(60, int((deposit.astimezone(timezone.utc) - anchor.astimezone(timezone.utc)).total_seconds() / possible))
-                due = max(start, anchor + timedelta(seconds=interval))
+                interval = max(60, int((deposit.astimezone(timezone.utc) - anchor.astimezone(timezone.utc)).total_seconds() / (possible + 1)))
+                due = max(start.astimezone(timezone.utc), anchor.astimezone(timezone.utc) + timedelta(seconds=interval)).astimezone(start.tzinfo)
             else:
                 due = deposit + timedelta(seconds=1)
         return None, "Estimate exceeds the 100-year forecast horizon"
@@ -302,7 +301,7 @@ __DESIGN_CSS__
 <div class="card"><label>Quote currency</label><div class="value" id="settingQuoteCurrency">—</div></div>
 <div class="card"><label>Trading mode</label><div class="value" id="tradingMode">—</div></div>
 <div class="card"><label>Purchase amount</label><div class="value" id="buyAmount">—</div><div class="small" id="buyAmountNote"></div></div>
-<div class="card"><label>Deposit day (day of month)</label><div class="value" id="depositDay">—</div></div>
+<div class="card"><label>Deposit day (day of month)</label><div class="value" id="depositDay">—</div><div class="small" id="depositTime">—</div></div>
 <div class="card"><label>Automatic withdrawals</label><div class="value" id="withdrawEnabled">—</div></div>
 <div class="card"><label>Withdrawal threshold</label><div class="value" id="threshold">—</div><div class="small" id="thresholdNote">Configured threshold</div></div>
 <div class="card"><label>Withdrawal target</label><div class="value" id="withdrawalTarget">—</div></div>
@@ -317,7 +316,7 @@ __DESIGN_CSS__
 <div class="schedule-row-scroll horizontal-scroll" role="region" aria-label="Purchase schedule cards" tabindex="0"><div class="grid schedule-grid">
 <div class="card"><label>Current BTC price</label><div class="value" id="spot">—</div><div class="small" id="spotUpdated">Kraken public price page</div><div class="small negative hidden" id="priceFeedback" role="status"></div></div>
 <div class="card"><label id="quoteBalanceLabel">Available fiat balance on exchange</label><div class="value" id="quoteBalance">—</div><div class="small" id="quoteBalanceUpdated">Waiting for account check</div></div>
-<div class="card time-card"><label>Next purchase <span id="nextPurchaseStatus">Scheduled</span></label><div class="value time-value" id="nextPurchaseAt">—</div></div>
+<div class="card time-card"><label>Next purchase</label><div class="value time-value" id="nextPurchaseAt">—</div></div>
 <div class="card time-card"><label>Time until next purchase</label><div class="value countdown-value" id="nextPurchaseCountdown">—</div></div>
 </div></div>
 </section>
@@ -359,7 +358,7 @@ __DESIGN_CSS__
 <footer class="dashboard-footnotes" aria-labelledby="notesHeading">
 <h2 id="notesHeading">Notes</h2>
 <ol>
-<li id="schedule-note"><strong>Schedule and automatic withdrawal</strong><p>Purchase interval = time from the last purchase to the next deposit day ÷ purchases affordable with the current fiat balance, including estimated fees and a planning buffer. Without a previous purchase, planning starts from now. Next purchase = last purchase + interval; elapsed time reduces the wait. Open orders block further purchases. Balances reflect the last account check; the display BTC price comes from Kraken’s public converter pages.</p><p id="automatic-withdrawal-note"><span id="automaticWithdrawalDestination"></span> The automatic withdrawal threshold uses all available exchange BTC valued in the purchase currency, including BTC acquired outside this bot. Remaining purchases = (threshold ÷ current BTC price − available BTC) ÷ BTC per purchase, rounded up. The forecast projects these purchases using the current budget, price and order costs. Expected monthly deposit adds assumed funds on each deposit day; unused funds carry over and intervals are recalculated for actual calendar months. This affects only the forecast. The estimated date is the final required purchase; withdrawal follows an eligible bot check. If the threshold is already reached, the estimate is now. Countdown = estimated date − current time, with a minimum of zero. Estimates require automatic withdrawals and live trading; future prices, fees, deposits and execution may change them.</p><div id="withdrawal-note" class="note-subsection"><h3 class="note-subheading">Manual withdrawal</h3><p id="withdrawalDestination">Loading withdrawal configuration…</p><p id="withdrawMessage" role="status" aria-live="polite"></p><p>After confirmation, sends all available BTC minus the exchange withdrawal fee. Requires live trading activated; the automatic withdrawal setting and threshold do not apply. Withdrawals appear immediately in Period activity.<span id="manual-export-note"> Only confirmed ones qualify for export.</span></p></div></li>
+<li id="schedule-note"><strong>Schedule and automatic withdrawal</strong><p>Purchase interval = time from the last purchase to the next deposit date and time ÷ (affordable purchases + 1), including estimated trading fees. This places the final purchase before the deposit boundary. An overdue deposit remains pending until available fiat increases; usable old funds are spent first. Without a previous purchase, planning starts from now. Next purchase = last purchase + interval; elapsed time reduces the wait. Open orders block further purchases. Balances reflect the last account check; the display BTC price comes from Kraken’s public converter pages.</p><p id="automatic-withdrawal-note"><span id="automaticWithdrawalDestination"></span> The automatic withdrawal threshold uses all available exchange BTC valued in the purchase currency, including BTC acquired outside this bot. Remaining purchases = (threshold ÷ current BTC price − available BTC) ÷ BTC per purchase, rounded up. The forecast projects these purchases using the current budget, price and order costs. Expected monthly deposit adds assumed funds on each configured deposit date and time; unused funds carry over and intervals are recalculated for actual calendar months. This affects only the forecast. The estimated date is the final required purchase; withdrawal follows an eligible bot check. If the threshold is already reached, the estimate is now. Countdown = estimated date − current time, with a minimum of zero. Estimates require automatic withdrawals and live trading; future prices, fees, deposits and execution may change them.</p><div id="withdrawal-note" class="note-subsection"><h3 class="note-subheading">Manual withdrawal</h3><p id="withdrawalDestination">Loading withdrawal configuration…</p><p id="withdrawMessage" role="status" aria-live="polite"></p><p>After confirmation, sends all available BTC minus the exchange withdrawal fee. Requires live trading activated; the automatic withdrawal setting and threshold do not apply. Withdrawals appear immediately in Period activity.<span id="manual-export-note"> Only confirmed ones qualify for export.</span></p></div></li>
 <li id="report-note"><strong>Period analysis and Parqet export</strong><p>Choose a custom range or an interval between withdrawals. Historical amounts are converted from their original currencies to the display currency.</p><p id="parqet-note">The Parqet-readable CSV exports only the complete cycle after the previous confirmed withdrawal through the last confirmed withdrawal in the selected range. It includes real purchase costs and trading fees, and the ending withdrawal’s net BTC after network fees. Later purchases, simulations and unconfirmed or failed withdrawals are excluded. A confirmed withdrawal and at least one real purchase in its cycle are required.</p></li>
 </ol>
 </footer>
@@ -434,7 +433,7 @@ let exchangeBtcBalance=null, balanceDisplayPrice=null, balanceDisplayCurrency=nu
 function renderExchangeBtcValue(){
  $("exchangeBtcValue").textContent=exchangeBtcBalance!==null&&balanceDisplayPrice>0&&balanceDisplayCurrency===displayCurrency?money(exchangeBtcBalance*balanceDisplayPrice,displayCurrency):"—";
 }
-let nextPurchaseTimestamp=null, estimatedWithdrawalTimestamp=null, scheduleClockOffset=0;
+let nextPurchaseTimestamp=null, estimatedWithdrawalTimestamp=null, scheduleClockOffset=0, nextPurchaseMessage="Not scheduled";
 function renderCountdown(id, timestamp){
  const output=$(id);
  if(timestamp===null){output.textContent="—";return}
@@ -447,6 +446,7 @@ function renderCountdown(id, timestamp){
 }
 function renderPurchaseCountdown(){
  renderCountdown("nextPurchaseCountdown",nextPurchaseTimestamp);
+ if(nextPurchaseTimestamp===null)$("nextPurchaseCountdown").textContent=nextPurchaseMessage;
  renderCountdown("withdrawalCountdown",estimatedWithdrawalTimestamp);
  if(estimatedWithdrawalTimestamp===null)$("withdrawalCountdown").textContent="Not estimated";
 }
@@ -474,8 +474,8 @@ async function refreshPurchaseSchedule(){
    :"Waiting for account check";
   nextPurchaseTimestamp=Number.isFinite(target)?target:null;
   scheduleClockOffset=Number.isFinite(serverTime)?serverTime-Date.now():0;
-  $("nextPurchaseAt").textContent=nextPurchaseTimestamp===null?"Not scheduled":new Date(nextPurchaseTimestamp).toLocaleString("en-GB",{timeZone:schedule.timezone||"UTC",timeZoneName:"short"});
-  $("nextPurchaseStatus").textContent=schedule.nextPurchaseStatus==="Waiting for startup delay"?"":(schedule.nextPurchaseStatus||"Waiting for the bot schedule");
+  nextPurchaseMessage=schedule.nextPurchaseStatus==="Waiting for startup delay"?"Not scheduled":(schedule.nextPurchaseStatus||"Not scheduled");
+  $("nextPurchaseAt").textContent=nextPurchaseTimestamp===null?nextPurchaseMessage:new Date(nextPurchaseTimestamp).toLocaleString("en-GB",{timeZone:schedule.timezone||"UTC",timeZoneName:"short"});
   exchangeBtcBalance=schedule.btcBalance!=null&&Number.isFinite(Number(schedule.btcBalance))?Number(schedule.btcBalance):null;
   $("exchangeBtcBalance").textContent=exchangeBtcBalance===null?"—":btc(exchangeBtcBalance);
   $("exchangeBtcUpdated").textContent=exchangeBtcBalance===null?"Waiting for account check":(Number.isFinite(checkedAt)?"Last checked "+new Date(checkedAt).toLocaleString("en-GB",{timeZone:schedule.timezone||"UTC"}):"Last account check");
@@ -642,7 +642,7 @@ async function loadAnalytics(){
   ?(Number.isFinite(effectiveMinimum)&&effectiveMinimum>0?btc(effectiveMinimum):"—")
   :btc(d.configuration.buyAmount);
  $("buyAmountNote").textContent=Number(d.configuration.buyAmount)===0?"(exchange minimum)"+(Number.isFinite(effectiveMinimum)&&effectiveMinimum>0?"":" · waiting for account check"):"";
- $("depositDay").textContent=String(d.configuration.depositDay);$("withdrawEnabled").textContent=d.configuration.withdrawalsEnabled?"Enabled":"Disabled";
+ $("depositDay").textContent=String(d.configuration.depositDay);$("depositTime").textContent=(d.configuration.depositTime||"00:00")+" · "+(d.configuration.timezone||"UTC");$("withdrawEnabled").textContent=d.configuration.withdrawalsEnabled?"Enabled":"Disabled";
  $("threshold").textContent=money(Number(d.configuration.withdrawalThreshold)*fxRate,displayCurrency);$("thresholdNote").textContent="Threshold in "+quote+", shown in "+displayCurrency;
  $("buyCount").textContent=d.summary.buyCount;$("buyBtc").textContent=btc(d.summary.boughtBtc);
  $("buyVolume").textContent=moneyAvailable?money(converted.buyVolume,displayCurrency):"—";$("avgPrice").textContent=moneyAvailable?"Average: "+money(Number(d.summary.boughtBtc)>0?converted.buyVolume/Number(d.summary.boughtBtc):0,displayCurrency)+"/BTC":"Conversion unavailable";

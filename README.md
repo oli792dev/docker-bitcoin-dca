@@ -18,7 +18,7 @@ docker compose up -d --build
 
 Set `WEB_UI_TLS_HOSTS` in Compose or `.env` to the IP address/hostname you use, then open `https://<docker-host-ip>:6890`. Trust the generated local CA on your devices; see [HTTPS setup](docs/architecture.md#https-and-session-security). The setup wizard first creates your username and password (12+ characters), then configures the exchange, API access and purchases. The web UI is always enabled. Bot settings and credentials come only from the saved web configuration; new installations start in dry run.
 
-Settings, beside Log out, opens a dialog with separate buttons for editing Login Credentials and API access/withdrawal targets. Bot Configuration groups purchase settings and the withdrawal threshold, each with a short explanation. Trading and dashboard groups the live-trading, automatic/manual withdrawal and Parqet switches with display currency. Disabled features also hide their controls and notes.
+Settings, beside Log out, groups Bot Configuration, Dashboard, Exchange and Login Credentials into tabs. Credentials and API access/withdrawal targets have separate editors. Bot Configuration groups purchase settings and the withdrawal threshold, each with a short explanation. Trading and dashboard groups the live-trading, automatic/manual withdrawal and Parqet switches with display currency. Disabled features also hide their controls and notes.
 
 | Exchange | API permissions | Bitcoin withdrawal destination |
 | --- | --- | --- |
@@ -35,11 +35,13 @@ Compose manages the web server, volumes and restart policy. Docker settings are 
 
 ### Purchase schedule
 
-The bot refreshes the available fiat balance, BTC price and exchange order rules. Estimated order cost includes the trading fee and a 0.5% planning buffer.
+The bot refreshes the available fiat balance, BTC price and exchange order rules. Estimated order cost includes trading fees, without an additional planning buffer.
 
-**Purchase interval = time from the last purchase to the next deposit day ÷ affordable purchases.**
+**Purchase interval = time from the last purchase to the next deposit date and time ÷ (affordable purchases + 1).**
 
-The next purchase is the last purchase time plus that interval. At startup, the bot uses recorded real purchases, falling back to saved execution state. Without previous execution history, the first purchase is due after the startup delay. Unchanged planning inputs retain the saved due time; changed funds, costs or deposit boundaries cause recalculation.
+Set the deposit day and time in Bot Configuration; both use the configured timezone (default time: 00:00). The next purchase is the last purchase time plus that interval. At startup, the bot uses recorded real purchases, falling back to saved execution state. Without previous execution history, the first purchase is due after the startup delay. Unchanged planning inputs retain the saved due time; changed funds, costs or deposit boundaries cause recalculation.
+
+The extra time slot puts the final affordable buy before the deposit boundary. Delayed deposits show Waiting for deposit; usable residual fiat is spent first, and new available funding resumes purchases. Small remnants below an executable order may remain.
 
 Live orders are submitted once and verified before another purchase. Open orders and uncertain submissions remain pending across restarts; completed partial fills are recorded at their actual executed amount. Network requests and queued actions can delay execution.
 
@@ -77,7 +79,7 @@ See [Architecture and operation](docs/architecture.md) for container components,
 
 ## Limitations
 
-- **Bitcoin spot market orders only.** Prices, fills and fees can differ from estimates. The planning buffer is not a price cap. Withdrawal forecasts assume unchanged prices and costs plus the entered monthly deposits.
+- **Bitcoin spot market orders only.** Prices, fills and fees can differ from estimates. Withdrawal forecasts assume unchanged prices and costs plus the entered monthly deposits.
 - **Available funds drive scheduling.** The bot does not reserve funds for other uses or identify actual monthly deposits. Run one instance per account and persistent state; other trading tools can affect balances.
 - **Local history is not a full account statement.** Unrelated trades and transfers are not imported. BTC totals use gross withdrawal debits; exported BTC uses the net amount received.
 - **Unresolved transactions require care.** Orders with uncertain outcomes block new purchases. Withdrawals qualify for export only after a unique exchange-history confirmation; the bot does not independently verify the blockchain. Older records may remain unverified. In-memory sessions and confirmation previews are lost on restart; pending submissions persist.

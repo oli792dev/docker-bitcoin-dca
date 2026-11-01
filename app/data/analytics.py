@@ -36,7 +36,7 @@ def report(settings, groups, snapshot, records):
     price=Decimal(str(snapshot.get('price','0')))
     return {'quote':settings['quote'],'exchange':settings['exchange'],
             'configuration':{'displayCurrency':settings.get('display_currency','EUR'),'liveTrading':bool(settings['live']),'buyAmount':str(settings['buy_amount']),
-                             'depositDay':int(settings['deposit_day']),'withdrawalsEnabled':bool(settings['withdrawals_enabled']),
+                             'depositDay':int(settings['deposit_day']),'depositTime':settings.get('deposit_time','00:00'),'timezone':settings.get('timezone','UTC'),'withdrawalsEnabled':bool(settings['withdrawals_enabled']),
                              'withdrawalThreshold':str(settings['withdraw_threshold'])},
             'snapshot':{'exchange':snapshot.get('exchange'),'quote':snapshot.get('quote'),
                         'withdrawalForecastPlan':snapshot.get('withdrawalForecastPlan'),

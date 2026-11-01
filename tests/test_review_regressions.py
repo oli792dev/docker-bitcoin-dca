@@ -208,6 +208,82 @@ class ReviewTests(unittest.TestCase):
         self.assertTrue(all('next purchase='+due in line for line in lines))
         api.buy_btc.assert_not_called()
 
+    def test_last_affordable_purchase_is_not_lost_to_the_old_buffer_or_boundary(self):
+        now=datetime(2026,10,31,18,tzinfo=timezone.utc)
+        state={'last_order_at':datetime(2026,10,31,tzinfo=timezone.utc).isoformat()}
+        api=self.cycle_api();api.balance.return_value=D('8.02')
+        with patch.object(bot,'local_now',return_value=now.astimezone(bot.ZoneInfo('Europe/Berlin'))),patch.object(bot,'read_state',return_value=state),patch.object(bot,'save_state'),patch.object(bot,'update_dashboard_snapshot'),patch.object(bot,'update_dashboard_schedule') as schedule:
+            bot.run_once(api,self.settings,300,schedule_only=True)
+            plan=schedule.call_args.args[2]
+            self.assertEqual(D(plan['plannedCost']),D('8.02'))
+            self.assertLess(datetime.fromisoformat(state['schedule']['dueAt']),datetime.fromisoformat(plan['nextDepositAt']))
+            bot.run_once(api,self.settings,300)
+        api.buy_btc.assert_called_once()
+
+    def test_late_deposit_wait_survives_restart_and_own_purchase_is_not_a_deposit(self):
+        now=datetime(2026,11,1,1,tzinfo=timezone.utc)
+        state={'last_order_at':'2026-10-30T12:00:00+00:00'}
+        api=self.cycle_api();api.balance.return_value=D('8.02')
+        with patch.object(bot,'local_now',return_value=now.astimezone(bot.ZoneInfo('Europe/Berlin'))),patch.object(bot,'read_state',side_effect=lambda *args:state),patch.object(bot,'save_state'),patch.object(bot,'update_dashboard_snapshot'),patch.object(bot,'update_dashboard_schedule') as schedule:
+            bot.run_once(api,self.settings,300,schedule_only=True)
+            self.assertLessEqual(datetime.fromisoformat(state['schedule']['dueAt']),now)
+            self.assertEqual(datetime.fromisoformat(state['deposit_tracking']['dueAt']).month,11)
+            state['last_order_at']=now.isoformat();state['last_order_quote']='8.02'
+            state=json.loads(json.dumps(state))
+            api.balance.return_value=D('0')
+            bot.run_once(api,self.settings,300)
+            self.assertEqual(schedule.call_args.args,(None,'Waiting for deposit'))
+            self.assertEqual(datetime.fromisoformat(state['deposit_tracking']['dueAt']).month,11)
+            state=json.loads(json.dumps(state))
+            api.balance.return_value=D('200')
+            bot.run_once(api,self.settings,300,schedule_only=True)
+            self.assertEqual(datetime.fromisoformat(state['deposit_tracking']['dueAt']).month,12)
+            self.assertEqual(datetime.fromisoformat(state['schedule']['dueAt']),now.astimezone(bot.ZoneInfo('Europe/Berlin')))
+            api.buy_btc.assert_not_called()
+
+    def test_upgrade_with_unknown_large_balance_does_not_drain_it_as_old_residual(self):
+        now=datetime(2026,11,1,1,tzinfo=timezone.utc)
+        state={'last_order_at':'2026-10-30T12:00:00+00:00'}
+        api=self.cycle_api();api.balance.return_value=D('200')
+        with patch.object(bot,'local_now',side_effect=lambda *args:now.astimezone(bot.ZoneInfo('Europe/Berlin'))),patch.object(bot,'read_state',side_effect=lambda *args:state),patch.object(bot,'save_state'),patch.object(bot,'update_dashboard_snapshot'),patch.object(bot,'update_dashboard_schedule') as schedule:
+            bot.run_once(api,self.settings,300,schedule_only=True)
+            self.assertEqual(datetime.fromisoformat(state['deposit_tracking']['dueAt']).month,12)
+            state['last_order_at']=now.isoformat();state['last_order_quote']='8.02'
+            api.balance.return_value=D('191.98');now+=timedelta(minutes=1)
+            bot.run_once(api,self.settings,300,schedule_only=True)
+            self.assertGreater(datetime.fromisoformat(state['schedule']['dueAt']),now)
+            self.assertFalse(state['deposit_tracking']['firstPurchaseDue'])
+            api.buy_btc.assert_not_called()
+
+    def test_deposit_clock_controls_boundary_and_purchase_interval(self):
+        now=datetime(2026,10,28,12,tzinfo=timezone.utc)
+        api=self.cycle_api();state={'last_order_at':(now-timedelta(minutes=1)).isoformat()}
+        settings={**self.settings,'deposit_time':'09:30'}
+        with patch.object(bot,'local_now',return_value=now.astimezone(bot.ZoneInfo('Europe/Berlin'))),patch.object(bot,'read_state',return_value=state),patch.object(bot,'save_state'),patch.object(bot,'update_dashboard_snapshot'),patch.object(bot,'update_dashboard_schedule') as schedule:
+            bot.run_once(api,settings,300,schedule_only=True)
+        plan=schedule.call_args.args[2]
+        self.assertEqual(datetime.fromisoformat(plan['nextDepositAt']).hour,9)
+        self.assertEqual(datetime.fromisoformat(plan['nextDepositAt']).minute,30)
+        self.assertEqual(datetime.fromisoformat(plan['nextDepositAt']).utcoffset(),timedelta(hours=1))
+        possible=int(D(plan['budget'])//D(plan['plannedCost']))
+        expected=int((datetime.fromisoformat(plan['nextDepositAt']).astimezone(timezone.utc)-datetime.fromisoformat(state['last_order_at'])).total_seconds()/(possible+1))
+        self.assertEqual(plan['intervalSeconds'],expected)
+        before=datetime(2026,10,31,9,29,tzinfo=timezone.utc)
+        self.assertEqual(bot.cycle_dates(before,31,'09:30')[2].month,10)
+        self.assertEqual(bot.cycle_dates(before+timedelta(minutes=1),31,'09:30')[2].day,30)
+
+    def test_local_deposit_clock_handles_short_months_and_dst_gaps_and_folds(self):
+        from app.core.deposit_calendar import deposit_at
+        zone=bot.ZoneInfo('Europe/Berlin')
+        self.assertEqual(deposit_at(2028,2,31,'09:30',zone).day,29)
+        self.assertEqual(deposit_at(2027,2,31,'09:30',zone).day,28)
+        self.assertEqual(deposit_at(2026,3,29,'02:30',zone).isoformat(),'2026-03-29T03:30:00+02:00')
+        repeated=deposit_at(2026,10,25,'02:30',zone)
+        self.assertEqual(repeated.utcoffset(),timedelta(hours=2))
+        second=datetime(2026,10,25,2,15,tzinfo=zone,fold=1)
+        self.assertEqual(bot.cycle_dates(second,25,'02:30')[2].month,11)
+        self.assertEqual(bot.cycle_dates(datetime(2026,12,31,23,59,tzinfo=zone),31,'23:59')[2].year,2027)
+
     def test_interval_uses_last_purchase_to_deposit_including_dst_boundary(self):
         now=datetime(2026,10,28,12,tzinfo=timezone.utc)
         for last in (now-timedelta(hours=2),now-timedelta(days=4)):
@@ -216,8 +292,8 @@ class ReviewTests(unittest.TestCase):
                 with patch.object(bot,'read_state',return_value=state),patch.object(bot,'save_state'),patch.object(bot,'update_dashboard_snapshot'),patch.object(bot,'update_dashboard_schedule'),patch.object(bot,'local_now',return_value=now.astimezone(bot.ZoneInfo('Europe/Berlin'))):
                     bot.run_once(api,self.settings,300,schedule_only=True)
                 deposit=bot.cycle_dates(now.astimezone(bot.ZoneInfo('Europe/Berlin')),1)[2]
-                # Available budget 100 / (8 + .02 fee, buffered and rounded to 8.07) = 12 buys.
-                seconds=int((deposit.astimezone(timezone.utc)-last).total_seconds()/12)
+                # Available budget 100 / (8 + .02 fee = 8.02; 12 buys and one trailing time slot) = 12 buys.
+                seconds=int((deposit.astimezone(timezone.utc)-last).total_seconds()/13)
                 self.assertEqual(datetime.fromisoformat(state['schedule']['dueAt']),last+timedelta(seconds=seconds))
                 api.buy_btc.assert_not_called()
 
@@ -242,10 +318,13 @@ class ReviewTests(unittest.TestCase):
 
     def test_monthly_state_reset_preserves_last_purchase_anchor(self):
         path=self.root/'state.json'
-        path.write_text(json.dumps({'cycle':'2026-09-01','spent':'50','last_order_at':'2026-09-30T12:00:00+00:00'}))
+        path.write_text(json.dumps({'cycle':'2026-09-01','spent':'50','last_order_at':'2026-09-30T12:00:00+00:00','last_order_quote':'8.02','deposit_tracking':{'dueAt':'2026-10-01T00:00:00+00:00'},'schedule':{'dueAt':'2026-10-01T00:00:00+00:00'}}))
         state=bot.read_state(path,'2026-10-01')
         self.assertEqual(state['spent'],'0')
         self.assertEqual(state['last_order_at'],'2026-09-30T12:00:00+00:00')
+        self.assertEqual(state['last_order_quote'],'8.02')
+        self.assertEqual(state['deposit_tracking']['dueAt'],'2026-10-01T00:00:00+00:00')
+        self.assertEqual(state['schedule']['dueAt'],state['deposit_tracking']['dueAt'])
 
     def test_worker_enqueues_without_waiting_for_slow_account_cycle(self):
         entered=threading.Event();release=threading.Event();finished=threading.Event()

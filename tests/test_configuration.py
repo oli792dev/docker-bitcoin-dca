@@ -266,6 +266,17 @@ class ConfigurationTests(unittest.TestCase):
         self.assertFalse(self.store.public()['passwordChangeRequired'])
 
 
+    def test_deposit_time_persists_and_requests_a_schedule_refresh(self):
+        self.ready()
+        calls=self.api_factory.call_count
+        self.app.save({'settings':{'deposit_time':'09:30'}})
+        self.assertTrue(self.app.worker.reconfigure.is_set())
+        self.assertEqual(self.api_factory.call_count,calls)
+        self.assertEqual(config.ConfigStore(self.store.path).snapshot()['settings']['deposit_time'],'09:30')
+        for clock in ('24:00','9:30','12:60','12:30:01','invalid'):
+            with self.subTest(clock=clock),self.assertRaises(ValueError):self.app.save({'settings':{'deposit_time':clock}})
+        self.assertEqual(self.app.settings['deposit_time'],'09:30')
+
     def test_dashboard_preferences_are_saved_without_rescheduling(self):
         self.ready()
         self.app.save({'current_password':PASSWORD,'settings': {'display_currency':'USD'}})
@@ -289,11 +300,12 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_old_configuration_gains_display_currency_default(self):
         self.ready()
-        data=self.store.snapshot();data['settings'].pop('display_currency');data['settings'].pop('appearance')
+        data=self.store.snapshot();data['settings'].pop('display_currency');data['settings'].pop('appearance');data['settings'].pop('deposit_time')
         self.store.path.write_text(json.dumps(data))
         reloaded=config.ConfigStore(self.store.path)
         self.assertEqual(reloaded.public()['settings']['display_currency'],'EUR')
         self.assertEqual(reloaded.public()['settings']['appearance'],'system')
+        self.assertEqual(reloaded.public()['settings']['deposit_time'],'00:00')
         self.assertTrue(reloaded.authenticate('operator',PASSWORD))
 
     def test_setup_step_two_omits_credentials_but_settings_keeps_them(self):

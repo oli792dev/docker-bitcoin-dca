@@ -76,6 +76,15 @@ td{font-size:.88rem}th,td{border-color:var(--line)}#activities td{padding:8px 12
 .status-pending{color:var(--warning)}.status-muted{color:var(--muted)}
 .feedback-close,.settings-dialog-header button{min-width:44px;min-height:44px;width:44px;padding:0;font-size:1.18rem;line-height:1;border-radius:10px}
 .feedback-close{flex:0 0 44px;margin-top:0}.withdraw-action .feedback-close{margin-top:0}
+/* Keyboard-accessible section tabs retain unsaved inputs in their panels. */
+.settings-page #settingsForm>.panel{margin:0}
+.settings-tabs{display:flex;gap:4px;align-items:center;flex-wrap:nowrap;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
+.settings-tabs.has-overflow{padding-bottom:16px}
+.settings-tabs button{flex:1 0 auto;white-space:nowrap;font-size:.82rem;font-weight:500;background:transparent;color:var(--muted);border:1px solid transparent;min-height:44px;padding:10px 16px;border-radius:8px}
+.settings-tabs button[aria-selected="true"]{background:var(--panel);color:var(--text);border-color:var(--line);font-weight:600}
+.settings-tabs button:not(:disabled):hover{background:var(--hover);color:var(--text)}
+.settings-tabs button[aria-selected="true"]:hover{background:var(--panel)}
+.settings-tabs button:focus-visible{outline-offset:-3px}
 /* Native dialogs provide keyboard containment, Escape and focus restoration. */
 dialog,.confirmation-dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:20px;box-shadow:0 24px 80px #0004;padding:24px;max-height:calc(100dvh - 32px)}
 dialog::backdrop,.confirmation-dialog::backdrop{background:var(--scrim);backdrop-filter:none;-webkit-backdrop-filter:none}

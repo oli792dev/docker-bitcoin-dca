@@ -4,6 +4,14 @@ Release history based on the published [GitHub Releases](https://github.com/oli7
 
 ## Unreleased
 
+- Fixed final purchases slipping into the following month: affordable buys now fall before the deposit deadline and overdue residual funds remain due.
+- Added persistent deposit-wait tracking and Waiting for deposit in purchase date/countdown fields; incoming available funds resume purchasing.
+- Removed the 0.5% planning buffer while retaining fee estimates and exchange minimum checks.
+- Removed the redundant scheduled status suffix from the Next purchase heading.
+
+- Added keyboard-accessible Settings tabs while retaining draft inputs and separate credential editors.
+- Added a persistent deposit time in the configured timezone; purchase intervals and withdrawal forecasts now use the full deposit date and time, including month-length and daylight-saving handling.
+
 - Added volume-saved Light, Dark and Automatic / System appearance in dashboard settings, applied consistently to sign-in, dashboard and settings.
 - Fixed main panel corners by clipping header backgrounds inside one continuous rounded border.
 
