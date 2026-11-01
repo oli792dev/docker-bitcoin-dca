@@ -18,7 +18,7 @@ docker compose up -d --build
 
 Set `WEB_UI_TLS_HOSTS` in Compose or `.env` to the IP address/hostname you use, then open `https://<docker-host-ip>:6890`. Trust the generated local CA on your devices; see [HTTPS setup](docs/architecture.md#https-and-session-security). The setup wizard first creates your username and password (12+ characters), then configures the exchange, API access and purchases. The web UI is always enabled. Bot settings and credentials come only from the saved web configuration; new installations start in dry run.
 
-Settings, beside Log out, groups Bot Configuration, Exchange, Dashboard and Login into tabs. API access, withdrawal targets and login credentials are edited directly in their tabs. Bot Configuration contains live trading, purchases, deposit timing and automatic withdrawals. Dashboard contains appearance, display currency and optional manual withdrawal/Parqet controls. Sensitive changes require your current password.
+Settings, beside Log out, groups Bot Configuration, Exchange, Dashboard and Login into tabs. API access, withdrawal targets and login credentials are edited directly in their tabs. Bot Configuration contains live trading, purchases, deposit timing and automatic withdrawals. Dashboard contains appearance, display currency and optional manual withdrawal/Parqet controls. Sensitive changes require your current password. Choose English or German under Dashboard → Language; this also sets date and number formatting. Technical logs remain English.
 
 | Exchange | API permissions | Bitcoin withdrawal destination |
 | --- | --- | --- |

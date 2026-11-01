@@ -112,3 +112,24 @@ modalA.open=true;updateModal();assert.equal(background.style.position,'fixed');a
 modalB.open=true;updateModal();modalA.open=false;updateModal();assert.equal(restored.length,0,'Another open dialog keeps the page locked');
 modalB.open=false;updateModal();assert.deepEqual(restored,[[30,420]]);assert.equal(background.style.cssText,'color:red');assert.equal(background.style.position,undefined);assert.equal(rootElement.style.scrollBehavior,'smooth');
 console.log('Dialog scroll lock passed: nested dialogs, scrollbar compensation and position/style restoration');
+
+// German presentation uses the same operational values and preserves user-entered names.
+const germanCatalog=JSON.parse(execFileSync('python3',['-c',"from pathlib import Path;print(Path('app/webpage/locales/de.json').read_text())"],{cwd:root,encoding:'utf8'}));
+const germanElements={};
+class GermanElement extends Element{append(...children){for(const child of children){child.parentElement=this;this.children.push(child);if(child.id)germanElements[child.id]=child}}}
+for(const match of page.matchAll(/<(\w+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)){const el=new GermanElement(match[1]);el.id=match[3];el.type=(match[2].match(/type="([^"]+)"/)||[])[1]||'';if(match[2].includes('data-setting'))el.dataset.setting='';germanElements[el.id]=el}
+const germanContext=vm.createContext({DCA_I18N:{language:'de',catalog:germanCatalog},document:{documentElement:{dataset:{}},getElementById:id=>germanElements[id],createElement:tag=>new GermanElement(tag),querySelectorAll:()=>Object.values(germanElements).filter(el=>'setting'in el.dataset)},location:{href:''},setTimeout:fn=>fn(),fetch:async()=>({ok:true,json:async()=>({saved:true})})});
+const i18nCode=execFileSync('python3',['-c',"from pathlib import Path;print(Path('app/webpage/static/i18n.js').read_text())"],{cwd:root,encoding:'utf8'});
+vm.runInContext(i18nCode,germanContext);
+assert.equal(germanContext.DCA_I18N.t('Available EUR balance on exchange'),'Verfügbares EUR-Guthaben auf der Börse');
+assert.equal(germanContext.DCA_I18N.t('BTC is sent to the address saved in Kraken under “Before”.'),'BTC werden an die bei Kraken unter „Before“ gespeicherte Adresse gesendet.');
+assert.equal(germanContext.DCA_I18N.t(123.45),123.45);
+vm.runInContext(script.replace('"language": "en"','"language": "de"'),germanContext);
+assert.deepEqual(germanElements.settingsTabs.children.map(x=>x.textContent),['Bot-Konfiguration','Börse','Dashboard','Anmeldung']);
+assert.equal(germanElements.withdraw_thresholdLabel.textContent,'Automatische Auszahlungsschwelle (EUR)');
+assert.equal(germanElements.language.value,'de');assert.equal(germanElements.quote.value,'EUR');
+germanElements.username.value='Before';germanElements.settingsForm.listeners.submit({preventDefault(){}});
+assert.match(allText(germanElements.reviewValues),/Before/);assert.match(allText(germanElements.reviewValues),/Bisher/);
+assert(!allText(germanElements.reviewValues).includes('Vorher'));
+assert.equal(germanElements.settingsContent.scrollTop,0);
+console.log('German settings passed: translated labels, locale, stable exchange values and unchanged user input');

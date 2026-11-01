@@ -89,6 +89,14 @@ class ConfigurationTests(unittest.TestCase):
         self.assertTrue(self.store.snapshot()['complete'])
         self.assertTrue(self.app.exchange_check_pending)
 
+    def test_language_change_is_saved_without_rescheduling_or_replacing_exchange(self):
+        self.ready();api=self.app.api;self.api_factory.reset_mock()
+        self.app.worker.reconfigure.clear()
+        self.app.save({'settings':{'language':'de'}})
+        self.assertEqual(config.ConfigStore(self.store.path).snapshot()['settings']['language'],'de')
+        self.assertIs(self.app.api,api);self.api_factory.assert_not_called()
+        self.assertFalse(self.app.worker.reconfigure.is_set())
+
     def test_retired_adaptive_settings_do_not_block_existing_volume_startup(self):
         self.ready()
         saved=json.loads(self.store.path.read_text())

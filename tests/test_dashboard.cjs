@@ -203,3 +203,19 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  assert.match(get('automaticWithdrawalDestination').textContent,/No withdrawal target is configured/);
  console.log('Dashboard regressions passed: interval dates, server pages, mixed-currency rows/totals and queued preview polling');
 })().catch(e=>{console.error(e);process.exit(1)});
+
+// Render a German report without translating exchange codes or changing arithmetic.
+const germanElements={},germanGet=id=>germanElements[id]??=new Element();
+germanGet('pageSize').value='10';
+const germanContext=vm.createContext({DCA_I18N:{language:'de',catalog:JSON.parse(fs.readFileSync('app/webpage/locales/de.json','utf8'))},document:{getElementById:germanGet,createElement:()=>new Element()},localStorage:{getItem:()=>null,setItem(){}},Intl,Date,URL,console,setInterval(){},setTimeout(){},clearTimeout(){},window:{location:{reload(){}}},fetch:()=>new Promise(()=>{})});
+vm.runInContext(fs.readFileSync('app/webpage/static/i18n.js','utf8'),germanContext);
+vm.runInContext(script,germanContext);
+vm.runInContext(`displayCurrency='EUR';activityRows=[{datetime:'2026-10-22T12:00:00Z',type:'Buy',purchaseStatus:'confirmed',shares:'.001',price:'80000',amount:'80',fee:'.2',currency:'EUR'}];activityTotal=1;activityPages=1;renderActivities()`,germanContext);
+assert.equal(germanElements.activities.children[0].children[1].textContent,'Kauf');
+assert.equal(germanElements.activities.children[0].children[6].textContent,'Bestätigt ✓');
+assert.match(germanElements.pageInfo.textContent,/Einträge 1–1 von 1/);
+assert.match(vm.runInContext("money(1234.5,'EUR')",germanContext),/1\.234,50/);
+assert.equal(vm.runInContext("btc('.00006')",germanContext),'0,00006 BTC');
+assert.equal(vm.runInContext('activityRows[0].type',germanContext),'Buy');
+assert.equal(vm.runInContext('activityRows[0].currency',germanContext),'EUR');
+console.log('German dashboard passed: labels, pagination, numbers and stable ledger values');

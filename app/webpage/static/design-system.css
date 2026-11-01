@@ -19,7 +19,6 @@ p{line-height:1.55}a{color:var(--accent);text-underline-offset:3px}
 /* One primary action; secondary actions stay visually quiet. */
 button,.button,input,select{font-family:inherit;font-size:.94rem;line-height:1.35;min-height:44px;border-radius:10px}
 input,select{background:var(--control);color:var(--text);border:1px solid var(--control-line);padding:10px 12px;max-width:100%;min-width:0}
-input:focus,select:focus{border-color:var(--accent);box-shadow:none;outline:none}
 input::placeholder{color:var(--muted);opacity:1}
 button,.button{background:var(--primary);color:var(--on-primary);border:1px solid transparent;font-weight:600;padding:10px 16px;transition:background-color .15s ease,border-color .15s ease;box-shadow:none}
 button.secondary,.button.secondary{background:var(--surface);color:var(--accent);border-color:var(--control-line)}
@@ -30,14 +29,12 @@ button:not(:disabled):hover,.button:hover{filter:none!important;transform:none!i
  button.secondary:not(:disabled):not(#previousPage):not(#nextPage):not(#goToPage):hover,.button.secondary:hover{background:var(--hover)}
 }
 button:not(:disabled):active,.button:active{filter:none!important;transform:none!important;box-shadow:none!important}
-body :is(button,a,input,select,summary,[tabindex]):focus-visible{outline:3px solid var(--accent);outline-offset:3px}
 .top-actions button,.top-actions .logout-button{font:600 .94rem/1.35 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;min-height:44px;padding:10px 16px;border-radius:10px}
 .btc-balance-card #manualWithdraw{font-size:.82rem;padding:10px 14px;min-height:44px;border-radius:10px}
 .controls input,.controls select,.controls>button{height:48px;min-height:48px;font-size:.94rem}
 /* Disclosure headers are grouped surfaces rather than decorative banners. */
 details.panel{border-radius:16px;overflow:hidden;isolation:isolate;background-clip:padding-box;border-color:var(--line)}
 details.panel>.panel-heading,details.panel>.report-heading,details.panel:not([open])>summary{border-radius:0;box-shadow:none}
-body details.panel>summary:focus-visible{outline-offset:-4px}
 .panel>.panel-heading,.panel>.report-heading{margin:calc(-1 * var(--panel-padding)) calc(-1 * var(--panel-padding)) var(--panel-padding);padding:16px var(--panel-padding);background:var(--panel);border-bottom:1px solid var(--line);border-radius:15px 15px 0 0}
 .panel>.panel-heading h2,.panel>.report-heading h2{font-size:1.18rem;font-weight:600;line-height:1.35}
 summary{min-height:44px}details.panel>summary{min-height:56px}
@@ -64,7 +61,6 @@ td{font-size:.88rem}th,td{border-color:var(--line)}#activities td{padding:8px 12
 .settings-tabs button[aria-selected="true"]{background:var(--panel);color:var(--text);border-color:var(--line);font-weight:600}
 .settings-tabs button:not(:disabled):hover{background:var(--hover);color:var(--text)}
 .settings-tabs button[aria-selected="true"]:hover{background:var(--panel)}
-.settings-tabs button:focus-visible{outline-offset:-3px}
 /* Native dialogs provide keyboard containment, Escape and focus restoration. */
 dialog,.confirmation-dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:20px;box-shadow:0 24px 80px #0004;padding:24px;max-height:calc(100dvh - 32px)}
 dialog::backdrop,.confirmation-dialog::backdrop{background:var(--scrim);backdrop-filter:none;-webkit-backdrop-filter:none}
@@ -78,7 +74,6 @@ dialog h2,.confirmation-dialog h2{font-size:1.18rem;font-weight:600}
 .review-list dt{font-size:.82rem}.review-new,.review-badge{color:var(--accent)}.review-old,.review-caption,.review-unchanged{color:var(--muted)}.review-caption,.review-badge{font-size:.76rem}
 /* The complete option card is the switch's touch target. */
 .option-card{align-items:center;gap:16px;min-height:100px;cursor:pointer}
-.option-card:focus-within{outline:3px solid var(--accent);outline-offset:3px}.option-card input[type=checkbox]:focus-visible{outline:none}
 .option-card strong,.currency-card label{font-size:.88rem;font-weight:600;color:var(--text)}
 .option-card small{font-size:.76rem;line-height:1.5;color:var(--muted)}
 .option-card input[type=checkbox]{flex:0 0 51px;width:51px;height:31px;min-height:31px;border:1px solid var(--line);border-radius:999px;background:var(--line)}
@@ -127,3 +122,6 @@ dialog h2,.confirmation-dialog h2{font-size:1.18rem;font-weight:600}
 @media(prefers-reduced-transparency:reduce){.compact-brand-bar{background:var(--panel);backdrop-filter:none;-webkit-backdrop-filter:none}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 @media(forced-colors:active){button,.button,input,select,.panel,.card,.option-card{border:1px solid ButtonText}.compact-brand-bar{background:Canvas;backdrop-filter:none;-webkit-backdrop-filter:none}}
+
+/* Requested globally: keep focus behavior, but draw no focus indicators. */
+:focus,:focus-visible,:focus-within{outline:none!important;box-shadow:none!important}

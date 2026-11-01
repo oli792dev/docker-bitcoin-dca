@@ -4,6 +4,12 @@ Release history based on the published [GitHub Releases](https://github.com/oli7
 
 ## Unreleased
 
+- Removed visible focus outlines and shadows across all pages and dialogs as requested, while retaining keyboard navigation.
+
+- Added a volume-saved English/German dashboard language setting, including login/setup, dialogs, feedback, accessibility labels and locale-specific dates and numbers. Technical logs remain English.
+- Kept Settings tabs and the review/save action fixed while only the settings content scrolls vertically.
+- Improved Settings switch descriptions, tab-change positioning and layout on short displays following Apple HIG accessibility principles.
+
 - Made Settings more compact with plain two-column form fields, flat switch rows and shorter descriptions while retaining mobile overflow and touch targets.
 
 - Paused transactions after interrupted settings writes until durable settings and exchange activity have been verified again.

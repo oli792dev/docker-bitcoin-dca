@@ -1,5 +1,6 @@
 """Local read-only portfolio dashboard and on-demand Parqet export."""
 import html
+from app.webpage.i18n import localize_page, translate
 import json
 import logging
 import re
@@ -63,8 +64,9 @@ _SESSIONS = {}
 HTML = HTML.replace("__SCROLL_CSS__", SCROLL_CSS).replace("__SCROLL_SCRIPT__", SCROLL_SCRIPT).replace("__DESIGN_CSS__", DESIGN_CSS)
 LOGIN_HTML = LOGIN_HTML.replace("__DESIGN_CSS__", DESIGN_CSS)
 
-def _login_page(error="", appearance="system"):
-    return apply_appearance(LOGIN_HTML.replace("{{ERROR}}", html.escape(error)), appearance)
+def _login_page(error="", appearance="system", language="en"):
+    page = apply_appearance(LOGIN_HTML.replace("{{ERROR}}", html.escape(translate(error,language))), appearance)
+    return localize_page(page,language)
 
 
 class _PageTextParser(HTMLParser):
@@ -159,7 +161,7 @@ class Handler(BaseHTTPRequestHandler):
     tls_context = None
 
     def _login_page(self, error=""):
-        return _login_page(error, (self.settings or {}).get("appearance", "system"))
+        return _login_page(error, (self.settings or {}).get("appearance", "system"), (self.settings or {}).get("language", "en"))
 
     def setup(self):
         if self.tls_context is not None:
@@ -191,6 +193,14 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _json(self, status, obj):
+        language = (self.settings or {}).get('language','en')
+        # Localize only presentation fields, never ledger values or exchange IDs.
+        def presentation(value):
+            if isinstance(value, dict):
+                return {key: translate(item,language) if key in ('error','message','reason','destination','nextPurchaseStatus','estimatedWithdrawalStatus') and isinstance(item,str) else presentation(item) for key,item in value.items()}
+            if isinstance(value, list): return [presentation(item) for item in value]
+            return value
+        obj = presentation(obj)
         self._send(status, json.dumps(obj, ensure_ascii=False).encode("utf-8"))
 
     def _has_valid_session(self):
@@ -355,7 +365,7 @@ class Handler(BaseHTTPRequestHandler):
         if not settings.get('parqet_enabled', True):
             page = page.replace('Period analysis and Parqet export</strong>', 'Period analysis</strong>')
             page = page.replace('to review activity and prepare a Parqet export.', 'to review activity.')
-        return apply_appearance(page, settings.get("appearance", "system"))
+        return localize_page(apply_appearance(page, settings.get("appearance", "system")), settings.get("language", "en"))
 
     def do_POST(self):
         if self.runtime:

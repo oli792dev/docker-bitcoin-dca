@@ -1,5 +1,6 @@
 """First-run account creation and authenticated application settings."""
 import re
+from app.webpage.i18n import localize_page
 from app.webpage.templates import load_page
 import json
 from app.webpage.scroll_ui import SCROLL_CSS, SCROLL_SCRIPT
@@ -19,4 +20,6 @@ def settings_page(store, create_account=False, embedded=False):
     page = PAGE
     if not data['complete'] and not data['passwordChangeRequired']:
         page = re.sub(r'<!--dashboard-credentials-start-->.*?<!--dashboard-credentials-end-->', '', page, flags=re.S)
-    return apply_appearance(page.replace('__INITIAL__', encoded), data['settings'].get('appearance', 'system'))
+    page = apply_appearance(page.replace('__INITIAL__', encoded), data['settings'].get('appearance', 'system'))
+    language = data['settings'].get('language','en')
+    return localize_page(page, language)
