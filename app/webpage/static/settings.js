@@ -18,11 +18,11 @@ function exchangeCredentialsReady(){if(!exchangeChanged())return true;const pref
 
 for(const prefix of ['kraken','bitvavo'])for(const part of ['key','secret']){const key=prefix+'_api_'+part,field=document.createElement('div'),label=document.createElement('label'),input=document.createElement('input');label.htmlFor=key;label.textContent=prefix[0].toUpperCase()+prefix.slice(1)+' API '+part;input.id=key;input.type='password';input.autocomplete='off';input.dataset.setting='';input.placeholder=initial.settings[key+'_configured']?'Saved · leave empty to keep':'Not configured';field.append(label,input);$('credentials').append(field)}
 const fields=[
- ['buy_amount','BTC per purchase (0 = exchange minimum)','0','any',null,'BTC per order. Zero or smaller amounts use the exchange minimum.'],
+ ['buy_amount','BTC per purchase (0 = exchange minimum)','0','any',null,'Amounts below exchange minimum are not applied.'],
  ['startup_delay_seconds','Startup delay (seconds)','0','1','86400','Delay before the first account check after startup or setup.'],
  ['deposit_day','Deposit day (day of month)','1','1','31','Monthly day; shorter months use their last day. Does not initiate deposits.'],
  ['deposit_time','Deposit time','00:00','60','23:59','Expected local deposit time, used to calculate purchase intervals.'],
- ['check_interval_seconds','Account check interval (seconds)','60','1','86400','Refresh balances, purchase schedule and withdrawal eligibility while waiting.'],
+ ['check_interval_seconds','Account check interval (seconds)','60','1','86400','Refresh balances, purchase schedule and withdrawal eligibility.'],
  ['order_status_check_seconds','Open order check interval (seconds)','1','1','3600','Recheck submitted orders; unresolved orders block new purchases.'],
  ['withdraw_threshold','Automatic withdrawal threshold (purchase currency)','0.01','any',null,'Withdraw when all available exchange BTC reaches this value in the purchase currency. Requires automatic withdrawals and live trading.']
 ];
