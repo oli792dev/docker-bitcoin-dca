@@ -4,6 +4,12 @@ Release history based on the published [GitHub Releases](https://github.com/oli7
 
 ## Unreleased
 
+- Added a compact bot/account-check status and explicit age indicators for retained account data.
+- Marked unsaved Settings drafts and added an in-page discard confirmation for close/Escape; saved drafts close normally.
+- Disabled inactive automatic-withdrawal thresholds with explanations while retaining their saved values and allowing dry-run configuration.
+- Explained withdrawal forecasts with approximate remaining BTC/purchases and expandable price, fee and deposit assumptions.
+- Translated all new controls and feedback into German.
+
 - Removed visible focus outlines and shadows across all pages and dialogs as requested, while retaining keyboard navigation.
 
 - Added a volume-saved English/German dashboard language setting, including login/setup, dialogs, feedback, accessibility labels and locale-specific dates and numbers. Technical logs remain English.

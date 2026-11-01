@@ -81,6 +81,18 @@ class MonthlyForecastTests(unittest.TestCase):
         self.assertGreater(datetime.fromisoformat(target),self.now)
         self.assertIn('assumes overdue deposit arrives now',reason)
 
+    def test_forecast_details_explain_threshold_without_mutating_schedule(self):
+        from app.trading.forecast import forecast_details
+        import copy
+        snapshot=copy.deepcopy(self.snapshot)
+        settings={**self.settings,'quote':'EUR','expected_monthly_deposit':'202'}
+        details=forecast_details(settings,self.snapshot)
+        self.assertEqual(D(details['remainingBtc']),D('.004'))
+        self.assertEqual(details['remainingPurchases'],4)
+        self.assertEqual(details['monthlyDeposit'],'202')
+        self.assertEqual(self.snapshot,snapshot)
+        self.assertIsNone(forecast_details(settings,{}))
+
     def test_no_assumed_funding_means_no_date_beyond_budget(self):
         self.assertIsNone(withdrawal_forecast(self.settings,self.snapshot,"0",self.now)[0])
     def test_existing_balance_and_funded_purchases(self):
@@ -133,6 +145,20 @@ class ScheduleBalanceTests(unittest.TestCase):
         with patch.object(web_ui,'read_dashboard_snapshot',return_value={}),patch.object(web_ui.time,'monotonic',return_value=200):
             handler.do_GET()
         self.assertEqual(handler._json.call_args.args[1]['nextPurchaseStatus'],'Waiting for automatic exchange check')
+
+    def test_account_status_reports_age_and_failure_without_exposing_error_details(self):
+        from types import SimpleNamespace
+        handler=object.__new__(web_ui.Handler);handler.path='/api/schedule'
+        handler.settings={**DEFAULTS,'live':True};handler._require_authentication=lambda:True;handler._json=Mock()
+        handler.worker=SimpleNamespace(last_error='PRIVATE NETWORK DETAIL',healthy=lambda:True)
+        snapshot={'exchange':'KRAKEN','quote':'EUR','updatedAt':'2026-11-01T12:00:00Z'}
+        with patch.object(web_ui,'read_dashboard_snapshot',return_value=snapshot):handler.do_GET()
+        data=handler._json.call_args.args[1]
+        self.assertEqual(data['botStatusLabel'],'Account check failed; retrying')
+        self.assertTrue(data['botStatusWarning'])
+        self.assertEqual(data['lastAccountCheckAt'],snapshot['updatedAt'])
+        self.assertEqual(data['staleAfterSeconds'],600)
+        self.assertNotIn('PRIVATE',str(data))
 
     def test_matching_balance_is_returned_with_original_currency_and_timestamp(self):
         data=self.response({'quote':'EUR','exchange':'KRAKEN','quoteBalance':'72.7719','updatedAt':'2026-10-29T12:00:00Z'})

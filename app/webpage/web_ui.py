@@ -35,7 +35,7 @@ from app.data.reporting import parqet_aggregate_rows, parqet_csv
 from app.webpage.scroll_ui import SCROLL_CSS, SCROLL_SCRIPT
 from app.webpage.design_system import DESIGN_CSS, apply_appearance
 
-from app.trading.forecast import withdrawal_forecast
+from app.trading.forecast import withdrawal_forecast, forecast_details
 
 
 LOG = logging.getLogger("bitcoin-dca.web")
@@ -197,7 +197,7 @@ class Handler(BaseHTTPRequestHandler):
         # Localize only presentation fields, never ledger values or exchange IDs.
         def presentation(value):
             if isinstance(value, dict):
-                return {key: translate(item,language) if key in ('error','message','reason','destination','nextPurchaseStatus','estimatedWithdrawalStatus') and isinstance(item,str) else presentation(item) for key,item in value.items()}
+                return {key: translate(item,language) if key in ('error','message','reason','destination','nextPurchaseStatus','estimatedWithdrawalStatus','botStatusLabel') and isinstance(item,str) else presentation(item) for key,item in value.items()}
             if isinstance(value, list): return [presentation(item) for item in value]
             return value
         obj = presentation(obj)
@@ -565,7 +565,26 @@ class Handler(BaseHTTPRequestHandler):
                     forecast_at, forecast_status = withdrawal_forecast(
                         self.settings, snapshot if balance_matches else {},
                         self.settings.get("expected_monthly_deposit") or "0", datetime.now(timezone.utc))
+                checked_at = snapshot.get('updatedAt') if balance_matches else None
+                worker_error = bool(self.worker and self.worker.last_error)
+                if self.worker and not self.worker.healthy():
+                    status_label = 'Worker unavailable'
+                elif worker_error:
+                    status_label = 'Account check failed; retrying'
+                elif exchange_check_pending:
+                    status_label = exchange_status
+                elif snapshot.get('nextPurchaseStatus') == 'Waiting for deposit':
+                    status_label = 'Waiting for deposit'
+                elif not self.settings.get('live'):
+                    status_label = 'Simulation'
+                else:
+                    status_label = 'Bot active'
                 self._json(200, {
+                    "botStatusLabel": status_label,
+                    "botStatusWarning": worker_error or bool(self.worker and not self.worker.healthy()),
+                    "lastAccountCheckAt": checked_at,
+                    "staleAfterSeconds": max(120, self.settings.get('check_interval_seconds',300)*2),
+                    "forecastDetails": forecast_details(self.settings,snapshot) if forecast_at and balance_matches else None,
                     "exchangeCheckPending": exchange_check_pending,
                     "expectedMonthlyDeposit": self.settings.get("expected_monthly_deposit", ""),
                     "quote": self.settings["quote"],

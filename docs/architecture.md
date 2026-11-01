@@ -154,3 +154,9 @@ The volume-saved `language` setting selects English (`en`, default) or German (`
 Settings keeps the tab bar and review/save footer outside its vertically scrolling content region. Tab changes reset that region; invalid fields reveal their tab before focus moves to them. Flat form rows retain 44 CSS-pixel controls, separate switch labels/descriptions and keyboard navigation inside scroll regions. Short displays hide the redundant brand header to preserve content space. Existing horizontal overflow and the two-row mobile layout remain available.
 
 Focus outlines, focus shadows and focus-specific border colors are disabled across all pages at the user’s request. Keyboard focus, native dialog containment, Escape handling and skip links remain functional.
+
+## Dashboard status and drafts
+
+The existing schedule response supplies a sanitized worker status and the matching account snapshot timestamp; it makes no extra exchange requests. The UI retains values on failures, reports their age using the server clock offset and marks account data stale after twice the account-check interval (at least two minutes). Forecast explanations are reporting-only and show an approximate count based on the ordinary purchase quantity; actual final purchases, prices and fees can change the result.
+
+Settings compares current fields with the loaded draft. Its parent frame receives only a dirty boolean, never credentials. Closing or pressing Escape requests an in-page discard confirmation when needed, and successful saves clear the guard. Browser navigation uses the browser’s standard unsaved-changes protection. Automatic-withdrawal thresholds are disabled while automatic withdrawals are off; their saved values are retained. Withdrawal configuration remains editable in simulation mode without enabling transactions.

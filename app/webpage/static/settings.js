@@ -46,7 +46,7 @@ const showCredentials=Boolean($('dashboardCredentials'));if(showCredentials)$('u
 if(showCredentials){$('passwordRequired').hidden=!initial.passwordChangeRequired;if(initial.passwordChangeRequired){$('password').required=true;$('current_password').required=true}}
 if(initial.embedded){
  document.body.classList.add('embedded');$('settingsNavigationHeading').hidden=true;$('back').hidden=true;$('pageHeading').hidden=true;
- document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('review').open)window.parent.postMessage({type:'dca-settings-close'},location.origin)});
+ document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('review').open&&!$('discardDialog').open){event.preventDefault();requestSettingsClose()}});
 }
 const settingsTabDefinitions=[['botConfiguration','Bot Configuration'],['exchangeConnection','Exchange'],['dashboardOptions','Dashboard'],['dashboardCredentials','Login']];
 const settingsTabs=[];
@@ -70,7 +70,7 @@ if(!initial.createAccount){
  $('settingsForm').addEventListener('invalid',event=>{if(invalidTabOpened)return;const item=settingsTabs.find(item=>item.panel.contains(event.target));if(item){activateSettingsTab(item.id);invalidTabOpened=true;setTimeout(()=>{invalidTabOpened=false},0)}},true);
 }
 $('quote').addEventListener('change',updatePurchaseCurrencyLabel);selectedExchange();$('exchange').addEventListener('change',()=>{for(const prefix of ['kraken','bitvavo'])for(const part of ['key','secret'])$(prefix+'_api_'+part).value='';connectionMessage('');selectedExchange()});
-function values(){const result={};for(const input of document.querySelectorAll('[data-setting]')){result[input.id]=input.type==='checkbox'?input.checked:input.type==='number'&&['deposit_day','startup_delay_seconds','check_interval_seconds','order_status_check_seconds'].includes(input.id)?Number(input.value):input.value}return result}
+function values(){const result={};for(const input of document.querySelectorAll('[data-setting]')){if(input.id==='withdraw_threshold'&&input.disabled){result[input.id]=initial.settings.withdraw_threshold;continue}result[input.id]=input.type==='checkbox'?input.checked:input.type==='number'&&['deposit_day','startup_delay_seconds','check_interval_seconds','order_status_check_seconds'].includes(input.id)?Number(input.value):input.value}return result}
 $('accountForm').addEventListener('submit',async e=>{e.preventDefault();if($('newPassword').value!==$('confirmPassword').value){message('Passwords do not match.',true);return}const b=e.submitter;b.disabled=true;try{await request('/api/setup/account',{username:$('newUsername').value,password:$('newPassword').value});location.href='/settings'}catch(err){message(err.message,true)}finally{b.disabled=false}});
 $('testConnection').addEventListener('click',async()=>{if(!exchangeCredentialsReady())return;const b=$('testConnection');b.disabled=true;b.ariaBusy='true';b.textContent=t('Testing…');connectionMessage('Testing connection…');try{connectionMessage((await request('/api/settings/test',values())).message)}catch(err){connectionMessage(err.message,true)}finally{b.disabled=false;b.ariaBusy='false';b.textContent=t('Test connection')}});
 function needsPassword(){
@@ -131,4 +131,40 @@ $('settingsForm').addEventListener('submit',e=>{e.preventDefault();if(!exchangeC
 
 function logSettingsCancellation(){fetch('/api/ui-events',{method:'POST',headers:{'Content-Type':'application/json','X-DCA-Action':'ui-event'},body:JSON.stringify({event:'settings_save_cancelled'}),keepalive:true}).catch(()=>{})}
 $('cancel').addEventListener('click',()=>{$('review').close();pending=null;$('sensitivePassword').value='';logSettingsCancellation()});$('review').addEventListener('cancel',()=>{pending=null;$('sensitivePassword').value='';logSettingsCancellation()});
-$('confirm').addEventListener('click',async()=>{if(!pending)return;if(needsPassword()&&!pending.current_password){if(!$('sensitivePassword').value){$('passwordConfirmationError').textContent=t('Enter your current login password to confirm these changes.');return}pending.current_password=$('sensitivePassword').value}const b=$('confirm');b.disabled=true;try{const d=await request('/api/settings',pending);pending=null;if(initial.embedded){window.parent.postMessage({type:'dca-settings-saved'},location.origin)}else{location.href='/'}}catch(err){if(pending)delete pending.current_password;$('review').close();message(err.message,true)}finally{$('sensitivePassword').value='';b.disabled=false}});
+$('confirm').addEventListener('click',async()=>{if(!pending)return;if(needsPassword()&&!pending.current_password){if(!$('sensitivePassword').value){$('passwordConfirmationError').textContent=t('Enter your current login password to confirm these changes.');return}pending.current_password=$('sensitivePassword').value}const b=$('confirm');b.disabled=true;try{const d=await request('/api/settings',pending);pending=null;savedDraft=draftSignature();updateDirty();if(initial.embedded){window.parent.postMessage({type:'dca-settings-saved'},location.origin)}else{location.href='/'}}catch(err){if(pending)delete pending.current_password;$('review').close();message(err.message,true)}finally{$('sensitivePassword').value='';b.disabled=false}});
+
+function updateDependencies(){
+ const live=$('live').checked,automatic=$('withdrawals_enabled').checked;
+ $('withdrawals_enabled').disabled=false;
+ $('withdraw_threshold').disabled=!automatic;
+ $('withdrawals_enabledHint').textContent=t(live?'Withdraw when the configured threshold is reached.':'Automatic withdrawals require live trading; you can configure them now.');
+ $('withdraw_thresholdHint').textContent=t(!automatic?'Enable automatic withdrawals to edit this threshold.':fields.find(row=>row[0]==='withdraw_threshold')[5]);
+ $('automaticWithdrawalsCard').classList.toggle('setting-inactive',false);
+ $('withdraw_threshold').parentElement.classList.toggle('setting-inactive',!automatic);
+}
+updateDependencies();
+for(const id of ['live','withdrawals_enabled'])$(id).addEventListener('change',updateDependencies);
+function draftSignature(){
+ const settings=[...document.querySelectorAll('[data-setting]')].map(input=>[input.id,input.type==='checkbox'?input.checked:input.value]);
+ const account=showCredentials?['username','current_password','password','passwordConfirm'].map(id=>$(id).value):[];
+ return JSON.stringify([settings,account]);
+}
+let savedDraft=draftSignature(),settingsDirty=false;
+function updateDirty(){
+ settingsDirty=draftSignature()!==savedDraft;
+ $('unsavedChanges').hidden=!settingsDirty;
+ if(initial.embedded)window.parent.postMessage({type:'dca-settings-dirty',dirty:settingsDirty},location.origin);
+}
+function requestSettingsClose(){
+ updateDirty();
+ if(settingsDirty){$('discardDialog').showModal();return}
+ if(initial.embedded)window.parent.postMessage({type:'dca-settings-close'},location.origin);else location.href='/';
+}
+$('settingsForm').addEventListener('input',updateDirty);$('settingsForm').addEventListener('change',updateDirty);
+$('keepEditing').addEventListener('click',()=>$('discardDialog').close());
+$('discardChanges').addEventListener('click',()=>{savedDraft=draftSignature();updateDirty();$('discardDialog').close();requestSettingsClose()});
+$('back').addEventListener('click',event=>{event.preventDefault();requestSettingsClose()});
+if(typeof window!=='undefined'&&window.addEventListener){
+ window.addEventListener('message',event=>{if(initial.embedded&&event.origin===location.origin&&event.source===window.parent&&event.data?.type==='dca-settings-request-close')requestSettingsClose()});
+ window.addEventListener('beforeunload',event=>{if(settingsDirty){event.preventDefault();event.returnValue=''}});
+}

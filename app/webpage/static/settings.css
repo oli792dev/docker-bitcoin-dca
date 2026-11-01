@@ -51,3 +51,5 @@ __DESIGN_CSS__
 .settings-content{scroll-padding-block:12px}
 .settings-footer #status{max-height:min(96px,18dvh)}
 @media(max-height:500px){.settings-active header{display:none}.settings-active main{padding-top:8px}.settings-active #settingsForm{gap:8px}.settings-footer{padding-top:8px}}
+.setting-inactive{opacity:.65}
+#unsavedChanges{color:var(--warning);margin:0}

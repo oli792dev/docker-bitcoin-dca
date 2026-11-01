@@ -14,6 +14,7 @@
 <body class="dashboard-page"><a class="skip-link" href="#main-content">Skip to content</a>
 <div class="compact-brand-bar"><div class="compact-brand-inner"><img src="/bitcoin-dca-icon-v3.png" width="36" height="36" alt=""><span>Bitcoin DCA Dashboard</span></div></div><main id="main-content" tabindex="-1">
 <header class="top"><div><div class="dashboard-brand"><img class="dashboard-logo" src="/bitcoin-dca-icon-v3.png" width="48" height="48" alt=""><h1>Bitcoin DCA Dashboard</h1></div></div><div class="top-actions"><button id="openSettings" type="button" aria-haspopup="dialog" aria-controls="settingsDialog">Settings</button><form method="post" action="/logout"><button type="submit" class="secondary logout-button">Log out</button></form></div></header>
+<div class="bot-status" role="status" aria-live="polite"><span id="botStatusLabel">Checking bot status…</span><span id="accountFreshness" class="small"></span></div>
 <details open class="panel" aria-labelledby="configurationHeading">
 <summary class="panel-heading"><h2 id="configurationHeading">Configuration</h2></summary>
 <div class="horizontal-scroll configuration-scroll" role="region" aria-label="Configuration cards" tabindex="0"><div class="grid configuration-grid">
@@ -45,7 +46,7 @@
 <div class="schedule-row-scroll horizontal-scroll" role="region" aria-label="Withdrawal schedule cards" tabindex="0"><div class="grid schedule-grid">
 <div class="card btc-balance-card"><label>Current BTC balance</label><div class="value" id="exchangeBtcBalance">—</div><div class="small" id="exchangeBtcValue">—</div><div class="small" id="exchangeBtcUpdated">Waiting for account check</div><div class="withdraw-action"><button id="manualWithdraw" type="button" aria-describedby="withdrawal-note withdrawalFeedback">Withdraw BTC manually</button><div class="feedback-wrap"><p id="withdrawalFeedback" class="export-feedback withdraw-feedback hidden" role="alert"></p><button class="secondary feedback-close" type="button" data-dismiss="withdrawalFeedback" aria-label="Close withdrawal message">×</button></div></div></div>
 <div class="card"><div class="field"><label for="monthlyDeposit">Expected monthly deposit (<span id="monthlyDepositCurrency">EUR</span>)</label><input id="monthlyDeposit" type="number" min="0" step="0.01" inputmode="decimal" value=""></div><div class="small">assumes deposits on the configured deposit day</div></div>
-<div class="card time-card"><label>Estimated automatic withdrawal date</label><div class="value time-value" id="estimatedWithdrawalAt">—</div><div class="small" id="estimatedWithdrawalStatus">Waiting for account check</div></div>
+<div class="card time-card"><label>Estimated automatic withdrawal date</label><div class="value time-value" id="estimatedWithdrawalAt">—</div><div class="small" id="estimatedWithdrawalStatus">Waiting for account check</div><div class="small" id="forecastProgress"></div><details id="forecastAssumptions" class="forecast-assumptions" hidden><summary>Forecast assumptions</summary><p id="forecastAssumptionsText"></p></details></div>
 <div class="card time-card"><label>Time until automatic withdrawal</label><div class="value countdown-value" id="withdrawalCountdown">—</div><div class="small" id="withdrawalCountdownStatus">Estimate at the current BTC price, deposit and purchase interval</div></div>
 </div></div>
 </section>

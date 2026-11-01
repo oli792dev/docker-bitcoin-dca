@@ -173,3 +173,9 @@ th.num,td.num{text-align:right;font-variant-numeric:tabular-nums;font-feature-se
 .withdraw-action>.feedback-wrap{width:100%}
 .withdraw-action .feedback-close{margin-top:4px}
 __DESIGN_CSS__
+.bot-status{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center;margin:-12px 0 18px;font-size:.82rem;color:var(--muted)}
+.bot-status>span:first-child{font-weight:600;color:var(--text)}
+.bot-status .stale{color:var(--warning)}
+.forecast-assumptions{margin-top:8px;font-size:.76rem;color:var(--muted)}
+.forecast-assumptions summary{cursor:pointer;min-height:44px;display:flex;align-items:center;text-decoration:underline;text-underline-offset:3px}
+.forecast-assumptions p{margin:0;line-height:1.5}

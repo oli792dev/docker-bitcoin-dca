@@ -43,7 +43,7 @@ async function event(id,name='click'){if(id==='confirm'&&!elements.passwordConfi
  elements.exchange.value='BITVAVO';await event('exchange','change');assert.equal(elements.exchangeEditor.hidden,false);assert.equal(elements.exchangeSwitchHint.hidden,false);assert.match(elements.exchangeSwitchHint.textContent,/Bitvavo/);assert.equal(elements.bitvavo_api_key.required,true);const beforeMissingKeys=requests.length;await event('testConnection');await event('settingsForm','submit');assert.equal(requests.length,beforeMissingKeys);assert.match(elements.connectionStatus.textContent,/API key and API secret/);assert.equal(elements.quote.value,'EUR');assert.equal(elements.withdraw_thresholdLabel.textContent,'Automatic withdrawal threshold (EUR)');assert.equal(elements.quote.options[1].disabled,true);assert.equal(elements.kraken_api_key.parentElement.hidden,true);
  elements.bitvavo_api_key.value='fictional-key';elements.bitvavo_api_secret.value='fictional-secret';
  const testing=event('testConnection');assert.equal(elements.connectionStatus.textContent,'Testing connection…');assert.equal(elements.testConnection.disabled,true);await testing;assert.equal(requests.at(-1).url,'/api/settings/test');assert.equal(requests.at(-1).body.bitvavo_api_key,'fictional-key');assert.equal(elements.connectionStatus.textContent,'Connected');
- const count=requests.length;elements.display_currency.value='USD';elements.timezone.value='Asia/Tokyo';elements.withdrawals_enabled.checked=true;elements.withdraw_threshold.value='1200';
+ const count=requests.length;elements.display_currency.value='USD';elements.timezone.value='Asia/Tokyo';elements.live.checked=true;elements.withdrawals_enabled.checked=true;vm.runInContext('updateDependencies()',context);elements.withdraw_threshold.value='1200';
  await event('settingsForm','submit');assert.equal(elements.review.open,true);assert.equal(requests.length,count,'Review must not save yet');
  const text=allText(elements.reviewValues);assert.match(text+allText(elements.unchangedReviewValues),/LIVE|Dry run/);assert.match(text,/1200 EUR/);assert.match(text,/1000 EUR/);assert.match(text,/Before/);assert.match(text,/After/);assert.equal(elements.unchangedReview.hidden,false);assert.match(allText(elements.unchangedReviewValues),/BTC per purchase/);assert(!text.includes('fictional-key'));assert(!text.includes('fictional-secret'));assert.match(text,/Will be updated \(hidden\)/);
  await event('cancel');assert.equal(elements.review.open,false);await event('confirm');assert.equal(requests.filter(r=>r.url==='/api/settings').length,0,'Cancelled review must not submit');assert.equal(requests.at(-1).body.event,'settings_save_cancelled');
@@ -84,6 +84,11 @@ events.message({origin:'http://untrusted.test',source:frameWindow,data:{type:'dc
 events.message({origin:'http://dashboard.test',source:{},data:{type:'dca-settings-saved'}});assert.equal(reloads,0);
 events.message({origin:'http://dashboard.test',source:frameWindow,data:{type:'dca-settings-saved'}});assert.equal(reloads,1);
 events.message({origin:'http://dashboard.test',source:frameWindow,data:{type:'dca-settings-auth-required'}});assert.equal(modalWindow.location.href,'/');
+const closeRequests=[];frameWindow.postMessage=(data,origin)=>closeRequests.push({data,origin});
+modalElements.openSettings.listeners.click();events.message({origin:'http://dashboard.test',source:frameWindow,data:{type:'dca-settings-dirty',dirty:true}});
+modalElements.closeSettings.listeners.click();assert.equal(modalElements.settingsDialog.open,true);assert.equal(closeRequests.at(-1).data.type,'dca-settings-request-close');
+let prevented=false;modalElements.settingsDialog.listeners.cancel({preventDefault(){prevented=true}});assert(prevented);assert.equal(modalElements.settingsDialog.open,true);
+events.message({origin:'http://dashboard.test',source:frameWindow,data:{type:'dca-settings-close'}});assert.equal(modalElements.settingsDialog.open,false);
 console.log('Settings modal passed: open/close, secret cleanup, origin/source checks and save/auth handling');
 
 // Settings share dashboard scroll behavior, including resize and disappearing edge hints.
@@ -133,3 +138,15 @@ assert.match(allText(germanElements.reviewValues),/Before/);assert.match(allText
 assert(!allText(germanElements.reviewValues).includes('Vorher'));
 assert.equal(germanElements.settingsContent.scrollTop,0);
 console.log('German settings passed: translated labels, locale, stable exchange values and unchanged user input');
+
+// Closing with drafts requires the in-page discard dialog; no secrets are sent to the parent.
+germanElements.username.value='Unsaved name';vm.runInContext('updateDirty();requestSettingsClose()',germanContext);
+assert.equal(germanElements.unsavedChanges.hidden,false);assert.equal(germanElements.discardDialog.open,true);
+germanElements.keepEditing.listeners.click();assert.equal(germanElements.discardDialog.open,false);
+vm.runInContext('requestSettingsClose()',germanContext);germanElements.discardChanges.listeners.click();
+assert.equal(germanElements.unsavedChanges.hidden,true);assert.equal(germanElements.discardDialog.open,false);
+germanElements.live.checked=false;germanElements.withdrawals_enabled.checked=true;vm.runInContext('updateDependencies()',germanContext);
+assert.equal(germanElements.withdraw_threshold.disabled,false);assert.equal(germanElements.withdrawals_enabled.disabled,false);
+germanElements.withdrawals_enabled.checked=false;vm.runInContext('updateDependencies()',germanContext);assert.equal(germanElements.withdraw_threshold.disabled,true);
+assert.match(germanElements.withdraw_thresholdHint.textContent,/Aktiviere automatische/);
+console.log('Settings drafts passed: keep/discard guard and dependent values retained');

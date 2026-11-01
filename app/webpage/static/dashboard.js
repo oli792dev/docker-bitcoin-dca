@@ -28,6 +28,15 @@ function renderPurchaseCountdown(){
  renderCountdown("withdrawalCountdown",estimatedWithdrawalTimestamp);
  if(estimatedWithdrawalTimestamp===null)$("withdrawalCountdown").textContent=t("Not estimated");
 }
+let accountCheckedAt=null,staleAfterSeconds=600,scheduleOffline=false;
+function renderFreshness(){
+ const age=accountCheckedAt===null?null:Math.max(0,Math.floor((Date.now()+scheduleClockOffset-accountCheckedAt)/60000));
+ $('accountFreshness').textContent=t(age===null?'No successful account check yet':age===0?'Account checked just now':'Account checked {minutes} minutes ago'.replace('{minutes}',age));
+ const stale=scheduleOffline||accountCheckedAt!==null&&(Date.now()+scheduleClockOffset-accountCheckedAt)/1000>staleAfterSeconds;
+ $('accountFreshness').classList.toggle('stale',stale);
+ if(stale&&age!==null)$('accountFreshness').textContent=t('Data is {minutes} minutes old'.replace('{minutes}',age));
+}
+setInterval(renderFreshness,30000);
 async function refreshPurchaseSchedule(){
  const request=++scheduleRequest;sectionFeedback("scheduleFeedback","Updating schedule…");
  try{
@@ -35,6 +44,16 @@ async function refreshPurchaseSchedule(){
   if(response.status===401){window.location.reload();return}
   if(!response.ok)throw new Error("Schedule unavailable");
   const schedule=await response.json();if(request!==scheduleRequest)return;const target=Date.parse(schedule.nextPurchaseAt),serverTime=Date.parse(schedule.serverTime);
+  scheduleClockOffset=Number.isFinite(serverTime)?serverTime-Date.now():0;
+  scheduleOffline=false;
+  const checked=Date.parse(schedule.lastAccountCheckAt||schedule.balanceUpdatedAt);
+  accountCheckedAt=Number.isFinite(checked)?checked:null;staleAfterSeconds=Number(schedule.staleAfterSeconds)||600;
+  $('botStatusLabel').textContent=t(schedule.botStatusLabel||'Bot active');
+  $('botStatusLabel').classList.toggle('stale',Boolean(schedule.botStatusWarning));renderFreshness();
+  const detail=schedule.forecastDetails;
+  $('forecastProgress').textContent=detail?t('About {btc} BTC · {buys} purchases remaining'.replace('{btc}',Number(detail.remainingBtc).toLocaleString(locale,{maximumFractionDigits:8})).replace('{buys}',detail.remainingPurchases)):'';
+  $('forecastAssumptions').hidden=!detail;
+  if(detail)$('forecastAssumptionsText').textContent=t('BTC price: {price}. BTC per purchase: {quantity}. Threshold: {threshold}. Assumes unchanged price and fees. Monthly deposit: {amount}. Deposit: day {day}, {time} ({zone}).'.replace('{price}',money(detail.price,detail.quote)).replace('{quantity}',btc(detail.quantity)).replace('{threshold}',money(detail.threshold,detail.quote)).replace('{amount}',detail.monthlyDeposit?money(detail.monthlyDeposit,detail.quote):t('Not configured')).replace('{day}',detail.depositDay).replace('{time}',detail.depositTime).replace('{zone}',detail.timezone));
   $("monthlyDepositCurrency").textContent=t(schedule.quote);
   if(!monthlyDepositDirty&&!monthlyDepositSaving)$("monthlyDeposit").value=schedule.expectedMonthlyDeposit??"";
   if(schedule.configuredBuyAmount!==undefined){
@@ -51,7 +70,7 @@ async function refreshPurchaseSchedule(){
    ?(Number.isFinite(checkedAt)?"Last checked "+new Date(checkedAt).toLocaleString(locale,{timeZone:schedule.timezone||"UTC"}):"Last account check")
    :"Waiting for account check");
   nextPurchaseTimestamp=Number.isFinite(target)?target:null;
-  scheduleClockOffset=Number.isFinite(serverTime)?serverTime-Date.now():0;
+
   nextPurchaseMessage=schedule.nextPurchaseStatus||"Not scheduled";
   $("nextPurchaseAt").textContent=t(nextPurchaseTimestamp===null?nextPurchaseMessage:new Date(nextPurchaseTimestamp).toLocaleString(locale,{timeZone:schedule.timezone||"UTC",timeZoneName:"short"}));
   exchangeBtcBalance=schedule.btcBalance!=null&&Number.isFinite(Number(schedule.btcBalance))?Number(schedule.btcBalance):null;
@@ -65,7 +84,7 @@ async function refreshPurchaseSchedule(){
   $("withdrawalCountdownStatus").textContent=t(estimatedWithdrawalTimestamp===null?$("estimatedWithdrawalStatus").textContent:(schedule.estimatedWithdrawalStatus||"Estimate at the current BTC price, deposit and purchase interval"));
   renderPurchaseCountdown();
   sectionFeedback("scheduleFeedback","");
- }catch(e){if(request===scheduleRequest)sectionFeedback("scheduleFeedback","Could not refresh the schedule. Previous values are still shown.",true)}
+ }catch(e){if(request===scheduleRequest){scheduleOffline=true;$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");renderFreshness();sectionFeedback("scheduleFeedback","Could not refresh the schedule. Previous values are still shown.",true)}}
 }
 let monthlyDepositDirty=false,monthlyDepositSaving=false;
 $("monthlyDeposit").addEventListener("input",()=>{monthlyDepositDirty=true});

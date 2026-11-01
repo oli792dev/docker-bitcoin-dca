@@ -64,3 +64,21 @@ def withdrawal_forecast(settings, snapshot, monthly_deposit, now):
         return None,'Estimate exceeds the 100-year forecast horizon'
     except (KeyError,TypeError,ValueError,DecimalException,OverflowError):
         return None,'Waiting for account price and order minimums'
+
+
+def forecast_details(settings, snapshot):
+    """Reporting-only explanation; never creates or advances a purchase schedule."""
+    try:
+        price=Decimal(snapshot['price']);balance=Decimal(snapshot['btcBalance'])
+        threshold=Decimal(str(settings['withdraw_threshold']))
+        plan=snapshot['withdrawalForecastPlan']
+        quantity=Decimal(plan.get('baseOrderAmount',plan['orderAmount']))
+        if not all(x.is_finite() for x in (price,balance,threshold,quantity)) or price<=0 or quantity<=0:
+            return None
+        remaining=max(Decimal(0),threshold/price-balance)
+        return {'remainingBtc':str(remaining),'remainingPurchases':int((remaining/quantity).to_integral_value(rounding=ROUND_CEILING)),
+                'price':str(price),'threshold':str(threshold),'quote':settings['quote'],'monthlyDeposit':settings.get('expected_monthly_deposit',''),
+                'depositDay':settings['deposit_day'],'depositTime':settings.get('deposit_time','00:00'),
+                'timezone':settings['timezone'],'quantity':str(quantity)}
+    except (KeyError,TypeError,ValueError,DecimalException):
+        return None
