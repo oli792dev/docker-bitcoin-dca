@@ -137,7 +137,6 @@
   "Deposit time": "Einzahlungsuhrzeit",
   "Expected local deposit time, used to calculate purchase intervals.": "Erwartete lokale Einzahlungszeit zur Berechnung der Kaufintervalle.",
   "Account check interval (seconds)": "Intervall der Kontoprüfung (Sekunden)",
-  "Refresh balances, purchase schedule and withdrawal eligibility.": "Guthaben, Kaufzeitplan und Auszahlungsvoraussetzungen aktualisieren.",
   "Open order check interval (seconds)": "Prüfintervall offener Käufe (Sekunden)",
   "Recheck submitted orders; unresolved orders block new purchases.": "Übermittelte Käufe erneut prüfen; ungeklärte Käufe sperren weitere Käufe.",
   "Automatic withdrawal threshold (purchase currency)": "Automatische Auszahlungsschwelle (Kaufwährung)",
@@ -422,5 +421,6 @@
   "Invalid report start request.": "Ungültige Anfrage für das Startdatum des Berichts.",
   "Bitvavo Bitcoin withdrawal address": "Bitcoin-Auszahlungsadresse bei Bitvavo",
   "Kraken: Query Funds, Query Open/Closed Orders & Trades and Query ledger entries. Add Modify Orders for live trading and Withdraw Funds only for withdrawals.": "Kraken: Query Funds, Query Open/Closed Orders & Trades und Query ledger entries. Für Live-Handel zusätzlich Modify Orders, für Auszahlungen Withdraw Funds aktivieren.",
-  "Bitvavo: Read-only / View access and Trade digital assets. Add Withdraw digital assets only for withdrawals.": "Bitvavo: Read-only / View access und Trade digital assets. Withdraw digital assets nur für Auszahlungen aktivieren."
+  "Bitvavo: Read-only / View access and Trade digital assets. Add Withdraw digital assets only for withdrawals.": "Bitvavo: Read-only / View access und Trade digital assets. Withdraw digital assets nur für Auszahlungen aktivieren.",
+  "Time until the next balance refresh and recalculation of the purchase and withdrawal schedules.": "Zeit bis zur nächsten Guthabenabfrage und Neuberechnung der Kauf- und Auszahlungsplanung."
 }
