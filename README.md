@@ -66,4 +66,12 @@ After updating the source, run `docker compose up -d --build`. Do not run `docke
 
 See [Architecture and operation](docs/architecture.md) for HTTPS, storage, backups, logs and health checks, and the [Changelog](docs/CHANGELOG.md) for changes.
 
-Provided as is, without investment or tax advice. Market prices, fees and execution can differ from estimates; verify transactions and exports.
+## Limitations
+
+- Bitcoin spot purchases only. Prices, fees and fills may differ from estimates; small fiat remnants can remain.
+- Forecasts depend on assumed prices and deposits. API outages or unresolved transactions can delay execution.
+- Activity is not a complete exchange account statement. CSV exports consolidate withdrawal cycles; review them before importing.
+
+## Disclaimer
+
+Provided “as is” without warranty or investment, tax or legal advice. You are responsible for configuration, credentials, monitoring, transactions and exports. To the extent permitted by law, the maintainer accepts no liability for financial losses, fees, outages, withdrawal errors or data loss.
