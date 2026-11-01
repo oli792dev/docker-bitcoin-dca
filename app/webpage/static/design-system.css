@@ -56,7 +56,6 @@ td{font-size:.88rem}th,td{border-color:var(--line)}#activities td{padding:8px 12
 /* Keyboard-accessible section tabs retain unsaved inputs in their panels. */
 .settings-page #settingsForm>.panel{margin:0}
 .settings-tabs{display:flex;gap:4px;align-items:center;flex-wrap:nowrap;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
-.settings-tabs.has-overflow{padding-bottom:16px}
 .settings-tabs button{flex:1 0 auto;white-space:nowrap;font-size:.82rem;font-weight:500;background:transparent;color:var(--muted);border:1px solid transparent;min-height:44px;padding:10px 16px;border-radius:8px}
 .settings-tabs button[aria-selected="true"]{background:var(--panel);color:var(--text);border-color:var(--line);font-weight:600}
 .settings-tabs button:not(:disabled):hover{background:var(--hover);color:var(--text)}

@@ -18,9 +18,9 @@ dialog{max-width:600px;width:calc(100% - 32px);max-height:calc(100dvh - 32px);ov
 
 __SCROLL_CSS__
 .panel,.credential-editor,#settingsForm{min-width:0}
-.settings-card-grid{grid-template-columns:repeat(2,minmax(240px,1fr))}
+.settings-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 .settings-card-grid>div:not(.option-card){padding:var(--card-padding);border:1px solid var(--line);border-radius:10px;background:#0d1525;min-width:0}
-@media(max-width:600px){:root{--card-padding:12px 16px;--control-gap:6px}.settings-card-grid{grid-template-columns:none;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:minmax(288px,1fr)}.exchange-choice-grid{grid-template-rows:auto}.option-card{min-height:88px}.option-card small{line-height:1.5}}
+@media(max-width:600px){:root{--card-padding:12px 16px;--control-gap:6px}.settings-card-grid{grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-auto-flow:row;grid-auto-columns:auto}.option-card{min-height:88px}.option-card small{line-height:1.5}}
 __DESIGN_CSS__
 
 /* Compact forms: the controls define fields; no additional tile borders. */
@@ -36,7 +36,7 @@ __DESIGN_CSS__
 .settings-page .settings-tab-panel input:not([type=checkbox]),.settings-page .settings-tab-panel select{height:44px;padding:10px 12px}
 .settings-page .connection-check{gap:8px}
 @media(min-width:601px){.settings-page #liveTradingCard{grid-column:1/-1;min-height:56px}}
-@media(max-width:600px){.settings-page .settings-card-grid{column-gap:16px;row-gap:12px;grid-auto-columns:minmax(272px,1fr)}.settings-page .option-card{min-height:64px}}
+@media(max-width:600px){.settings-page .settings-card-grid{column-gap:16px;row-gap:12px}.settings-page .option-card{min-height:64px}}
 
 /* Fixed navigation and save action; only the tab contents scroll vertically. */
 .settings-page.settings-active{height:100dvh;overflow:hidden;min-height:0}
@@ -44,7 +44,7 @@ __DESIGN_CSS__
 .settings-active header{flex:0 0 auto;margin-bottom:16px}
 .settings-active #settingsForm{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;overflow:hidden;gap:12px}
 .settings-active #settingsNavigationHeading,.settings-active #settingsTabs,.settings-active .settings-footer{flex:0 0 auto}
-.settings-content{min-height:0;overflow-y:auto;overscroll-behavior-y:contain;scrollbar-width:thin;scrollbar-gutter:stable;padding:2px 16px 4px 4px;flex:1 1 auto}
+.settings-content{min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain;scrollbar-width:thin;scrollbar-gutter:stable;padding:2px 16px 4px 4px;flex:1 1 auto}
 .settings-footer{display:grid;gap:8px;padding-top:12px;border-top:1px solid var(--line);background:var(--panel)}
 .settings-footer #status{padding:0;min-height:0;font-size:.85rem;max-height:96px;overflow:auto}
 @media(max-width:600px){.settings-active main{padding-top:12px;padding-bottom:max(12px,env(safe-area-inset-bottom))}.settings-active #settingsForm{gap:10px}.settings-footer{padding-top:10px}}
@@ -53,3 +53,9 @@ __DESIGN_CSS__
 @media(max-height:500px){.settings-active header{display:none}.settings-active main{padding-top:8px}.settings-active #settingsForm{gap:8px}.settings-footer{padding-top:8px}}
 .setting-inactive{opacity:.65}
 #unsavedChanges{color:var(--warning);margin:0}
+
+/* All Settings fields reflow; only the content region scrolls vertically. */
+.settings-fields{min-width:0;max-width:100%}
+.settings-page .settings-tabs{min-width:0;max-width:100%}
+.settings-page .settings-tabs button{min-width:0;flex:1 1 0;white-space:normal;overflow-wrap:anywhere}
+@media(max-width:600px){.settings-page .settings-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.settings-page .settings-tabs button{width:100%;padding:8px 10px}}

@@ -99,9 +99,9 @@ vm.runInNewContext(scrollSnippet,{document:{querySelectorAll:selector=>selector=
 assert(scrollClasses.has('has-overflow'));assert(scrollClasses.has('has-more-right'));
 area.scrollLeft=480;scrollEvents.scroll();assert(!scrollClasses.has('has-more-right'));assert(scrollClasses.has('is-scrolling'));finishScroll();assert(!scrollClasses.has('is-scrolling'));
 area.clientWidth=900;resizeScroll();assert(!scrollClasses.has('has-overflow'));
-assert(page.includes('grid-template-rows:repeat(2,auto);grid-auto-flow:column'));
-assert.equal((page.match(/class="horizontal-scroll(?: settings-tabs)?"/g)||[]).length,8);
-console.log('Settings scrolling passed: two-row layout, overflow, edge fade, resize and scroll feedback');
+assert(!page.includes('grid-auto-flow:column'));assert(page.includes('grid-auto-flow:row'));assert(page.includes('overflow-x:hidden;overflow-y:auto'));assert(page.includes('class="settings-fields"'));
+assert.equal((page.match(/class="horizontal-scroll(?: settings-tabs)?"/g)||[]).length,0);
+console.log('Settings reflow passed: vertical-only fields, wrapping tabs and shared dashboard scroll behavior');
 
 // All native dialogs lock their own page and restore its exact scroll position.
 const lockScript=page.match(/<script data-ui-dialog-lock>([\s\S]*?)<\/script>/)[1];

@@ -4,6 +4,8 @@ Release history based on the published [GitHub Releases](https://github.com/oli7
 
 ## Unreleased
 
+- Unified mobile Settings with vertical-only content scrolling, single-column fields and wrapping fixed tabs; removed horizontal field scrollers.
+
 - Standardized dismissible-message spacing: 12 pixels above messages and between text and close buttons, including manual withdrawals and Parqet exports.
 
 - Moved the single labeled bot status beside Settings and removed the account-check age message.
