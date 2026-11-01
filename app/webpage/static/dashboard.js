@@ -251,7 +251,7 @@ async function loadAnalytics(){
   $("profitLoss").textContent=t(money(profitLoss,displayCurrency));
   $("profitLoss").className="value "+(profitLoss>=0?"positive":"negative");
  }else{$("profitLoss").textContent=t("—");$("profitLoss").className="value"}
- $("settingExchange").textContent=t(ex);$("settingQuoteCurrency").textContent=t(quote);$("tradingMode").textContent=t(d.configuration.liveTrading?"live":"Simulation");
+ $("settingExchange").textContent=t(ex);$("settingQuoteCurrency").textContent=t(quote);$("tradingMode").textContent=t(d.configuration.liveTrading?"Live":"Simulation");
  const amountSnapshot=d.snapshot||{};
  const effectiveMinimum=amountSnapshot.exchange===d.exchange&&amountSnapshot.quote===quote?Number((amountSnapshot.withdrawalForecastPlan||{}).orderAmount):NaN;
  $("buyAmount").textContent=t(d.snapshot.withdrawalForecastPlan?.useRemainingBudget&&effectiveMinimum>0?btc(effectiveMinimum):Number(d.configuration.buyAmount)===0

@@ -411,7 +411,6 @@
   "Connection successful. Account balances and deposit history are accessible; no order or withdrawal was submitted.": "Verbindung erfolgreich. Guthaben und Einzahlungshistorie sind abrufbar; es wurde kein Kauf und keine Auszahlung ausgelöst.",
   "No activity in this period.": "Keine Aktivitäten in diesem Zeitraum.",
   "Place real Bitcoin orders. Disabled means Simulation.": "Echte Bitcoin-Käufe ausführen. Deaktiviert: Simulation.",
-  "live": "live",
   "Buy (Simulation)": "Kauf (Simulation)",
   "No real bot purchase was found since the previous confirmed withdrawal. The Parqet export requires a real purchase and a withdrawal; purchases made in Simulation are excluded.": "Seit der vorherigen bestätigten Auszahlung wurde kein echter Bot-Kauf gefunden. Der Parqet-Export erfordert einen echten Kauf und eine Auszahlung; Simulationen werden ausgeschlossen.",
   "Deposits": "Einzahlungen",

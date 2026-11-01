@@ -106,7 +106,7 @@ function renderReview(){
   const format=(settings)=>key==='buy_amount'?(Number(settings[key])===0?'Exchange minimum':number(settings[key])+' BTC'):key==='withdraw_threshold'?number(settings[key])+' '+settings.quote:number(settings[key])+(key.endsWith('_seconds')?t(' seconds'):'');
   add(label,format(before),format(after));
  }
- add('Live trading',before.live?'live':'Simulation',after.live?'live':'Simulation');
+ add('Live trading',before.live?'Live':'Simulation',after.live?'Live':'Simulation');
  for(const [key,label] of [['withdrawals_enabled','Automatic withdrawals'],['manual_withdrawal_enabled','Manual withdrawals'],['parqet_enabled','Parqet CSV']])add(label,enabled(before[key]),enabled(after[key]));
  const appearanceLabel=value=>({system:'Automatic / System',light:'Light',dark:'Dark'}[value]||'Automatic / System');
  add('Appearance',appearanceLabel(before.appearance),appearanceLabel(after.appearance));
