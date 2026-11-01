@@ -22,11 +22,12 @@ class FaviconTests(unittest.TestCase):
 
     def test_all_icon_routes_are_public_and_cacheable(self):
         routes=[('/favicon.ico',favicon_assets.FAVICON_ICO,'image/x-icon'),
+                ('/favicon-32-v4.png',favicon_assets.FAVICON_PNG,'image/png'),
                 ('/favicon-32.png',favicon_assets.FAVICON_PNG,'image/png'),
                 ('/apple-touch-icon.png',favicon_assets.APPLE_TOUCH_ICON_PNG,'image/png'),
                 ('/apple-touch-icon-precomposed.png',favicon_assets.APPLE_TOUCH_ICON_PNG,'image/png'),
-                ('/bitcoin-dca-icon-v3.png',favicon_assets.APPLE_TOUCH_ICON_PNG,'image/png'),
-                ('/safari-pinned-tab-v3.svg',favicon_assets.FAVICON_MASK_SVG,'image/svg+xml; charset=utf-8'),
+                ('/bitcoin-dca-icon-v4.png',favicon_assets.APPLE_TOUCH_ICON_PNG,'image/png'),
+                ('/safari-pinned-tab-v4.svg',favicon_assets.FAVICON_MASK_SVG,'image/svg+xml; charset=utf-8'),
                 ('/favicon.svg',web_ui.FAVICON_SVG,'image/svg+xml; charset=utf-8')]
         for path,data,content_type in routes:
             with self.subTest(path=path):
@@ -40,18 +41,19 @@ class FaviconTests(unittest.TestCase):
             def __init__(self):super().__init__();self.links=[]
             def handle_starttag(self,tag,attrs):
                 if tag=='link':self.links.append(dict(attrs))
-        for page in [web_ui.HTML,web_ui.LOGIN_HTML]:
+        from app.webpage.settings_ui import PAGE
+        for page in [web_ui.HTML,web_ui.LOGIN_HTML,PAGE]:
             parser=Links();parser.feed(page)
             regular=[link for link in parser.links if link.get('rel')=='icon']
             self.assertEqual(len(regular),1)
-            self.assertEqual(regular[0]['href'],'/favicon-32.png')
+            self.assertEqual(regular[0]['href'],'/favicon-32-v4.png')
             self.assertEqual(regular[0]['sizes'],'32x32')
             touch=next(link for link in parser.links if link.get('rel')=='apple-touch-icon')
             self.assertEqual(touch['sizes'],'180x180')
             self.assertNotEqual(regular[0]['href'],touch['href'])
             self.assertEqual(regular[0]['type'],'image/png')
-            self.assertTrue(any(link.get('rel')=='apple-touch-icon' and link['href']=='/bitcoin-dca-icon-v3.png' for link in parser.links))
-            self.assertTrue(any(link.get('rel')=='mask-icon' and link['href']=='/safari-pinned-tab-v3.svg' and link['color']=='#8bafff' for link in parser.links))
+            self.assertTrue(any(link.get('rel')=='apple-touch-icon' and link['href']=='/bitcoin-dca-icon-v4.png' for link in parser.links))
+            self.assertTrue(any(link.get('rel')=='mask-icon' and link['href']=='/safari-pinned-tab-v4.svg' and link['color']=='#4285d4' for link in parser.links))
 
         svg=ET.fromstring(favicon_assets.FAVICON_MASK_SVG)
         self.assertEqual(svg.attrib['viewBox'],'0 0 16 16')
@@ -83,10 +85,11 @@ class DesignAccessibilityTests(unittest.TestCase):
             return (high+.05)/(low+.05)
         for appearance,colors in PALETTES.items():
             for role in ('text','muted','accent','green','red','warning'):
-                for background in ('bg','panel','surface','control'):
+                for background in ('bg','panel','surface','control','pressed'):
                     with self.subTest(appearance=appearance,role=role,background=background):
                         self.assertGreaterEqual(contrast(colors[role],colors[background]),4.5)
-            self.assertGreaterEqual(contrast(colors['primary'],colors['on-primary']),4.5)
+            for role in ('primary','primary-hover','primary-pressed'):
+                self.assertGreaterEqual(contrast(colors[role],colors['on-primary']),4.5)
             self.assertGreaterEqual(contrast(colors['control-line'],colors['control']),3)
 
     def test_dashboard_login_setup_and_settings_share_the_accessible_theme(self):

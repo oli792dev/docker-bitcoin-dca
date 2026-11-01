@@ -8,6 +8,9 @@ function exchangeChanged(){return $('exchange').value!==(initial.settings.exchan
 function exchangeName(){return $('exchange').value==='KRAKEN'?'Kraken':'Bitvavo'}
 function updateExchangeGuidance(){
  const changed=exchangeChanged(),name=exchangeName();
+ $('exchangePermissionsHint').textContent=t($('exchange').value==='KRAKEN'?
+  'Kraken: Query Funds, Query Open/Closed Orders & Trades and Query ledger entries. Add Modify Orders for live trading and Withdraw Funds only for withdrawals.':
+  'Bitvavo: Read-only / View access and Trade digital assets. Add Withdraw digital assets only for withdrawals.');
  $('exchangeSwitchHint').hidden=!changed;
  $('exchangeSwitchHint').textContent=t(changed?'Switching to '+name+' requires entering its API key and API secret again. Enter the keys below and review the withdrawal target.':'');
  $('exchangeCredentialHint').textContent=t(changed?'Enter the API key and API secret for '+name+'. Saved keys from either exchange are not reused automatically. Confirm the '+name+' withdrawal target if you use withdrawals.':'Leave API fields empty to keep saved '+name+' keys. The withdrawal target below applies to '+name+'.');
@@ -17,7 +20,7 @@ function updatePurchaseCurrencyLabel(){$('withdraw_thresholdLabel').textContent=
 function selectedExchange(){const kraken=$('exchange').value==='KRAKEN';for(const prefix of ['kraken','bitvavo'])for(const part of ['key','secret'])$(prefix+'_api_'+part).parentElement.hidden=(prefix==='kraken')!==kraken;$('krakenTarget').hidden=!kraken;$('bitvavoTarget').hidden=kraken;$('bitvavoNetwork').hidden=kraken;$('quote').options[1].disabled=!kraken;if(!kraken)$('quote').value='EUR';updateExchangeGuidance();updatePurchaseCurrencyLabel()}
 function exchangeCredentialsReady(){if(!exchangeChanged())return true;const prefix=$('exchange').value.toLowerCase();if(!$(prefix+'_api_key').value.trim()||!$(prefix+'_api_secret').value.trim()){activateSettingsTab('exchangeConnection');connectionMessage('Enter '+exchangeName()+' API key and API secret before testing or saving.',true);return false}return true}
 
-for(const prefix of ['kraken','bitvavo'])for(const part of ['key','secret']){const key=prefix+'_api_'+part,field=document.createElement('div'),label=document.createElement('label'),input=document.createElement('input');label.htmlFor=key;label.textContent=t(prefix[0].toUpperCase()+prefix.slice(1)+' API '+part);input.id=key;input.type='password';input.autocomplete='off';input.dataset.setting='';input.placeholder=t(initial.settings[key+'_configured']?'Saved · leave empty to keep':'Not configured');field.append(label,input);$('credentials').append(field)}
+for(const prefix of ['kraken','bitvavo'])for(const part of ['key','secret']){const key=prefix+'_api_'+part,field=document.createElement('div'),label=document.createElement('label'),input=document.createElement('input');label.htmlFor=key;label.textContent=t(prefix[0].toUpperCase()+prefix.slice(1)+' API '+part);input.id=key;input.type='password';input.autocomplete='off';input.autocapitalize='none';input.spellcheck=false;input.setAttribute('aria-describedby','exchangePermissionsHint');input.dataset.setting='';input.placeholder=t(initial.settings[key+'_configured']?'Saved · leave empty to keep':'Not configured');field.append(label,input);$('credentials').append(field)}
 const fields=[
  ['buy_amount','BTC per purchase (0 = exchange minimum)','0','any',null,'Amounts below exchange minimum are not applied.'],
  ['startup_delay_seconds','Startup delay (seconds)','0','1','86400','Delay before the first account check after startup or setup.'],
@@ -28,7 +31,7 @@ const fields=[
  ['withdraw_threshold','Automatic withdrawal threshold (purchase currency)','0.01','any',null,'Withdraw when all available exchange BTC reaches this value in the purchase currency. Requires automatic withdrawals and live trading.']
 ];
 $('purchaseFields').append($('liveTradingCard'));
-for(const [key,title,min,step,max,description] of fields){if(key==='withdraw_threshold')$('purchaseFields').append($('automaticWithdrawalsCard'));const field=document.createElement('div'),label=document.createElement('label'),input=document.createElement('input'),hint=document.createElement('small');label.htmlFor=key;label.id=key+'Label';label.textContent=t(title);input.id=key;input.type=key==='deposit_time'?'time':'number';input.required=true;input.dataset.setting='';input.min=min;input.step=step;if(max)input.max=max;hint.id=key+'Hint';hint.className='hint field-description';hint.textContent=t(description);input.setAttribute('aria-describedby',hint.id);field.append(label,input,hint);$('purchaseFields').append(field)}
+for(const [key,title,min,step,max,description] of fields){if(key==='withdraw_threshold')$('purchaseFields').append($('automaticWithdrawalsCard'));const field=document.createElement('div'),label=document.createElement('label'),input=document.createElement('input'),hint=document.createElement('small');label.htmlFor=key;label.id=key+'Label';label.textContent=t(title);input.id=key;input.type=key==='deposit_time'?'time':'number';if(input.type==='number')input.inputMode=['buy_amount','withdraw_threshold'].includes(key)?'decimal':'numeric';input.required=true;input.dataset.setting='';input.min=min;input.step=step;if(max)input.max=max;hint.id=key+'Hint';hint.className='hint field-description';hint.textContent=t(description);input.setAttribute('aria-describedby',hint.id);field.append(label,input,hint);$('purchaseFields').append(field)}
 const timezoneGroups=[
  ['Universal',[['UTC','UTC']]],
  ['Europe',[['Europe/Berlin','Berlin'],['Europe/London','London'],['Europe/Paris','Paris'],['Europe/Zurich','Zurich'],['Europe/Helsinki','Helsinki'],['Europe/Istanbul','Istanbul'],['Europe/Moscow','Moscow']]],
@@ -52,6 +55,7 @@ const settingsTabs=[];
 function activateSettingsTab(id,focus=false){
  if($('settingsContent'))$('settingsContent').scrollTop=0;
  if(initial.createAccount)return;
+ if(initial.complete&&settingsTabs.some(item=>item.id===id)){try{localStorage.setItem('bitcoinDcaSettingsTab',id)}catch(e){}}
  for(const item of settingsTabs){const selected=item.id===id;item.panel.hidden=!selected;item.button.setAttribute('aria-selected',String(selected));item.button.tabIndex=selected?0:-1;if(selected&&focus)item.button.focus()}
 }
 $('settingsTabs').hidden=Boolean(initial.createAccount);
@@ -64,7 +68,9 @@ if(!initial.createAccount){
   button.addEventListener('keydown',event=>{const index=settingsTabs.findIndex(item=>item.id===id);let next;if(event.key==='ArrowRight')next=(index+1)%settingsTabs.length;else if(event.key==='ArrowLeft')next=(index-1+settingsTabs.length)%settingsTabs.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=settingsTabs.length-1;else return;event.preventDefault();activateSettingsTab(settingsTabs[next].id,true)});
   settingsTabs.push({id,panel,button});$('settingsTabs').append(button);
  }
- activateSettingsTab(initial.complete?'botConfiguration':'exchangeConnection');
+ let rememberedTab='botConfiguration';
+ try{const saved=localStorage.getItem('bitcoinDcaSettingsTab');if(settingsTabs.some(item=>item.id===saved))rememberedTab=saved}catch(e){}
+ activateSettingsTab(initial.complete?rememberedTab:'exchangeConnection');
  let invalidTabOpened=false;
  $('settingsForm').addEventListener('invalid',event=>{if(invalidTabOpened)return;const item=settingsTabs.find(item=>item.panel.contains(event.target));if(item){activateSettingsTab(item.id);invalidTabOpened=true;setTimeout(()=>{invalidTabOpened=false},0)}},true);
 }

@@ -4,14 +4,14 @@ from app.webpage.templates import load_asset
 PALETTES = {
     'light': {'bg':'#f5f5f7','panel':'#ffffff','surface':'#f2f2f7','control':'#ffffff',
               'line':'#d2d2d7','control-line':'#85858a','text':'#1d1d1f','muted':'#606067','accent':'#005bb5',
-              'primary':'#0066cc','primary-hover':'#0055aa','on-primary':'#ffffff',
+              'primary':'#0066cc','primary-hover':'#0055aa','primary-pressed':'#004b96','on-primary':'#ffffff',
               'green':'#237537','red':'#b42324','warning':'#855000','hover':'#e8e8ed',
-              'glass':'rgba(245,245,247,.88)','scrim':'rgba(0,0,0,.32)'},
+              'pressed':'#e5e5ea','glass':'rgba(245,245,247,.88)','scrim':'rgba(0,0,0,.32)'},
     'dark': {'bg':'#000000','panel':'#1c1c1e','surface':'#2c2c2e','control':'#1c1c1e',
              'line':'#48484a','control-line':'#8e8e93','text':'#f5f5f7','muted':'#b5b5bc','accent':'#82b6ff',
-             'primary':'#0066cc','primary-hover':'#0055aa','on-primary':'#ffffff',
+             'primary':'#0066cc','primary-hover':'#0055aa','primary-pressed':'#004b96','on-primary':'#ffffff',
              'green':'#76d98d','red':'#ff9999','warning':'#f0c675','hover':'#3a3a3c',
-             'glass':'rgba(28,28,30,.88)','scrim':'rgba(0,0,0,.64)'},
+             'pressed':'#343436','glass':'rgba(28,28,30,.88)','scrim':'rgba(0,0,0,.64)'},
 }
 
 

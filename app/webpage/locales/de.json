@@ -94,7 +94,6 @@
   "Leave API fields empty to keep saved keys for the current exchange.": "Lasse die API-Felder leer, um die gespeicherten Schlüssel der aktuellen Börse beizubehalten.",
   "Use balance and trading permissions; add withdrawal permission only if needed.": "Erlaube Guthabenabfragen und Handel; Auszahlungen nur bei Bedarf.",
   "Kraken saved Bitcoin withdrawal method": "Gespeicherte Bitcoin-Auszahlungsmethode bei Kraken",
-  "Bitvavo Withdrawal Bitcoin Adress": "Bitcoin-Auszahlungsadresse bei Bitvavo",
   "Bitvavo Bitcoin network": "Bitcoin-Netzwerk bei Bitvavo",
   "Withdrawals require live trading, withdrawal permission and a saved Bitcoin destination.": "Auszahlungen erfordern aktivierten echten Handel, eine Auszahlungsberechtigung und ein gespeichertes Bitcoin-Ziel.",
   "Test connection": "Verbindung testen",
@@ -420,5 +419,8 @@
   "{count} deposits": "{count} Einzahlungen",
   "Could not save report start date.": "Das Startdatum des Berichts konnte nicht gespeichert werden.",
   "Invalid report start date.": "Ungültiges Startdatum des Berichts.",
-  "Invalid report start request.": "Ungültige Anfrage für das Startdatum des Berichts."
+  "Invalid report start request.": "Ungültige Anfrage für das Startdatum des Berichts.",
+  "Bitvavo Bitcoin withdrawal address": "Bitcoin-Auszahlungsadresse bei Bitvavo",
+  "Kraken: Query Funds, Query Open/Closed Orders & Trades and Query ledger entries. Add Modify Orders for live trading and Withdraw Funds only for withdrawals.": "Kraken: Query Funds, Query Open/Closed Orders & Trades und Query ledger entries. Für Live-Handel zusätzlich Modify Orders, für Auszahlungen Withdraw Funds aktivieren.",
+  "Bitvavo: Read-only / View access and Trade digital assets. Add Withdraw digital assets only for withdrawals.": "Bitvavo: Read-only / View access und Trade digital assets. Withdraw digital assets nur für Auszahlungen aktivieren."
 }

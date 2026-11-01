@@ -208,7 +208,7 @@ $("pageJump").addEventListener("submit",event=>{
  if(page!==currentPage){currentPage=page;loadAnalytics()}
 });
 async function loadAnalytics(){
- const request=++reportRequest;saveReportView();sectionFeedback("reportFeedback","");
+ const request=++reportRequest;$("refresh").ariaBusy="true";$("periodReport").ariaBusy="true";saveReportView();sectionFeedback("reportFeedback","");
  try{showError("");const p=selectedPeriod();const response=await fetch("/api/analytics?start="+p.start+"&end="+p.end+"&page="+currentPage+"&limit="+$("pageSize").value);const d=await response.json();if(!response.ok)throw new Error(d.error||"Could not load the report.");if(request!==reportRequest)return;quote=d.quote;
  displayCurrency=["EUR","USD"].includes(d.configuration.displayCurrency)?d.configuration.displayCurrency:(["EUR","USD"].includes(quote)?quote:"EUR");
  const ex=d.exchange==="KRAKEN"?"Kraken":d.exchange==="BITVAVO"?"Bitvavo":d.exchange;document.title="Bitcoin DCA Dashboard";
@@ -266,7 +266,7 @@ async function loadAnalytics(){
  $("withdrawFees").textContent=t(moneyAvailable?money(converted.withdrawalFees,displayCurrency):"—");$("netBtc").textContent=t(btc(d.summary.netBtc));
  activityRates=currencyRates;activityRows=d.activities;activityTotal=d.pagination.total;activityPages=d.pagination.pages;currentPage=d.pagination.page;renderActivities();
  }catch(e){if(request===reportRequest)showError(e.message)}
- finally{if(request===reportRequest)sectionFeedback("reportFeedback","")}
+ finally{if(request===reportRequest){$("refresh").ariaBusy="false";$("periodReport").ariaBusy="false";sectionFeedback("reportFeedback","")}}
 }
 $("refresh").addEventListener("click",()=>{currentPage=1;loadAnalytics()});
 $("download").addEventListener("click",async()=>{

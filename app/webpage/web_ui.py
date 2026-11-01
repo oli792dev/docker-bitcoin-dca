@@ -21,7 +21,7 @@ import traceback
 from app.core.security import AttemptLimiter, PasswordConfirmationError
 from app.exchanges import market_prices
 from app.exchanges.exchange_errors import UncertainWithdrawalError
-from app.webpage.favicon_assets import FAVICON_ICO, FAVICON_PNG, APPLE_TOUCH_ICON_PNG, FAVICON_MASK_SVG
+from app.webpage.favicon_assets import FAVICON_ICO, FAVICON_PNG, APPLE_TOUCH_ICON_PNG, FAVICON_MASK_SVG, FAVICON_SVG
 from app.data.analytics import report as build_report
 from app.data.activity import parqet_interval_records, withdrawal_records, read_report
 
@@ -37,15 +37,6 @@ from app.trading.forecast import withdrawal_forecast, forecast_details
 
 LOG = logging.getLogger("bitcoin-dca.web")
 
-FAVICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-<title>Bitcoin DCA Dashboard</title>
-<rect x="1" y="1" width="62" height="62" rx="15" fill="#0b1020" stroke="#26324a" stroke-width="2"/>
-<circle cx="32" cy="32" r="24" fill="#8bafff"/>
-<g transform="rotate(14 32 32)" fill="none" stroke="#0b1020" stroke-width="4.5" stroke-linecap="square" stroke-linejoin="round">
-<path d="M23 19v27M23 19h11c13 0 13 13 0 13H23m0 0h13c14 0 14 14 0 14H23"/>
-<path d="M28 13v6m7-6v6M28 46v6m7-6v6"/>
-</g>
-</svg>"""
 
 HTML = load_page("dashboard")
 
@@ -394,6 +385,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200 if healthy else 503,{'healthy':healthy})
             return
         icon = {
+            "/bitcoin-dca-icon-v4.png": (APPLE_TOUCH_ICON_PNG, "image/png"),
+            "/favicon-32-v4.png": (FAVICON_PNG, "image/png"),
+            "/safari-pinned-tab-v4.svg": (FAVICON_MASK_SVG, "image/svg+xml; charset=utf-8"),
             "/bitcoin-dca-icon-v3.png": (APPLE_TOUCH_ICON_PNG, "image/png"),
             "/safari-pinned-tab-v3.svg": (FAVICON_MASK_SVG, "image/svg+xml; charset=utf-8"),
             "/apple-touch-icon-precomposed.png": (APPLE_TOUCH_ICON_PNG, "image/png"),
