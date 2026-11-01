@@ -1,95 +1,35 @@
 # Changelog
 
-Release history based on the published [GitHub Releases](https://github.com/oli792dev/docker-bitcoin-dca/releases). Entries are newest first; dates use Europe/Berlin. Releases without notes are marked explicitly.
+Unreleased changes followed by historical version notes, newest first. Dates use Europe/Berlin. Earlier notes are retained even when their GitHub releases or tags are no longer available.
 
 ## Unreleased
 
-- Added a traffic-light status indicator: green for active operation, amber for waiting/simulation, red for account-check or connection failures.
+- Added a labeled traffic-light status beside Settings: green for active operation, amber for waiting/simulation, red for failures; no separate account-age message.
+- Simplified Settings into Bot Configuration, Exchange, Dashboard and Login tabs with directly editable credentials and withdrawal targets.
+- Made Settings compact and vertically scrollable on all devices, with fixed navigation/save controls and single-column mobile fields.
+- Added an unsaved-draft indicator and in-page discard confirmation; inactive withdrawal thresholds retain their saved values.
+- Added English/German interface language, localized dates/numbers and volume-saved Light, Dark and Automatic / System appearance. Technical logs remain English.
+- Standardized field-title hierarchy, mobile time-input sizing, scrollbar colors and dismiss-button spacing; removed visible focus indicators as requested while retaining keyboard navigation.
+- Improved withdrawal confirmations and messages, background-scroll locking, saved view preferences and reporting feedback.
+- Explained withdrawal forecasts with approximate remaining BTC/purchases and expandable assumptions; the monthly forecast amount is volume-saved and starts empty without browser imports.
+- Kept forecasts available while waiting for deposits, with overdue-funding assumptions explicitly labelled.
+- Added deposit time, actual calendar-month and daylight-saving handling; purchase intervals use the last purchase through the next deposit deadline.
+- Persisted deposit-wait tracking across restarts. Affordable old funds remain due, and incoming available fiat releases the wait.
+- Removed the 0.5% planning buffer and increased the final affordable order to use the remaining fiat budget, allowing for fees and exchange precision.
+- Preserved existing account-check deadlines after manual withdrawal previews/confirmations; due checks take priority over queued requests.
+- Paused trading after interrupted Settings writes until durable configuration and exchange activity have been verified again.
+- Replaced manual account recovery with conservative automatic startup checks, preserving pending transactions and purchase history.
+- Bounded HTTPS connections, rechecked sessions at worker execution and safely paginated withdrawal histories.
+- Added native HTTPS with a persistent local CA and renewable certificates, 30-minute secure sessions, attempt limits and password confirmation for sensitive changes.
+- Restricted persistent-file permissions, shared durable atomic JSON writes and avoided unnecessary exchange reconnections.
+- Versioned SQLite initialization so normal reads skip schema work; unsupported newer schemas are rejected safely.
+- Added coordinated SIGTERM/SIGINT shutdown and a 60-second Compose stop grace period.
+- Organized application packages and separated HTML/CSS/JavaScript from HTTP handlers without frontend dependencies.
+- Removed unused helpers and Adaptive DCA; consolidated regression tests and excluded documentation/tests from container builds.
+- Corrected mixed-currency handling for failed withdrawals and retained confirmation states in Period Activity.
+- Updated and consolidated README and operation documentation to match the current interface and behavior.
 
-- Unified mobile Settings with vertical-only content scrolling, single-column fields and wrapping fixed tabs; removed horizontal field scrollers.
-
-- Standardized dismissible-message spacing: 12 pixels above messages and between text and close buttons, including manual withdrawals and Parqet exports.
-
-- Moved the single labeled bot status beside Settings and removed the account-check age message.
-
-- Added a compact bot/account-check status and explicit age indicators for retained account data.
-- Marked unsaved Settings drafts and added an in-page discard confirmation for close/Escape; saved drafts close normally.
-- Disabled inactive automatic-withdrawal thresholds with explanations while retaining their saved values and allowing dry-run configuration.
-- Explained withdrawal forecasts with approximate remaining BTC/purchases and expandable price, fee and deposit assumptions.
-- Translated all new controls and feedback into German.
-
-- Removed visible focus outlines and shadows across all pages and dialogs as requested, while retaining keyboard navigation.
-
-- Added a volume-saved English/German dashboard language setting, including login/setup, dialogs, feedback, accessibility labels and locale-specific dates and numbers. Technical logs remain English.
-- Kept Settings tabs and the review/save action fixed while only the settings content scrolls vertically.
-- Improved Settings switch descriptions, tab-change positioning and layout on short displays following Apple HIG accessibility principles.
-
-- Made Settings more compact with plain two-column form fields, flat switch rows and shorter descriptions while retaining mobile overflow and touch targets.
-
-- Paused transactions after interrupted settings writes until durable settings and exchange activity have been verified again.
-- Prioritized due account checks over queued manual requests without moving their check deadline.
-- Added coordinated SIGTERM/SIGINT shutdown, queued-action cancellation and a 60-second Compose stop grace period.
-- Initialized SQLite tables and indexes only when the schema version requires it; newer unsupported versions fail safely.
-- Separated page templates and CSS/JavaScript assets from Python handlers without adding frontend dependencies.
-- Showed Waiting for startup delay during the configured delay, before the automatic exchange check begins.
-
-- Simplified Settings tabs: removed redundant panels/headings and made login credentials, exchange API access and withdrawal targets directly editable.
-- Increased the final affordable purchase to use remaining fiat while reserving estimated trading fees and respecting exchange precision.
-- Kept automatic withdrawal forecasts available while waiting for deposits; overdue funding assumptions are labeled explicitly.
-
-- Fixed final purchases slipping into the following month: affordable buys now fall before the deposit deadline and overdue residual funds remain due.
-- Added persistent deposit-wait tracking and Waiting for deposit in purchase date/countdown fields; incoming available funds resume purchasing.
-- Removed the 0.5% planning buffer while retaining fee estimates and exchange minimum checks.
-- Removed the redundant scheduled status suffix from the Next purchase heading.
-
-- Added keyboard-accessible Settings tabs while retaining draft inputs.
-- Added a persistent deposit time in the configured timezone; purchase intervals and withdrawal forecasts now use the full deposit date and time, including month-length and daylight-saving handling.
-
-- Added volume-saved Light, Dark and Automatic / System appearance in dashboard settings, applied consistently to sign-in, dashboard and settings.
-- Fixed main panel corners by clipping header backgrounds inside one continuous rounded border.
-
-- Unified dashboard, login, setup and settings around an Apple HIG-inspired design system with automatic light/dark appearance.
-- Added system typography, consistent grouped surfaces, accessible contrast, larger control targets, keyboard skip links and reduced-motion/transparency support.
-- Replaced decorative button glow with restrained interaction feedback and applied shared styling to all dialogs and credential editors.
-
-- Removed Adaptive DCA, its settings and dashboard statistics; preserved the reorganized application packages. Existing volumes ignore the retired settings.
-
-- Organized application modules into webpage, trading, exchanges, data and core packages; updated imports, Docker startup and health checks.
-
-
-- Bounded concurrent HTTPS requests and rechecked sessions before queued manual withdrawals execute.
-- Followed paginated withdrawal histories and rejected incomplete or stalled responses safely.
-- Shared private atomic JSON writes, restricted ledger permissions and reused exchange connections for cosmetic settings changes.
-- Excluded failed foreign-currency withdrawals from monetary currency grouping.
-- Removed redundant worker startup hooks, unused legacy path placeholders and an unreachable balance branch.
-- Consolidated small Python suites by domain and added regression checks before container publishing.
-- Shortened forecast and manual-withdrawal notes and removed cancellation feedback from the notes.
-
-- Persisted the expected monthly deposit in the named volume, starting empty without importing browser values.
-- Vertically aligned header buttons with the dashboard title.
-
-- Locked background scrolling while settings, withdrawal and review dialogs are open, restoring the previous position on close.
-- Placed exchange and purchase currency cards in one horizontal row on mobile.
-
-- Replaced expected TLS-handshake tracebacks with concise certificate-trust guidance; repeated failures and disconnects remain DEBUG.
-
-- Added native HTTPS with a persistent local CA, configurable certificate addresses and automatic renewal.
-- Secured session cookies, reduced sessions to 30 minutes and limited sign-in/password-confirmation attempts.
-- Required current-password confirmation for sensitive exchange, withdrawal and live-trading changes.
-
-- Added responsive horizontal scrolling with two card rows to mobile settings, sharing dashboard scrollbar and edge-fade behavior.
-
-- Removed unused activity deletion/query helpers, the obsolete worker bootstrap and superseded withdrawal estimator.
-- Consolidated report tests around the active runtime and paginated SQLite queries; removed stale imports, flags and styles.
-- Avoided unchanged state rewrites and excluded documentation/tests from the Docker build context.
-
-- Fixed the restart loop when saved settings or history exist but scheduling state is missing.
-- Replaced manual account recovery with automatic startup exchange checks; new purchases and withdrawals wait for open transactions to close.
-- Preserved saved configuration and recorded activity while rebuilding the purchase schedule after startup checks.
-- Added separate, independently saved pages for dashboard credentials and exchange API access.
-- Aligned display currency with the timezone field and shortened its timezone help text.
-
-## [v0.5.0](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.5.0) — 2026-10-30
+## v0.5.0 — 2026-10-30
 
 - Added first-run setup for creating dashboard credentials and configuring the bot.
 - Added a Settings dialog for exchange access, purchase parameters, withdrawal targets and dashboard options.
@@ -105,46 +45,46 @@ Release history based on the published [GitHub Releases](https://github.com/oli7
 - Expanded setup and Settings logs without exposing credentials.
 - Improved mobile layouts and simplified the deployment configuration and documentation.
 
-## [v0.4.2](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.4.2) — 2026-10-30
+## v0.4.2 — 2026-10-30
 
 - improvements in configuration and settings page
 
-## [v0.4.1](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.4.1) — 2026-10-30
+## v0.4.1 — 2026-10-30
 
 - improving configuration page
 
-## [v0.4.0](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.4.0) — 2026-10-30
+## v0.4.0 — 2026-10-30
 
 - Adding settings menu and configuration assistant
 
-## [v0.3.5](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.3.5) — 2026-10-30
+## v0.3.5 — 2026-10-30
 
 - Kept scheduled account checks unchanged after manual withdrawal previews and confirmations, avoiding unnecessary purchase schedule recalculations.
 - Added compact dismiss buttons to manual withdrawal and Parqet CSV export messages.
 - Unified automatic withdrawal forecast subtitles and subsection spacing.
 - Kept activity table height stable by filling unused page rows.
 
-## [v0.3.4](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.3.4) — 2026-10-30
+## v0.3.4 — 2026-10-30
 
 - Standardized log levels and reduced routine INFO output.
 - Added logs for withdrawal status changes.
 - Kept temporary network failures at WARNING without stack traces.
 - Preserved INFO logs for purchase scheduling and user actions.
 
-## [v0.3.3](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.3.3) — 2026-10-30
+## v0.3.3 — 2026-10-30
 
 - Improved the web UI appearance.
 
-## [v0.3.2](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.3.2) — 2026-10-30
+## v0.3.2 — 2026-10-30
 
 - Reworked the application architecture, moving Python runtime modules into `app/`.
 - Updated Docker source paths, test entry points and architecture documentation.
 
-## [v0.3.1](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.3.1) — 2026-10-30
+## v0.3.1 — 2026-10-30
 
 - Improved visibility in the web UI.
 
-## [v0.3.0](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.3.0) — 2026-10-30
+## v0.3.0 — 2026-10-30
 
 Improvements in Web UI
 - Added responsive horizontal scrolling with clearer scrollbars and edge indicators.
@@ -153,108 +93,108 @@ Improvements in Web UI
 - Remembered panel states, date ranges and activity page sizes.
 - Standardized numeric alignment and missing-value formatting.
 
-## [v0.2.9](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.2.9) — 2026-10-30
+## v0.2.9 — 2026-10-30
 
 - Improved responsive layouts for mobile devices.
 
-## [v0.2.8](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.2.8) — 2026-10-29
+## v0.2.8 — 2026-10-29
 
 - Improved the web UI appearance.
 
-## [v0.2.7](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.2.7) — 2026-10-29
+## v0.2.7 — 2026-10-29
 
 - Improved the web UI appearance.
 
-## [v0.2.6](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.2.6) — 2026-10-29
+## v0.2.6 — 2026-10-29
 
 - Improved the web UI appearance.
 
-## [v0.2.5](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.2.5) — 2026-10-29
+## v0.2.5 — 2026-10-29
 
 - No release notes were published.
 
-## [v0.2.4](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.2.4) — 2026-10-29
+## v0.2.4 — 2026-10-29
 
 - Improved the web UI appearance.
 
-## [v0.2.3](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.2.3) — 2026-10-29
+## v0.2.3 — 2026-10-29
 
 - Improved the web UI appearance.
 
-## [v0.2.2](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.2.2) — 2026-10-29
+## v0.2.2 — 2026-10-29
 
 - Improved the web UI appearance.
 
-## [v0.2.1](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.2.1) — 2026-10-29
+## v0.2.1 — 2026-10-29
 
 - Improved the web UI appearance.
 
-## [v0.2.0](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.2.0) — 2026-10-29
+## v0.2.0 — 2026-10-29
 
 - Reworked the web UI.
 
-## [v0.1.32](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.32) — 2026-10-29
+## v0.1.32 — 2026-10-29
 
 - Improved the web UI appearance.
 
-## [v0.1.31](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.31) — 2026-10-29
+## v0.1.31 — 2026-10-29
 
 - Improved the web UI appearance.
 
-## [v0.1.30](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.30) — 2026-10-29
+## v0.1.30 — 2026-10-29
 
 - Improved the web UI appearance.
 
-## [v0.1.29](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.29) — 2026-10-29
+## v0.1.29 — 2026-10-29
 
 - Improved the automatic withdrawal date estimate in the web UI.
 
-## [v0.1.28](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.28) — 2026-10-29
+## v0.1.28 — 2026-10-29
 
 - Improved the web UI appearance.
 
-## [v0.1.27](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.27) — 2026-10-29
+## v0.1.27 — 2026-10-29
 
 - Improved the web UI appearance.
 
-## [v0.1.26](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.26) — 2026-10-29
+## v0.1.26 — 2026-10-29
 
 - Improved the web UI appearance.
 
-## [v0.1.25](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.25) — 2026-10-29
+## v0.1.25 — 2026-10-29
 
 - Added an estimated automatic withdrawal countdown to the web UI when applicable.
 
-## [v0.1.24](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.24) — 2026-10-29
+## v0.1.24 — 2026-10-29
 
 - Improved the web UI appearance.
 
-## [v0.1.23](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.23) — 2026-10-29
+## v0.1.23 — 2026-10-29
 
 - Improved the web UI appearance.
 
-## [v0.1.22](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.22) — 2026-10-29
+## v0.1.22 — 2026-10-29
 
 - Improved the web UI appearance.
 
-## [v0.1.21](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.21) — 2026-10-29
+## v0.1.21 — 2026-10-29
 
 - No release notes were published.
 
-## [v0.1.20](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.20) — 2026-10-28
+## v0.1.20 — 2026-10-28
 
 - Improved the web UI appearance.
 
-## [v0.1.19](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.19) — 2026-10-28
+## v0.1.19 — 2026-10-28
 
 - Improved the web UI appearance.
 
-## [v0.1.18](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.18) — 2026-10-28
+## v0.1.18 — 2026-10-28
 
 - Calculate purchase intervals from the last purchase to the next deposit date, using the current time only when no previous purchase exists.
 - Recalculate saved schedules with the corrected rule and preserve the last purchase time across monthly resets.
 
-## [v0.1.17](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.17) — 2026-10-28
+## v0.1.17 — 2026-10-28
 
 Changes in the Parqet CSV generation logic:
 - Restricted Parqet CSV exports to the complete interval between the previous confirmed withdrawal and the last confirmed withdrawal in the selected date range.
@@ -263,27 +203,27 @@ Changes in the Parqet CSV generation logic:
 - For the first withdrawal, included all preceding recorded real purchases.
 - Updated the README, UI guidance, and illustration.
 
-## [v0.1.16](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.16) — 2026-10-28
+## v0.1.16 — 2026-10-28
 
 - Improved the web UI appearance.
 
-## [v0.1.15](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.15) — 2026-10-28
+## v0.1.15 — 2026-10-28
 
 - Improved the web UI appearance.
 
-## [v0.1.14](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.14) — 2026-10-28
+## v0.1.14 — 2026-10-28
 
 - Improved the web UI appearance.
 
-## [v0.1.13](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.13) — 2026-10-28
+## v0.1.13 — 2026-10-28
 
 - Improved the web UI appearance.
 
-## [v0.1.12](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.12) — 2026-10-28
+## v0.1.12 — 2026-10-28
 
 - Improved the web UI appearance.
 
-## [v0.1.11](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.11) — 2026-10-28
+## v0.1.11 — 2026-10-28
 
 - Made all superscript footnote numbers consistently white.
 - Fixed currency-rate parsing that incorrectly hid monetary totals in EUR-only reports.
@@ -291,11 +231,11 @@ Changes in the Parqet CSV generation logic:
 - Restored startup INFO logs showing the last purchase, elapsed time, calculated interval, next purchase time, and remaining wait.
 - Updated the README and web UI illustration.
 
-## [v0.1.10](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.1.10) — 2026-10-28
+## v0.1.10 — 2026-10-28
 
 - Improved the web UI appearance.
 
-## [v0.0.9](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.0.9) — 2026-10-28
+## v0.0.9 — 2026-10-28
 
 - Distinguished definitive exchange rejections from uncertain submission outcomes.
 - Fixed BTC balance calculations to include network fees.
@@ -308,15 +248,15 @@ Changes in the Parqet CSV generation logic:
 - Fixed date-range initialization and removed unused code.
 - Updated the README, web UI preview, and documented limitations.
 
-## [v0.0.8](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.0.8) — 2026-10-28
+## v0.0.8 — 2026-10-28
 
 - Improved the web UI appearance.
 
-## [v0.0.7](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.0.7) — 2026-10-28
+## v0.0.7 — 2026-10-28
 
 - Repositioned the manual withdrawal button in the web UI.
 
-## [v0.0.6](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.0.6) — 2026-10-28
+## v0.0.6 — 2026-10-28
 
 - Renamed the application and web UI to Bitcoin DCA Bot.
 - Restricted purchases and withdrawals to Bitcoin (BTC).
@@ -324,12 +264,12 @@ Changes in the Parqet CSV generation logic:
 - Limited dashboard activity and Parqet exports to BTC records.
 - Updated the README and example screenshots.
 
-## [v0.0.5](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.0.5) — 2026-10-28
+## v0.0.5 — 2026-10-28
 
 - Moved “Purchase schedule” into its own main panel alongside “Bot configuration”.
 - Added a linked footnote explaining how purchase intervals and the next purchase time are calculated.
 
-## [v0.0.4](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.0.4) — 2026-10-28
+## v0.0.4 — 2026-10-28
 
 - Simplified dashboard labels and renamed “Bot settings” to “Bot configuration”.
 - Separated the purchase schedule from other configuration details.
@@ -339,20 +279,20 @@ Changes in the Parqet CSV generation logic:
 - Matched the withdrawal interval selector width to the date fields.
 - Added clear CSV export messages when the selected period has no withdrawal or real purchase.
 
-## [v0.0.3](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.0.3) — 2026-10-28
+## v0.0.3 — 2026-10-28
 
 - Simplified dashboard labels and renamed “Bot settings” to “Bot configuration”.
 - Visually separated the purchase schedule from other configuration details.
 - Moved date filters above “Selected period summary” and added a clearer visual separation between portfolio information and period analysis.
 
-## [v0.0.2](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.0.2) — 2026-10-28
+## v0.0.2 — 2026-10-28
 
 - Added configurable live-order verification for Kraken and Bitvavo via `ORDER_STATUS_CHECK_SECONDS`. Open or unresolved orders block further purchases; final fills are recorded after the order ends.
 - Added the estimated next purchase time and a live countdown to the dashboard.
 - Improved Kraken read-request retries and endpoint logging without automatically resending orders or withdrawals.
 - Improved mobile dashboard layouts and reduced date-range typography for clearer display on small screens.
 
-## [v0.0.1](https://github.com/oli792dev/docker-bitcoin-dca/releases/tag/v0.0.1) — 2026-10-27
+## v0.0.1 — 2026-10-27
 
 - No release notes were published.
 

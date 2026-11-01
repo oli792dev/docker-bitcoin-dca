@@ -59,3 +59,17 @@ __DESIGN_CSS__
 .settings-page .settings-tabs{min-width:0;max-width:100%}
 .settings-page .settings-tabs button{min-width:0;flex:1 1 0;white-space:normal;overflow-wrap:anywhere}
 @media(max-width:600px){.settings-page .settings-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.settings-page .settings-tabs button{width:100%;padding:8px 10px}}
+/* WebKit time controls must fit their grid column, including narrow iPhones. */
+.settings-page input[type=time]{display:block;box-sizing:border-box;inline-size:100%;max-inline-size:100%;min-inline-size:0;appearance:none;-webkit-appearance:none;overflow:hidden}
+.settings-page input[type=time]::-webkit-date-and-time-value{min-width:0;text-align:start}
+.settings-page input[type=time]::-webkit-datetime-edit{min-width:0;padding:0}
+.settings-page input[type=time]::-webkit-datetime-edit-fields-wrapper{min-width:0;padding:0}
+/* Match vertical Settings scrolling to the dashboard's shared scrollbar palette. */
+.settings-content{scrollbar-color:var(--muted) var(--surface)}
+.settings-content::-webkit-scrollbar{width:10px}
+.settings-content::-webkit-scrollbar-track{background:var(--surface);border-radius:6px}
+.settings-content::-webkit-scrollbar-thumb{background:var(--muted);border:2px solid var(--surface);border-radius:6px}
+.settings-content::-webkit-scrollbar-thumb:hover,.settings-content::-webkit-scrollbar-thumb:active{background:var(--accent)}
+/* Consistent field hierarchy on setup and Settings, in both appearances. */
+.settings-page label,.settings-page .option-card strong{color:var(--text);font-size:.88rem;font-weight:600;line-height:1.5}
+.settings-page .option-card small,.settings-page .field-description,.settings-page .hint{color:var(--muted);font-weight:400}

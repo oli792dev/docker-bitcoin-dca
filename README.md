@@ -4,7 +4,7 @@ A Docker bot that buys Bitcoin on Bitvavo or Kraken, with optional automatic and
 
 ![Bitcoin DCA Dashboard: full-page screenshot with fictional data](docs/web-ui-dashboard-screenshot.png)
 
-*Full-page browser screenshot with fictional data, including Configuration, Schedule, Period Analysis and Notes.*
+*Example full-page screenshot with fictional data.*
 
 ## Setup
 
@@ -13,12 +13,17 @@ Requires Docker Engine with Compose, internet access and a Bitvavo or Kraken acc
 ~~~sh
 git clone https://github.com/oli792dev/docker-bitcoin-dca.git
 cd docker-bitcoin-dca
+~~~
+
+Set `WEB_UI_TLS_HOSTS` in Compose or `.env` to the IP address/hostname you use before starting the container:
+
+~~~sh
 docker compose up -d --build
 ~~~
 
-Set `WEB_UI_TLS_HOSTS` in Compose or `.env` to the IP address/hostname you use, then open `https://<docker-host-ip>:6890`. Trust the generated local CA on your devices; see [HTTPS setup](docs/architecture.md#https-and-session-security). The setup wizard first creates your username and password (12+ characters), then configures the exchange, API access and purchases. The web UI is always enabled. Bot settings and credentials come only from the saved web configuration; new installations start in dry run.
+Open `https://<docker-host-ip>:6890`. Trust the generated local CA on your devices; see [HTTPS setup](docs/architecture.md#https-and-session-security). The setup wizard first creates your username and password (12+ characters), then configures the exchange, API access and purchases. The web UI is always enabled. Bot settings and credentials come only from the saved web configuration; new installations start in dry run.
 
-Settings, beside Log out, groups Bot Configuration, Exchange, Dashboard and Login into tabs. API access, withdrawal targets and login credentials are edited directly in their tabs. Bot Configuration contains live trading, purchases, deposit timing and automatic withdrawals. Dashboard contains appearance, display currency and optional manual withdrawal/Parqet controls. Sensitive changes require your current password. Choose English or German under Dashboard → Language; this also sets date and number formatting. Technical logs remain English.
+Settings, beside Log out, has Bot Configuration, Exchange, Dashboard and Login tabs. Edit API access and withdrawal targets directly under Exchange, and login credentials under Login. Review changes before saving; closing with unsaved edits asks for confirmation. Sensitive changes require your current password.
 
 | Exchange | API permissions | Bitcoin withdrawal destination |
 | --- | --- | --- |
@@ -27,7 +32,7 @@ Settings, beside Log out, groups Bot Configuration, Exchange, Dashboard and Logi
 
 **Test connection** reads balances without trading; progress and results appear beside the button. API access and internet are required even for dry runs. Exchange, credential, currency and trading-mode changes are blocked while transactions remain unresolved.
 
-Settings persist as `config.json` in the named volume `bitcoin-dca-webui-data`; passwords are hashed and API credentials stay private. Empty API fields keep saved credentials. Protect this file and backups; never commit credentials or `.env`. All runtime state and activity also live in this volume; no host state directory is required. Reuse the same volume on redeployment. After setup and each restart, automatic API checks block new transactions until open exchange orders and Bitcoin withdrawals are closed. Unavailable status keeps the bot paused and is retried.
+Settings persist as `config.json` in the named volume `bitcoin-dca-webui-data`; passwords are hashed; API credentials are stored in this private file. Empty API fields keep saved credentials. Protect this file and backups; never commit credentials or `.env`. All runtime state and activity also live in this volume; no host state directory is required. Reuse the same volume on redeployment. After setup and each restart, automatic API checks block new transactions until open exchange orders and Bitcoin withdrawals are closed. Unavailable status keeps the bot paused and is retried.
 
 Compose manages the web server, volumes and restart policy. Docker settings are `WEB_UI_PORT` (6890), `LOG_LEVEL` (INFO) and `WEB_UI_TLS_HOSTS` (comma-separated IP addresses/hostnames). HTTPS is always enabled. Sessions expire after 30 minutes; sensitive changes require your current login password. See [Architecture and operation](docs/architecture.md) for storage and operation.
 
@@ -55,13 +60,14 @@ Submitted withdrawals block further withdrawals until resolved. Uncertain Kraken
 
 ## Dashboard and Parqet export
 
-The web UI is fully responsive on desktop, tablet and mobile. Card rows and tables scroll horizontally only when needed.
+The web UI is fully responsive. Dashboard card rows and tables scroll horizontally when needed; Settings scrolls vertically, with fixed tabs and a fixed save action.
 
+- **Status:** beside Settings, green means active, amber waiting/simulation, and red an account-check or connection failure.
 - **Configuration:** exchange, purchase settings and withdrawal target.
-- **Schedule:** exchange balances, purchase timing and estimated automatic withdrawal timing. **Expected monthly deposit** is a volume-saved forecast assumption; it adds funds on each deposit day and recalculates future intervals using actual calendar months. It does not initiate deposits or change trading. Forecasts continue while waiting for deposits; overdue deposits are assumed to arrive now and labeled accordingly.
+- **Schedule:** exchange balances, purchase timing and estimated automatic withdrawal timing. **Expected monthly deposit** is a volume-saved forecast assumption; it adds funds on each deposit day and recalculates future intervals using actual calendar months. It does not initiate deposits or change trading. Forecasts continue while waiting for deposits, show approximate remaining BTC/purchases, and offer expandable assumptions. Overdue deposits are assumed to arrive now and labelled accordingly.
 - **Period Analysis:** date filters, summary, activity status (confirmed, pending, failed or simulated) and CSV export. Activities cannot be deleted through the UI.
 
-Choose Light, Dark or Automatic / System in Settings. The interface supports keyboard navigation and reduced motion. View preferences are saved in this browser; the To field resets to now on page load. Refreshes preserve existing values; withdrawal confirmations show the destination, gross BTC, fee and net BTC.
+Under Settings → Dashboard, choose English/German and Light, Dark or Automatic / System. Language also controls date and number formatting; technical logs remain English. The interface supports keyboard navigation and reduced motion. View preferences are saved in this browser; the To field resets to now on page load. Refreshes preserve existing values; messages can be dismissed. Withdrawal confirmations show the destination, gross BTC, fee and net BTC. Inactive withdrawal thresholds are disabled without erasing their saved value.
 
 Display currency is set to EUR or USD in Settings. Reference BTC prices come from Kraken’s public [BTC/EUR](https://www.kraken.com/convert/btc/eur) and [BTC/USD](https://www.kraken.com/convert/btc/usd) pages, including when trading on Bitvavo. Saved or cached prices are labelled.
 
