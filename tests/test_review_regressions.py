@@ -248,6 +248,30 @@ class ReviewTests(unittest.TestCase):
             bot.run_once(api,self.settings,300)
         api.buy_btc.assert_called_once()
 
+    def test_early_deposit_advances_deadline_once_and_survives_restart(self):
+        from app.trading.funding import observe_deposit
+        zone=bot.ZoneInfo('Europe/Berlin')
+        settings={**self.settings,'deposit_day':1,'deposit_time':'12:00'}
+        state={}
+        now=datetime(2026,11,1,8,tzinfo=zone)
+        def observe(balance):
+            _,start,next_at=bot.cycle_dates(now,1,'12:00')
+            return observe_deposit(state,settings,now,start,next_at,D(balance))
+        observe('0.45')
+        due,expired,received=observe('200.45')
+        self.assertEqual(due,datetime(2026,12,1,12,tzinfo=zone))
+        self.assertFalse(expired);self.assertTrue(received)
+        state=json.loads(json.dumps(state))
+        state['last_order_at']=now.isoformat();state['last_order_quote']='4'
+        due,expired,received=observe('196.45')
+        self.assertFalse(received);self.assertFalse(expired)
+        now=datetime(2026,11,1,13,tzinfo=zone)
+        self.assertEqual(observe('196.45')[0],due)
+        self.assertFalse(observe('196.45')[2])
+        # The next due date, including year rollover, still uses its configured clock.
+        now=datetime(2026,12,1,8,tzinfo=zone)
+        self.assertEqual(observe('396.45')[0],datetime(2027,1,1,12,tzinfo=zone))
+
     def test_late_deposit_wait_survives_restart_and_own_purchase_is_not_a_deposit(self):
         now=datetime(2026,11,1,1,tzinfo=timezone.utc)
         state={'last_order_at':'2026-10-30T12:00:00+00:00'}

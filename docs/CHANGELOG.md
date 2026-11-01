@@ -4,6 +4,9 @@ Unreleased changes followed by historical version notes, newest first. Dates use
 
 ## Unreleased
 
+- Recognize observed early funding on the deposit day and persist the next monthly budget deadline.
+- Keep normal order submission and confirmation green as Bot active; simplify German trading mode and Kraken withdrawal target labels.
+
 - Added a labeled traffic-light status beside Settings: green for active operation, amber for waiting/simulation, red for failures; no separate account-age message.
 - Simplified Settings into Bot Configuration, Exchange, Dashboard and Login tabs with directly editable credentials and withdrawal targets.
 - Made Settings compact and vertically scrollable on all devices, with fixed navigation/save controls and single-column mobile fields.

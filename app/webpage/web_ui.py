@@ -575,7 +575,8 @@ class Handler(BaseHTTPRequestHandler):
                     status_label = exchange_status
                 elif not balance_matches:
                     status_label = 'Waiting for account check'
-                elif str(snapshot.get('nextPurchaseStatus','')).startswith(('Waiting','Submitting','Checking')):
+                elif (str(snapshot.get('nextPurchaseStatus','')).startswith(('Waiting','Checking'))
+                      and snapshot['nextPurchaseStatus'] != 'Waiting for confirmation that the previous order has ended'):
                     status_label = snapshot['nextPurchaseStatus']
                 elif not self.settings.get('live'):
                     status_label = 'Simulation'

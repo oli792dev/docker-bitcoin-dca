@@ -1,6 +1,7 @@
 """Keep an unfunded monthly boundary open until usable fiat arrives."""
 from datetime import datetime, timezone
 from decimal import Decimal
+from app.core.deposit_calendar import deposit_at
 
 
 def observe_deposit(state, settings, now, cycle_start, next_deposit, balance):
@@ -28,9 +29,15 @@ def observe_deposit(state, settings, now, cycle_start, next_deposit, balance):
         waiting = first_due = False
         unverified = now.astimezone(timezone.utc) >= due.astimezone(timezone.utc)
     expired = now.astimezone(timezone.utc) >= due.astimezone(timezone.utc)
-    received = (expired or waiting) and inflow >= Decimal('.01')
+    # An observed inflow on the due date also funds this cycle before its clock time.
+    early_today = now.astimezone(due.tzinfo).date() == due.date()
+    received = (expired or waiting or early_today) and inflow >= Decimal('.01')
     if received:
-        due = next_deposit
+        if next_deposit.astimezone(timezone.utc) <= due.astimezone(timezone.utc):
+            year, month = (due.year + 1, 1) if due.month == 12 else (due.year, due.month + 1)
+            due = deposit_at(year, month, settings['deposit_day'], settings.get('deposit_time','00:00'), now.tzinfo)
+        else:
+            due = next_deposit
         expired = False
         first_due = True
         unverified = False

@@ -46,7 +46,7 @@ The bot refreshes the available fiat balance, BTC price and exchange order rules
 
 Set the deposit day and time in Bot Configuration; both use the configured timezone (default time: 00:00). The next purchase is the last purchase time plus that interval. At startup, the bot uses recorded real purchases, falling back to saved execution state. Without previous execution history, the first purchase is due after the startup delay. Unchanged planning inputs retain the saved due time; changed funds, costs or deposit boundaries cause recalculation.
 
-The extra time slot puts the final affordable buy before the deposit boundary. Delayed deposits show Waiting for deposit; usable residual fiat is spent first, and new available funding resumes purchases. Small remnants below an executable order may remain.
+The extra time slot puts the final affordable buy before the deposit boundary. Observed fiat inflows on the deposit day, including before its configured time, move the budget deadline to the next month. Delayed deposits show Waiting for deposit; usable residual fiat is spent first, and new available funding resumes purchases. Small remnants below an executable order may remain.
 
 Live orders are submitted once and verified before another purchase. Open orders and uncertain submissions remain pending across restarts; completed partial fills are recorded at their actual executed amount. Network requests and queued actions can delay execution.
 

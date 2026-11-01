@@ -450,7 +450,7 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
     )
     next_deposit, deposit_overdue, deposit_received = observe_deposit(state, settings, now, cycle_start, next_deposit, balance)
     if deposit_received:
-        LOG.info('Available %s funding received after the expected deposit time; resuming purchases.', quote)
+        LOG.info('Available %s funding received for the deposit cycle; resuming purchases.', quote)
     # Fee lookup precedes the fresh market-rule check; it is cached by the adapter.
     fee_rate = cycle_data['fee_rate'] if cycle_data else api.estimate_taker_fee(symbol, Decimal(1))
     price = cycle_data['price'] if cycle_data else api.price(symbol)

@@ -41,7 +41,7 @@ class LocalizationTests(TestCase):
         result=json.loads(handler._send.call_args.args[1])
         self.assertEqual(result['nextPurchaseStatus'],'Warten auf Einzahlung')
         self.assertEqual(result['target'],'Before');self.assertEqual(result['quote'],'EUR')
-        self.assertEqual(result['destination'],'Gespeicherte Kraken-Auszahlungsmethode: Before')
+        self.assertEqual(result['destination'],'Before')
         self.assertEqual(result['activities'],[{'type':'Buy','shares':'0.00006','currency':'EUR'}])
 
     def test_language_validation_fallback_and_placeholder_contract(self):

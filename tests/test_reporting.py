@@ -147,6 +147,17 @@ class ScheduleBalanceTests(unittest.TestCase):
             handler.do_GET()
         self.assertEqual(handler._json.call_args.args[1]['nextPurchaseStatus'],'Waiting for automatic exchange check')
 
+    def test_normal_order_submission_and_confirmation_remain_green(self):
+        handler=object.__new__(web_ui.Handler);handler.path='/api/schedule'
+        handler.settings={**DEFAULTS,'live':True};handler._require_authentication=lambda:True;handler._json=Mock()
+        for status in ('Submitting the order and waiting for its status check',
+                       'Waiting for confirmation that the previous order has ended'):
+            with self.subTest(status=status),patch.object(web_ui,'read_dashboard_snapshot',return_value={
+                    'exchange':'KRAKEN','quote':'EUR','nextPurchaseStatus':status}):
+                handler.do_GET()
+                result=handler._json.call_args.args[1]
+                self.assertEqual((result['botStatusLabel'],result['botStatusTone']),('Bot active','active'))
+
     def test_account_status_reports_age_and_failure_without_exposing_error_details(self):
         from types import SimpleNamespace
         handler=object.__new__(web_ui.Handler);handler.path='/api/schedule'
