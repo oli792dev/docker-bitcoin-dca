@@ -582,7 +582,7 @@ class Handler(BaseHTTPRequestHandler):
                     if not any(record["row"].get("type") == "Buy" for record in real_records):
                         raise ValueError(
                             "No real bot purchase was found since the previous confirmed withdrawal. "
-                            "The Parqet export requires a real purchase and a withdrawal; dry-run purchases are excluded."
+                            "The Parqet export requires a real purchase and a withdrawal; purchases made in Simulation are excluded."
                         )
                     rows = parqet_aggregate_rows(
                         selected_records, self.settings["exchange"]

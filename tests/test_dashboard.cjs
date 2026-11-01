@@ -188,7 +188,7 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  assert(requests.some(u=>u.startsWith('/api/market-price?currency=USD')));
  assert(get('spot').textContent.includes('$'));
  assert.equal(vm.runInContext('activityStatus({type:"Buy"}).label',context),'Confirmed ✓');
- assert.equal(vm.runInContext('activityStatus({type:"Buy",simulated:true}).label',context),'Simulated');
+ assert.equal(vm.runInContext('activityStatus({type:"Buy",simulated:true}).label',context),'Simulation');
  assert.equal(vm.runInContext('activityStatus({type:"TransferOut",withdrawalStatus:"completed"}).label',context),'Confirmed ✓');
  assert.equal(vm.runInContext('activityStatus({type:"TransferOut",withdrawalStatus:"submitted"}).label',context),'Pending');
  assert.equal(vm.runInContext('activityStatus({type:"TransferOut",withdrawalStatus:"failed"}).label',context),'Failed');

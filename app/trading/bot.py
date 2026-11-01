@@ -1,4 +1,4 @@
-"""Bitcoin DCA bot for Bitvavo and Kraken. Starts in dry-run mode unless explicitly enabled."""
+"""Bitcoin DCA bot for Bitvavo and Kraken. Starts in Simulation mode unless explicitly enabled."""
 import json
 import logging
 import os
@@ -597,12 +597,12 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
         )
         return wait
     else:
-        LOG.info("DRY RUN: would market-buy %s %s (estimated %s %s at %s %s/%s); saved as simulated activity.", order_amount, "BTC", order_quote, quote, price, quote, "BTC")
+        LOG.info("SIMULATION: would market-buy %s %s (estimated %s %s at %s %s/%s); saved as simulated activity.", order_amount, "BTC", order_quote, quote, price, quote, "BTC")
         added = persist_simulated_buy(api, settings, order_amount, price, order_quote, estimated_fee)
         LOG.info("Saved %s simulated purchase record(s) for the web UI; excluded from the Parqet CSV export.", added)
 
     settings["startup_last_buy_at"] = None
-    # Debit budget for dry-run too, to make its monthly schedule representative.
+    # Debit budget for Simulation too, to make its monthly schedule representative.
     state["spent"] = str(spent + order_quote + estimated_fee)
     state["last_order_at"] = datetime.now(timezone.utc).isoformat()
     state["last_order_quote"] = str(order_quote)

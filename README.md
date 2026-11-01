@@ -21,7 +21,7 @@ Set `WEB_UI_TLS_HOSTS` in Compose or `.env` to the IP address/hostname you use b
 docker compose up -d --build
 ~~~
 
-Open `https://<docker-host-ip>:6890`. Trust the generated local CA on your devices; see [HTTPS setup](docs/architecture.md#https-and-session-security). The setup wizard first creates your username and password (12+ characters), then configures the exchange, API access and purchases. The web UI is always enabled. Bot settings and credentials come only from the saved web configuration; new installations start in dry run.
+Open `https://<docker-host-ip>:6890`. Trust the generated local CA on your devices; see [HTTPS setup](docs/architecture.md#https-and-session-security). The setup wizard first creates your username and password (12+ characters), then configures the exchange, API access and purchases. The web UI is always enabled. Bot settings and credentials come only from the saved web configuration; new installations start in Simulation.
 
 Settings, beside Log out, has Bot Configuration, Exchange, Dashboard and Login tabs. Edit API access and withdrawal targets directly under Exchange, and login credentials under Login. Review changes before saving; closing with unsaved edits asks for confirmation. Sensitive changes require your current password.
 
@@ -32,7 +32,7 @@ Settings, beside Log out, has Bot Configuration, Exchange, Dashboard and Login t
 
 Fiat deposit checks use Kraken’s [deposit ledger](https://docs.kraken.com/api-reference/account-data/get-ledgers-info) (Data → Query ledger entries) or Bitvavo’s [deposit history](https://docs.bitvavo.com/docs/rest-api/get-deposit-history/) (Read-only / View access). Both support fiat deposits. Enable this read permission on existing keys too; failed checks pause new automatic transactions until verification succeeds. No deposit or withdrawal permission is needed just to read deposits.
 
-**Test connection** reads balances and deposit history without trading; progress and results appear beside the button. API access and internet are required even for dry runs. Exchange, credential, currency and trading-mode changes are blocked while transactions remain unresolved.
+**Test connection** reads balances and deposit history without trading; progress and results appear beside the button. API access and internet are required even for Simulation mode. Exchange, credential, currency and trading-mode changes are blocked while transactions remain unresolved.
 
 Settings persist as `config.json` in the named volume `bitcoin-dca-webui-data`; passwords are hashed; API credentials are stored in this private file. Empty API fields keep saved credentials. Protect this file and backups; never commit credentials or `.env`. All runtime state and activity also live in this volume; no host state directory is required. Reuse the same volume on redeployment. After setup and each restart, automatic API checks block new transactions until open exchange orders and Bitcoin withdrawals are closed. Unavailable status keeps the bot paused and is retried.
 
