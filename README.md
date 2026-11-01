@@ -89,7 +89,7 @@ See [Architecture and operation](docs/architecture.md) for container components,
 ## Limitations
 
 - **Bitcoin spot market orders only.** Prices, fills and fees can differ from estimates. Withdrawal forecasts assume unchanged prices and costs plus the entered monthly deposits.
-- **Available funds drive scheduling.** The bot does not reserve funds for other uses or identify actual monthly deposits. Run one instance per account and persistent state; other trading tools can affect balances.
+- **Available funds drive scheduling.** The bot verifies deposits but cannot determine their intended purpose or reserve funds for other uses. Run one instance per account and persistent state; other trading tools can affect balances.
 - **Local history is not a full account statement.** Unrelated trades and transfers are not imported. BTC totals use gross withdrawal debits; exported BTC uses the net amount received.
 - **Unresolved transactions require care.** Orders with uncertain outcomes block new purchases. Withdrawals qualify for export only after a unique exchange-history confirmation; the bot does not independently verify the blockchain. Older records may remain unverified. In-memory sessions and confirmation previews are lost on restart; pending submissions persist.
 - **Reporting depends on external services.** Exchange API outages can delay price updates; historical USD/EUR conversion uses Frankfurter. Unavailable rates can prevent exports. Reporting supports EUR and USD; displayed conversions use current reference rates.
