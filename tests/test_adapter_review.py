@@ -53,6 +53,20 @@ class AdapterReviewTests(unittest.TestCase):
         self.assertEqual(api.public.call_count,3)
         self.assertEqual(api.public.call_args.args[1]['pair'],'XBTEUR')
 
+    def test_kraken_pair_cache_handles_both_fiat_currencies_independently(self):
+        api=kraken.Kraken('EUR',api_key='fictional',api_secret='dGVzdA==')
+        eur=self.pair('.0001');usd={'XXBTZUSD':{'base':'XXBT','quote':'ZUSD','altname':'XBTUSD'}}
+        api.public=Mock(side_effect=[eur,usd,eur,usd])
+        with patch.object(kraken.time,'monotonic',return_value=100):
+            self.assertEqual(api._pair_info('BTC-EUR')['_quote'],'EUR')
+            self.assertEqual(api._pair_info('BTC-USD')['_quote'],'USD')
+            self.assertEqual(api._pair_info('BTC-EUR')['_quote'],'EUR')
+            self.assertEqual(api.public.call_count,2)
+        with patch.object(kraken.time,'monotonic',return_value=170):
+            api._pair_info('BTC-EUR',refresh=True)
+            api._pair_info('BTC-USD')
+        self.assertEqual(api.public.call_count,4)
+
     def test_bitvavo_queries_only_selected_market(self):
         api=bitvavo.Bitvavo(api_key='fictional',api_secret='fictional');api.request=Mock(side_effect=[[{'market':'BTC-EUR','minOrderInBaseAsset':'.0001'}],[{'market':'BTC-EUR','minOrderInBaseAsset':'.0002'}]])
         first=api.market('BTC-EUR');self.assertEqual(api.market('BTC-EUR'),first)

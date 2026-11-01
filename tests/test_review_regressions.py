@@ -270,7 +270,11 @@ class ReviewTests(unittest.TestCase):
         records,total,page,groups,balance=activity.read_report(0,2**63-1)
         self.assertEqual(total,3)
         self.assertTrue(any(r['row']['type']=='Deposit' for r in records))
-        self.assertTrue(all(g['kind']!='Deposit' for g in groups))
+        self.assertEqual(next(g['amount'] for g in groups if g['kind']=='Deposit'),'200')
+        report=analytics.report(self.settings,groups,{},records)
+        self.assertEqual(report['summary']['depositCount'],1)
+        self.assertEqual(report['depositsByCurrency']['EUR']['amount'],'200')
+        self.assertEqual(report['summary']['buyVolume'],'359')
         self.assertEqual(reporting.parqet_aggregate_rows(activity.parqet_interval_records(0,2**63-1),'KRAKEN'),expected)
 
     def test_early_deposit_advances_deadline_once_and_survives_restart(self):

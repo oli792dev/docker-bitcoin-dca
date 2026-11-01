@@ -68,6 +68,7 @@ class Kraken:
         self.withdraw_key = withdraw_key
         self._pairs = None
         self._pairs_at = 0
+        self._pair_timestamps = {}
         self._fee_rates = {}
         self._reads = ReadCache()
 
@@ -197,16 +198,26 @@ class Kraken:
     def invalidate_market(self):
         self._pairs = None
         self._pairs_at = 0
+        self._pair_timestamps = {}
         self._fee_rates = {}
 
     def _pair_info(self, symbol, refresh=False):
         bitcoin, quote = symbol.upper().replace("/", "-").split("-", 1)
         if bitcoin != "BTC":
             raise ValueError("Only Bitcoin markets are supported")
-        if refresh or self._pairs is None or time.monotonic() - getattr(self, '_pairs_at', 0) >= 60:
-            self._pairs = self.public("AssetPairs", {"pair": "XBT" + quote, "assetVersion": 1})
-            self._pairs_at = time.monotonic()
-        for key, info in self._pairs.items():
+        cached=self._pairs or {}
+        timestamps=getattr(self,'_pair_timestamps',{})
+        matching=any(_canonical_asset(info.get('base'))=='BTC' and
+                     _canonical_asset(info.get('quote'))==_canonical_asset(quote)
+                     for info in cached.values())
+        available=cached
+        if refresh or not matching or time.monotonic()-timestamps.get(quote,getattr(self,'_pairs_at',0))>=60:
+            available=self.public("AssetPairs", {"pair": "XBT" + quote, "assetVersion": 1})
+            self._pairs={**cached,**available}
+            self._pairs_at=time.monotonic()
+            timestamps[quote]=self._pairs_at
+            self._pair_timestamps=timestamps
+        for key, info in available.items():
             if _canonical_asset(info.get("base")) == "BTC" and _canonical_asset(info.get("quote")) == _canonical_asset(quote):
                 normalized = dict(info)
                 normalized["_key"] = key

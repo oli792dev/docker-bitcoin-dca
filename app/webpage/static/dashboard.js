@@ -2,7 +2,7 @@ const {t,locale}=typeof DCA_I18N!=="undefined"?DCA_I18N:{t:value=>value,locale:"
 
 const $=id=>document.getElementById(id);
 let quote="EUR", displayCurrency="", fxRate=1, activityRows=[], currentPage=1, activityTotal=0, activityPages=1, activityRates={};
-function localInput(ms){const d=new Date(ms);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16)}
+function localInput(ms){const d=new Date(ms);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,19)}
 function parseInput(el){return new Date(el.value).getTime()}
 function money(v,c){try{return new Intl.NumberFormat(locale,{style:"currency",currency:c,maximumFractionDigits:2}).format(Number(v||0))}catch(e){return Number(v||0).toFixed(2)+" "+c}}
 function btc(v){return Number(v||0).toLocaleString(locale,{minimumFractionDigits:0,maximumFractionDigits:8})+" BTC"}
@@ -109,13 +109,13 @@ function logUiEvent(event){
 }
 function sectionFeedback(id,message,error=false){const el=$(id);el.textContent=t(message);el.classList.toggle("hidden",!message);el.classList.toggle("is-error",error)}
 function readReportView(){try{return JSON.parse(localStorage.getItem("bitcoinDcaReportView")||"null")}catch(e){return null}}
-function saveReportView(){try{localStorage.setItem("bitcoinDcaReportView",JSON.stringify({interval:$("interval").value,start:$("start").value,end:$("end").value,pageSize:$("pageSize").value}))}catch(e){}}
+function saveReportView(){try{localStorage.setItem("bitcoinDcaReportView",JSON.stringify({pageSize:$("pageSize").value}))}catch(e){}}
 function restoreReportView(){
- const now=Date.now();$("end").value=localInput(now);$("interval").value="";
+ const now=Date.now(),first=Date.parse($("firstStartedAt").value);
+ $("start").value=localInput(Number.isFinite(first)?first:now-1000);
+ $("end").value=localInput(now);$("interval").value="";
  const saved=readReportView();if(!saved||typeof saved!=="object")return;
  if(["5","10","20","50","100","500","1000"].includes(String(saved.pageSize)))$("pageSize").value=String(saved.pageSize);
- const start=Date.parse(saved.start);
- if(Number.isFinite(start)&&start<now)$("start").value=saved.start;
 }
 
 let reportRequest=0,scheduleRequest=0;
@@ -143,8 +143,7 @@ async function loadIntervals(){
  const withdrawals=await response.json();const select=$("interval");select.innerHTML="";
  const custom=document.createElement("option");custom.value="";custom.textContent=t("Custom date range");select.appendChild(custom);
  for(let i=1;i<withdrawals.length;i++){const a=withdrawals[i-1],b=withdrawals[i],o=document.createElement("option");o.value=a.timestamp+","+b.timestamp;o.textContent=t(dateLabel(a.timestamp)+" → "+dateLabel(b.timestamp));select.appendChild(o)}
- const now=Date.now();if(withdrawals.length>=2){select.value=withdrawals[withdrawals.length-2].timestamp+","+withdrawals[withdrawals.length-1].timestamp;applySelectedInterval()}
- else {select.value="";$("start").value=localInput(withdrawals.length===1?withdrawals[0].timestamp:now-90*86400000);$("end").value=localInput(now)}
+ select.value="";
 }
 $("interval").addEventListener("change",()=>{applySelectedInterval();saveReportView();currentPage=1;loadAnalytics()});
 ["start","end"].forEach(id=>$(id).addEventListener("change",()=>{$("interval").value="";saveReportView()}));
@@ -200,7 +199,7 @@ async function loadAnalytics(){
  displayCurrency=["EUR","USD"].includes(d.configuration.displayCurrency)?d.configuration.displayCurrency:(["EUR","USD"].includes(quote)?quote:"EUR");
  const ex=d.exchange==="KRAKEN"?"Kraken":d.exchange==="BITVAVO"?"Bitvavo":d.exchange;document.title="Bitcoin DCA Dashboard";
  let livePrice=Number((d.snapshot||{}).price||0),currencyRates={[quote]:1};
- const currencies=Object.keys(d.summaryByCurrency||{});
+ const currencies=[...new Set([...Object.keys(d.summaryByCurrency||{}),...Object.keys(d.depositsByCurrency||{})])];
  try{
   const priceResponse=await fetch("/api/market-price?currency="+displayCurrency+"&currencies="+encodeURIComponent(currencies.join(",")));const market=await priceResponse.json();if(!priceResponse.ok)throw new Error(market.error||"Could not load current BTC price.");
   if(request!==reportRequest)return;
@@ -218,6 +217,13 @@ async function loadAnalytics(){
  }
  balanceDisplayPrice=livePrice;balanceDisplayCurrency=displayCurrency;renderExchangeBtcValue();
  $("spot").textContent=t(livePrice>0?money(livePrice,displayCurrency)+"/BTC":"—");
+ let depositTotal=0,depositConversionAvailable=true;
+ for(const [currency,values] of Object.entries(d.depositsByCurrency||{})){
+  if(!Number.isFinite(currencyRates[currency])){depositConversionAvailable=false;continue}
+  depositTotal+=Number(values.amount)*currencyRates[currency];
+ }
+ $('depositVolume').textContent=depositConversionAvailable?money(depositTotal,displayCurrency):'—';
+ $('depositCount').textContent=t((d.summary.depositCount||0)+' deposits');
  const converted={buyVolume:0,tradeFees:0,withdrawalFees:0};
  let moneyAvailable=true;
  for(const [currency,values] of Object.entries(d.summaryByCurrency||{})){
@@ -325,7 +331,7 @@ refreshPurchaseSchedule();
 
 (async()=>{
  try{await loadIntervals()}catch(e){
-  $("interval").value="";$("start").value=localInput(Date.now()-90*86400000);$("end").value=localInput(Date.now());
+  $("interval").value="";$("start").value=localInput(Date.parse($("firstStartedAt").value)||Date.now()-1000);$("end").value=localInput(Date.now());
   sectionFeedback("intervalFeedback","Withdrawal intervals unavailable. Custom dates remain available.",true);
  }
  restoreReportView();await loadAnalytics();

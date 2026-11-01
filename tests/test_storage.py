@@ -24,7 +24,15 @@ class StorageTests(TestCase):
         storage.prepare_storage(self.volume)
         self.assertEqual(json.loads((self.volume/'state.json').read_text()),{})
         self.assertEqual((self.volume/'state.json').stat().st_mode & 0o777,0o600)
-        self.assertEqual({p.name for p in self.volume.iterdir()},{'state.json'})
+        self.assertEqual({p.name for p in self.volume.iterdir()},{'state.json','installation.json'})
+
+    def test_first_start_timestamp_is_private_and_unchanged_on_restart(self):
+        storage.prepare_storage(self.volume)
+        first=storage.installation_started_at(self.volume)
+        self.assertEqual(storage.installation_started_at(self.volume),first)
+        storage.prepare_storage(self.volume)
+        self.assertEqual(storage.installation_started_at(self.volume),first)
+        self.assertEqual((self.volume/'installation.json').stat().st_mode & 0o777,0o600)
 
     def test_restart_preserves_pending_transactions_and_schedule(self):
         state={'pending_order':{'id':'order-1'},'pending_withdrawal':{'id':'withdrawal-1'},

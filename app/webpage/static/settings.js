@@ -40,7 +40,6 @@ const timezoneGroups=[
 const timezoneValues=new Set();for(const [region,zones] of timezoneGroups){const group=document.createElement('optgroup');group.label=t(region);for(const [value,label] of zones){const option=document.createElement('option');option.value=value;option.textContent=t(label+' ('+value+')');group.append(option);timezoneValues.add(value)}$('timezone').append(group)}
 const savedTimezone=initial.settings.timezone;if(typeof savedTimezone==='string'&&!timezoneValues.has(savedTimezone)){const option=document.createElement('option');option.value=savedTimezone;option.textContent=t(savedTimezone+' (saved timezone)');$('timezone').append(option)}
 for(const input of document.querySelectorAll('[data-setting]')){const v=initial.settings[input.id];if(v===undefined)continue;if(input.type==='checkbox')input.checked=v;else input.value=v}
-$('appearance').addEventListener('change',()=>{document.documentElement.dataset.appearance=$('appearance').value});
 $('accountPanel').hidden=!initial.createAccount;$('settingsForm').hidden=initial.createAccount;if(document.body)document.body.classList.toggle('settings-active',!initial.createAccount);
 const showCredentials=Boolean($('dashboardCredentials'));if(showCredentials)$('username').value=initial.username||'';if(!initial.complete){$('pageHeading').textContent=t('2. Configure your bot');$('back').hidden=true}
 if(showCredentials){$('passwordRequired').hidden=!initial.passwordChangeRequired;if(initial.passwordChangeRequired){$('password').required=true;$('current_password').required=true}}

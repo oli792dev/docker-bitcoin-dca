@@ -1,20 +1,29 @@
 """Import booked fiat deposits without changing Bitcoin accounting or CSV exports."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 from app.data.activity import append_activity_records
 
 
-def sync_deposits(api, settings, state, now, cycle_start):
+def sync_deposits(api, settings, state, now, balance):
+    """Query only after available fiat rises; retain a narrow window for retries."""
     identity=[settings['exchange'],settings['quote']]
-    previous=state.get('deposit_history',{})
-    start=0
-    if previous.get('identity')==identity:
-        # Revisit the active cycle and overlap recent history for delayed publication.
-        since=datetime.fromisoformat(previous['checkedAt'])-timedelta(days=1)
-        boundary=state.get('deposit_tracking',{}).get('dueAt')
-        dates=[since,cycle_start]
-        if boundary: dates.append(datetime.fromisoformat(boundary)-timedelta(days=1))
-        start=max(0,int(min(d.astimezone(timezone.utc) for d in dates).timestamp()*1000))
+    previous=state.get('fiat_observation',{})
+    observation={'identity':identity,'checkedAt':now.isoformat(),'balance':str(balance)}
+    if previous.get('identity')!=identity:
+        state['fiat_observation']=observation
+        return [],0
+    pending=previous.get('pending')
+    if balance-Decimal(previous['balance'])>=Decimal('.01'):
+        pending=pending or {'start':previous['checkedAt']}
+    confirmed=previous.get('confirmed',[])
+    observation['confirmed']=confirmed
+    if not pending:
+        state['fiat_observation']=observation
+        return confirmed,0
+    observation['pending']=pending
+    state['fiat_observation']=observation
+    # The adapter may round request timestamps; filter returned rows to this exact window.
+    start=max(0,int(datetime.fromisoformat(pending['start']).timestamp()*1000))
     rows=api.fiat_deposits(settings['quote'],start,int(now.timestamp()*1000))
     if not isinstance(rows,list): raise ValueError('Fiat deposit history could not be verified')
     records=[]
@@ -34,5 +43,8 @@ def sync_deposits(api, settings, state, now, cycle_start):
                 'shares':'0','price':'0','tax':'0'}})
     # Insert before advancing the checkpoint; retrying the same exchange IDs is harmless.
     inserted=append_activity_records(records) if records else 0
-    state['deposit_history']={'identity':identity,'checkedAt':now.isoformat()}
-    return records,inserted
+    known={record['id'] for record in confirmed}
+    if any(record['id'] not in known for record in records):
+        observation.pop('pending',None)
+        observation['confirmed']=records
+    return observation['confirmed'],inserted

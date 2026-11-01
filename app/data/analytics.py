@@ -5,11 +5,17 @@ from decimal import Decimal
 def report(settings, groups, snapshot, records):
     summary=dict(buyCount=0,boughtBtc=Decimal(0),simulatedBuyCount=0,simulatedBtc=Decimal(0),
                  withdrawalCount=0,withdrawnBtc=Decimal(0),grossWithdrawnBtc=Decimal(0),pendingWithdrawalCount=0)
-    money={}
+    money={};deposits={}
+    summary['depositCount']=0
     for g in groups:
         if g['simulated']:
             if g['kind']=='Buy':
                 summary['simulatedBuyCount']+=g['count'];summary['simulatedBtc']+=Decimal(g['shares'])
+            continue
+        if g['kind']=='Deposit':
+            values=deposits.setdefault(g['currency'],{'count':0,'amount':Decimal(0)})
+            values['count']+=g['count'];values['amount']+=Decimal(g['amount'])
+            summary['depositCount']+=g['count']
             continue
         values = None
         if g['kind'] == 'Buy' or g['kind'] == 'TransferOut' and g['status'] == 'completed':
@@ -43,6 +49,7 @@ def report(settings, groups, snapshot, records):
                         'balance':str(balance),'price':str(price),'value':str(balance*price),
                         'quoteBalance':str(snapshot.get('quoteBalance','0')),'updatedAt':snapshot.get('updatedAt'),
                         'withdrawThreshold':str(settings['withdraw_threshold'])},
+            'depositsByCurrency':{c:{'count':v['count'],'amount':str(v['amount'])} for c,v in deposits.items()},
             'summary':summary,'summaryByCurrency':{c:{k:str(v) for k,v in m.items()} for c,m in money.items()},
             'activities':[{**r['row'],'activityId':r['id'],'simulated':bool(r.get('simulated')),
                            'exchange':r.get('exchange',''),'depositStatus':r.get('depositStatus'),'withdrawalStatus':r.get('withdrawalStatus'),

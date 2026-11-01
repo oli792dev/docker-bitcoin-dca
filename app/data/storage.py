@@ -4,6 +4,7 @@ import logging
 import os
 from pathlib import Path
 import tempfile
+from datetime import datetime, timezone
 
 LOG = logging.getLogger('bitcoin-dca.storage')
 DATA_DIR = Path('/webui-data')
@@ -37,10 +38,23 @@ def write_json_atomic(path, data):
         if os.path.exists(temporary): os.unlink(temporary)
 
 
+def installation_started_at(data_dir=None):
+    """Immutable first-start timestamp, independent of scheduling resets."""
+    directory=Path(data_dir) if data_dir is not None else DATA_DIR
+    path=directory/'installation.json'
+    if not path.exists():
+        write_json_atomic(path,{'firstStartedAt':datetime.now(timezone.utc).isoformat(timespec='seconds')})
+    value=_read(path)['firstStartedAt']
+    parsed=datetime.fromisoformat(value)
+    if parsed.tzinfo is None: raise ValueError('Invalid installation start timestamp')
+    return value
+
+
 def prepare_storage(data_dir=None):
     """Validate existing volume state or initialize an empty first-run volume."""
     destination = Path(data_dir) if data_dir is not None else DATA_DIR
     destination.mkdir(parents=True, exist_ok=True)
+    installation_started_at(destination)
     state = destination / 'state.json'
     if state.exists():
         _read(state)

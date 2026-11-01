@@ -11,6 +11,7 @@ class Element{
  set innerHTML(v){this.children=[]} addEventListener(event,handler){this.handlers[event]=handler}
 }
 const elements={},get=id=>{assert(!["balance","balanceValue"].includes(id),"Removed portfolio element must not be accessed");return elements[id]??=new Element()};get('pageSize').value=html.match(/<option selected>(\d+)<\/option>/)[1];
+get('firstStartedAt').value='2020-10-01T12:34:56Z';
 const records=Array.from({length:45},(_,i)=>({activityId:String(i),datetime:'2026-10-22T12:00:00Z',type:'Buy',identifier:'BTC',shares:'.001',currency:i<22?'EUR':'USD',price:i<22?'80000':'100000',amount:i<22?'80':'100',fee:i<22?'.2':'.25'}));
 const stored=new Map([['bitcoinDcaMonthlyDeposit','999']]);let expiryCallback;let configuredMonthlyDeposit='',forecastSaveFails=false;const forecastSaves=[];
 const requests=[];let waitingDeposit=false,reportFails=false,scheduleFails=false,checks=0,eurOnly=false,priceUnavailable=false,invalidUsdRate=false,withdrawalUnavailable=false,configuredDisplayCurrency="EUR",withdrawalExchange="KRAKEN",withdrawalTarget="Example wallet",withdrawalNetwork="BTC";
@@ -28,7 +29,7 @@ const context={document:{getElementById:get,createElement:()=>new Element()},loc
   if(reportFails)throw Error('Report offline');
   const limit=Number(parsed.searchParams.get('limit'))||10,pages=Math.ceil(records.length/limit);
   const page=Math.max(1,Math.min(pages,Number(parsed.searchParams.get('page'))||1));
-  return response({quote:'EUR',exchange:'KRAKEN',configuration:{displayCurrency:configuredDisplayCurrency,liveTrading:true,buyAmount:0,depositDay:1,withdrawalsEnabled:false,withdrawalThreshold:1000},snapshot:{price:80000,balance:'.045',updatedAt:new Date().toISOString()},summary:{buyCount:45,boughtBtc:'.045',withdrawnBtc:0,withdrawalCount:0,pendingWithdrawalCount:0,netBtc:'.045'},summaryByCurrency:eurOnly?{EUR:{buyVolume:3600,tradeFees:9,withdrawalFees:0}}:{EUR:{buyVolume:1760,tradeFees:4.4,withdrawalFees:0},USD:{buyVolume:2300,tradeFees:5.75,withdrawalFees:0}},activities:records.slice((page-1)*limit,page*limit),pagination:{page,pageSize:limit,total:45,pages}});
+  return response({quote:'EUR',exchange:'KRAKEN',configuration:{displayCurrency:configuredDisplayCurrency,liveTrading:true,buyAmount:0,depositDay:1,withdrawalsEnabled:false,withdrawalThreshold:1000},snapshot:{price:80000,balance:'.045',updatedAt:new Date().toISOString()},depositsByCurrency:{EUR:{count:1,amount:'200'}},summary:{depositCount:1,buyCount:45,boughtBtc:'.045',withdrawnBtc:0,withdrawalCount:0,pendingWithdrawalCount:0,netBtc:'.045'},summaryByCurrency:eurOnly?{EUR:{buyVolume:3600,tradeFees:9,withdrawalFees:0}}:{EUR:{buyVolume:1760,tradeFees:4.4,withdrawalFees:0},USD:{buyVolume:2300,tradeFees:5.75,withdrawalFees:0}},activities:records.slice((page-1)*limit,page*limit),pagination:{page,pageSize:limit,total:45,pages}});
  }
  if(parsed.pathname==='/api/withdrawal/preview')return response({jobId:'fictional-job'});
  if(parsed.pathname==='/api/withdrawal/jobs/fictional-job')return response(++checks===1?{state:'queued'}:{state:'completed',result:{token:'single-use'}});
@@ -37,6 +38,8 @@ const context={document:{getElementById:get,createElement:()=>new Element()},loc
 const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
 (async()=>{
  vm.createContext(context);vm.runInContext(script,context);await settle();
+ assert.equal(get('depositVolume').textContent,'€200.00');assert.equal(get('depositCount').textContent,'1 deposits');
+ assert(html.indexOf('id="depositVolume"')<html.indexOf('id="buyCount"'));
  assert(!html.includes('id="nextPurchaseStatus"'));waitingDeposit=true;await vm.runInContext('refreshPurchaseSchedule()',context);
  assert.equal(get('nextPurchaseAt').textContent,'Waiting for deposit');assert.equal(get('nextPurchaseCountdown').textContent,'Waiting for deposit');
  vm.runInContext('renderPurchaseCountdown()',context);assert.equal(get('nextPurchaseCountdown').textContent,'Waiting for deposit');waitingDeposit=false;await vm.runInContext('refreshPurchaseSchedule()',context);
@@ -117,7 +120,7 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  get('pageSize').value='20';get('start').value='2026-10-01T00:00';get('end').value='2026-10-29T12:00';get('interval').value='';
  vm.runInContext('saveReportView()',context);
  get('pageSize').value='10';get('start').value='';get('end').value='';vm.runInContext('restoreReportView()',context);
- assert.equal(get('pageSize').value,'20');assert.equal(get('start').value,'2026-10-01T00:00');
+ assert.equal(get('pageSize').value,'20');assert.equal(get('start').value,vm.runInContext('localInput(Date.parse($("firstStartedAt").value))',context));
  assert.equal(get('end').value,vm.runInContext('localInput(Date.now())',context),'Saved end dates must not override the current time');
  stored.set('bitcoinDcaReportView',JSON.stringify({interval:'1,2',start:'2026-10-01T00:00',end:'2026-10-02T00:00',pageSize:'20'}));
  vm.runInContext('restoreReportView()',context);

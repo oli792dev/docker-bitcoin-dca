@@ -55,20 +55,49 @@ class DepositTests(unittest.TestCase):
         state={};api=Mock();api.fiat_deposits.return_value=[{'id':'bank','timestamp':int(now.timestamp()*1000)-3600000,
             'status':'completed','symbol':'EUR','amount':'200','fee':'0'}]
         with tempfile.TemporaryDirectory() as root,patch.object(activity,'ACTIVITY_PATH',Path(root)/'activity.json'):
-            records,inserted=sync_deposits(api,settings,state,now,datetime(2026,10,1,12,tzinfo=timezone.utc))
+            self.assertEqual(sync_deposits(api,settings,state,now.replace(hour=7),Decimal(0)),([],0))
+            api.fiat_deposits.assert_not_called()
+            records,inserted=sync_deposits(api,settings,state,now,Decimal(200))
             self.assertEqual(inserted,1)
             due,_,received=observe_deposit(state,settings,now,datetime(2026,10,1,12,tzinfo=timezone.utc),datetime(2026,11,1,12,tzinfo=timezone.utc),Decimal(200),records)
             self.assertTrue(received);self.assertEqual(due,datetime(2026,12,1,12,tzinfo=timezone.utc))
-            self.assertEqual(sync_deposits(api,settings,state,now,datetime(2026,10,1,12,tzinfo=timezone.utc))[1],0)
+            self.assertEqual(sync_deposits(api,settings,state,now,Decimal(200))[1],0)
             api.fiat_deposits.side_effect=requests.ConnectionError('offline')
-            saved=dict(state['deposit_history'])
-            with self.assertRaises(requests.ConnectionError):sync_deposits(api,settings,state,now,now)
-            self.assertEqual(state['deposit_history'],saved)
+            calls=api.fiat_deposits.call_count
+            self.assertEqual(calls,1)
+            with self.assertRaises(requests.ConnectionError):sync_deposits(api,settings,state,now,Decimal(210))
+            self.assertIn('pending',state['fiat_observation'])
+            self.assertEqual(api.fiat_deposits.call_count,2)
             self.assertEqual(len(activity.read_activity_records()),1)
+
+    def test_only_balance_increases_query_a_narrow_window_and_pending_checks_retry(self):
+        from datetime import timedelta
+        import json
+        settings={'exchange':'KRAKEN','quote':'EUR'}
+        now=datetime(2026,11,1,9,tzinfo=timezone.utc)
+        state={};api=Mock();api.fiat_deposits.return_value=[]
+        sync_deposits(api,settings,state,now,Decimal(100))
+        sync_deposits(api,settings,state,now+timedelta(minutes=5),Decimal(92))
+        sync_deposits(api,settings,state,now+timedelta(minutes=10),Decimal(92))
+        api.fiat_deposits.assert_not_called()
+        sync_deposits(api,settings,state,now+timedelta(minutes=15),Decimal(292))
+        self.assertEqual(api.fiat_deposits.call_args.args[1],int((now+timedelta(minutes=10)).timestamp()*1000))
+        self.assertIn('pending',state['fiat_observation'])
+        # A restart or unchanged balance must not lose an awaiting confirmation window.
+        state=json.loads(json.dumps(state))
+        sync_deposits(api,settings,state,now+timedelta(minutes=20),Decimal(292))
+        self.assertEqual(api.fiat_deposits.call_count,2)
+        self.assertEqual(api.fiat_deposits.call_args.args[1],int((now+timedelta(minutes=10)).timestamp()*1000))
 
     def test_worker_prices_keep_purchase_price_if_conversion_is_unavailable(self):
         api=Mock();api.price.return_value=Decimal(88000)
         self.assertEqual(collect_prices(api,{'quote':'EUR','exchange':'KRAKEN'},Decimal(80000)),{'EUR':'80000','USD':'88000'})
         api.price.assert_called_once_with('BTC-USD')
         api.price.side_effect=requests.ReadTimeout()
-        self.assertEqual(collect_prices(api,{'quote':'EUR','exchange':'KRAKEN'},Decimal(80000)),{'EUR':'80000'})
+        with self.assertLogs('bitcoin-dca.prices',level='DEBUG') as logs:
+            self.assertEqual(collect_prices(api,{'quote':'EUR','exchange':'KRAKEN'},Decimal(80000)),{'EUR':'80000'})
+        self.assertFalse(any(':WARNING:' in line for line in logs.output))
+        api._logged_states={}
+        with self.assertLogs('bitcoin-dca.prices',level='DEBUG') as logs:
+            for _ in range(2):collect_prices(api,{'quote':'EUR','exchange':'KRAKEN','display_currency':'USD'},Decimal(80000))
+        self.assertEqual(sum(line.startswith('WARNING:') for line in logs.output),1)

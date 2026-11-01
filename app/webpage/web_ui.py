@@ -295,7 +295,8 @@ class Handler(BaseHTTPRequestHandler):
         if not settings.get('parqet_enabled', True): hidden += ['#download', '#parqet-actions', '#exportMessage', '#parqet-note', '#manual-export-note']
         if not settings.get('withdrawals_enabled', False): hidden += ['#automatic-withdrawal-note']
         styles = '<style>' + ','.join(hidden) + '{display:none!important}</style>' if hidden else ''
-        page = HTML.replace('</head>', styles + '</head>')
+        first_start = getattr(self.runtime.store, 'first_started_at', '') if self.runtime else ''
+        page = HTML.replace('__FIRST_STARTED_AT__', html.escape(first_start, quote=True)).replace('</head>', styles + '</head>')
         if not settings.get('withdrawals_enabled', False):
             page = page.replace('Schedule and automatic withdrawal</strong>', 'Purchase schedule</strong>')
         if not settings.get('parqet_enabled', True):

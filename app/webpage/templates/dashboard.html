@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <style>__STATIC_dashboard.css__</style>
 </head>
-<body class="dashboard-page"><a class="skip-link" href="#main-content">Skip to content</a>
+<body class="dashboard-page"><input id="firstStartedAt" type="hidden" value="__FIRST_STARTED_AT__"><a class="skip-link" href="#main-content">Skip to content</a>
 <div class="compact-brand-bar"><div class="compact-brand-inner"><img src="/bitcoin-dca-icon-v3.png" width="36" height="36" alt=""><span>Bitcoin DCA Dashboard</span></div></div><main id="main-content" tabindex="-1">
 <header class="top"><div><div class="dashboard-brand"><img class="dashboard-logo" src="/bitcoin-dca-icon-v3.png" width="48" height="48" alt=""><h1>Bitcoin DCA Dashboard</h1></div></div><div class="top-actions"><div class="bot-status" role="status" aria-live="polite"><span class="status-caption"><span id="botStatusLight" class="status-light status-active" aria-hidden="true"></span>Status:</span><span id="botStatusLabel">Bot active</span></div><button id="openSettings" type="button" aria-haspopup="dialog" aria-controls="settingsDialog">Settings</button><form method="post" action="/logout"><button type="submit" class="secondary logout-button">Log out</button></form></div></header>
 <details open class="panel" aria-labelledby="configurationHeading">
@@ -55,11 +55,12 @@
 <p class="sub">Choose a custom date range or an interval between withdrawals to review activity and prepare a Parqet export.</p>
 <div class="controls">
 <div class="field"><label for="interval">Date range</label><select id="interval"></select></div>
-<div class="field"><label for="start">From</label><input id="start" type="datetime-local"></div>
-<div class="field"><label for="end">To</label><input id="end" type="datetime-local"></div>
+<div class="field"><label for="start">From</label><input id="start" type="datetime-local" step="1"></div>
+<div class="field"><label for="end">To</label><input id="end" type="datetime-local" step="1"></div>
 <button id="refresh">Load report</button>
 </div><p id="intervalFeedback" class="section-feedback hidden" role="status"></p><div id="error" class="error hidden" role="alert"></div><p id="reportFeedback" class="section-feedback hidden" role="status" aria-live="polite"></p>
 <div class="period-summary-content" role="region" aria-labelledby="periodSummaryHeading"><h3 id="periodSummaryHeading" class="summary-subheading">Period Report</h3><div class="horizontal-scroll report-scroll" role="region" aria-label="Period report cards" tabindex="0"><div class="report-cards"><div class="grid period-summary-grid">
+<div class="card"><label>Deposits</label><div class="value" id="depositVolume">—</div><div class="small" id="depositCount"></div></div>
 <div class="card"><label>BTC purchases</label><div class="value" id="buyCount">—</div><div class="small" id="buyBtc"></div></div>
 <div class="card"><label>Purchase volume</label><div class="value" id="buyVolume">—</div><div class="small" id="avgPrice"></div></div>
 <div class="card"><label>Trading fees</label><div class="value" id="tradeFees">—</div></div>

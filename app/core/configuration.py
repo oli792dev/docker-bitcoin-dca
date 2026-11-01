@@ -8,7 +8,7 @@ import logging
 import os
 import re
 import secrets
-from app.data.storage import write_json_atomic
+from app.data.storage import write_json_atomic, installation_started_at
 import threading
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -128,6 +128,7 @@ class ConfigStore:
     def __init__(self, path=None):
         self.path = Path(path) if path is not None else CONFIG_PATH
         self.lock = threading.RLock()
+        self.first_started_at = installation_started_at(self.path.parent)
         if self.path.exists():
             self.data = self._read(self.path)
             LOG.debug('Stored application configuration loaded; setup complete=%s', self.data['complete'])

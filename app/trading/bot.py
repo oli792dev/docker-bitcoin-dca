@@ -77,7 +77,7 @@ def read_state(path, cycle_key):
             fresh["last_withdrawal"] = state["last_withdrawal"]
         if state.get("last_order_at"):
             fresh["last_order_at"] = state["last_order_at"]
-        for key in ("deposit_tracking", "deposit_history", "schedule", "last_order_quote"):
+        for key in ("deposit_tracking", "fiat_observation", "schedule", "last_order_quote"):
             if key in state: fresh[key] = state[key]
         if "withdrawal_armed" in state:
             fresh["withdrawal_armed"] = state["withdrawal_armed"]
@@ -435,14 +435,6 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
         if wait is not None:
             return wait
         return run_once(api, settings, check_interval, schedule_only=True)
-    deposits, inserted_deposits = sync_deposits(api, settings, state, now, cycle_start)
-    save_state(state_path, state)
-    if inserted_deposits:
-        LOG.info('Confirmed fiat deposits recorded: count=%s; currency=%s; exchange=%s', inserted_deposits, quote, settings['exchange'])
-    try:
-        maybe_withdraw_btc(api, state, settings)
-    except requests.RequestException as exc:
-        LOG.warning("Automatic BTC withdrawal check failed; will retry: %s", exc)
     # Use the current available quote balance as the DCA budget. This includes
     # funds already on the exchange, even if they were deposited before this cycle.
     try:
@@ -452,6 +444,15 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
         LOG.debug("Dashboard balance refresh failure", exc_info=True)
         exchange_btc = None
     balance = cycle_data['balance'] if cycle_data else api.balance(quote)
+    try:
+        deposits, inserted_deposits = sync_deposits(api, settings, state, now, balance)
+    except Exception:
+        # Preserve the detection window even if the exchange response is delayed or fails.
+        save_state(state_path, state)
+        raise
+    save_state(state_path, state)
+    if inserted_deposits:
+        LOG.info('Confirmed fiat deposits recorded: count=%s; currency=%s; exchange=%s', inserted_deposits, quote, settings['exchange'])
     balance_after_simulated_spend = (
         max(Decimal(0), balance - spent) if not settings["live"] else balance
     )
@@ -465,6 +466,16 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
     market_prices = cycle_data['market_prices'] if cycle_data else collect_prices(api, settings, price)
     cycle_data = {'market_prices':market_prices,'balance':balance,'price':price,'market':market,'fee_rate':fee_rate,'btc_balance':exchange_btc}
     update_dashboard_snapshot(settings, balance, price, exchange_btc, market_prices)
+    if state.get('fiat_observation',{}).get('pending'):
+        update_dashboard_schedule(None, 'Waiting for automatic exchange check')
+        log_transition(LOG, api, 'deposit-verification', 'pending', logging.INFO,
+                       'Fiat balance increased; waiting for exchange deposit confirmation before new automatic transactions.')
+        return check_interval
+    clear_transition(api, 'deposit-verification')
+    try:
+        maybe_withdraw_btc(api, state, settings)
+    except requests.RequestException as exc:
+        LOG.warning("Automatic BTC withdrawal check failed; will retry: %s", exc)
     if market.get("status") != "trading":
         update_dashboard_schedule(None, f"Waiting for market status: {market.get('status')}")
         log_transition(LOG, api, "purchase-wait", "market-" + str(market.get("status")), logging.INFO, "Market %s is %s; waiting.", symbol, market.get("status"))

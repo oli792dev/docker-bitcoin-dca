@@ -150,6 +150,7 @@ def parqet_interval_records(start, end):
 
 def _totals(db, start, end):
     rows = db.execute("SELECT currency,kind,simulated,status,count(*),decimal_sum(shares),decimal_sum(amount),decimal_sum(fee),decimal_sum(gross) FROM activity WHERE asset='BTC' AND timestamp>? AND timestamp<=? GROUP BY currency,kind,simulated,status", (start,end)).fetchall()
+    rows += db.execute("SELECT currency,'Deposit',0,'confirmed',count(*),'0',decimal_sum(amount),decimal_sum(fee),'0' FROM activity WHERE kind='Deposit' AND json_extract(payload,'$.depositStatus')='confirmed' AND timestamp>? AND timestamp<=? GROUP BY currency", (start,end)).fetchall()
     return [dict(zip(('currency','kind','simulated','status','count','shares','amount','fee','gross'),r)) for r in rows]
 
 

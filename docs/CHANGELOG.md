@@ -4,6 +4,13 @@ Unreleased changes followed by historical version notes, newest first. Dates use
 
 ## Unreleased
 
+- Cache Kraken BTC/EUR and BTC/USD market metadata independently and distinguish conversion failures from a successful purchase-currency price refresh.
+
+- Query only the current deposit window after a fiat balance increase, without importing historical deposits.
+- Persist the first container-start timestamp as the Period Analysis From default.
+- Add a currency-aware Deposits tile first in Period Report, leaving BTC and Parqet calculations unchanged.
+- Apply appearance changes only after saving Settings.
+
 - Refresh dashboard BTC prices with regular account checks instead of browser-triggered requests.
 - Document deposit-history read permissions and correct Bitvavo private-request signing.
 

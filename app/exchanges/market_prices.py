@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 import logging
 import requests
+from app.core.logging_utils import log_transition, clear_transition
 
 LOG=logging.getLogger('bitcoin-dca.prices')
 
@@ -23,8 +24,11 @@ def collect_prices(api, settings, price):
             alternate=Decimal(str(next(iter(payload['result'].values()))['c'][0]))
         if not alternate.is_finite() or alternate<=0: raise ValueError('Invalid conversion price')
         prices[other]=format(alternate,'f')
+        clear_transition(api,'display-price')
     except (requests.RequestException,ValueError,ArithmeticError,KeyError,StopIteration,TypeError):
-        LOG.warning('Display-currency price unavailable; retaining the current purchase-currency price')
+        needed=settings.get('display_currency',quote)!=quote
+        log_transition(LOG,api,'display-price','missing-'+other,logging.WARNING if needed else logging.DEBUG,
+                       'BTC/%s display conversion unavailable; BTC/%s purchase price remains current.',other,quote)
         LOG.debug('Display conversion refresh failed',exc_info=True)
     return prices
 
