@@ -79,6 +79,8 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  assert.equal(get('buyVolume').textContent,'€3,600.00','EUR string rate must retain monetary totals');
  assert.equal(get('error').textContent,'','EUR-only history must not report mixed currencies');
  priceUnavailable=true;await vm.runInContext('loadAnalytics()',context);
+ assert(get('spotUpdated').textContent.startsWith('Last checked '));
+ assert(!html.includes('id="priceFeedback"'));
  assert.equal(get('buyVolume').textContent,'€3,600.00','EUR totals need no external conversion rate');
  assert(!get('error').textContent.includes('multiple currencies'));
  eurOnly=false;priceUnavailable=false;invalidUsdRate=true;await vm.runInContext('loadAnalytics()',context);

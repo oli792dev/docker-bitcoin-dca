@@ -203,7 +203,7 @@ async function loadAnalytics(){
  const currencies=Object.keys(d.summaryByCurrency||{});
  try{
   const priceResponse=await fetch("/api/market-price?currency="+displayCurrency+"&currencies="+encodeURIComponent(currencies.join(",")));const market=await priceResponse.json();if(!priceResponse.ok)throw new Error(market.error||"Could not load current BTC price.");
-  if(request!==reportRequest)return;sectionFeedback("priceFeedback","");
+  if(request!==reportRequest)return;
   fxRate=Number(market.conversionRate);livePrice=Number(market.price);currencyRates=Object.fromEntries(Object.entries(market.conversionRates||{[quote]:fxRate})
    .map(([currency,rate])=>[currency,Number(rate)]).filter(([,rate])=>Number.isFinite(rate)&&rate>0));
   currencyRates[displayCurrency]=1;
@@ -212,8 +212,9 @@ async function loadAnalytics(){
   if(request!==reportRequest)return;
   displayCurrency=quote;fxRate=1;
   if(!(livePrice>0)&&balanceDisplayCurrency===quote&&balanceDisplayPrice>0)livePrice=balanceDisplayPrice;
-  $("spotUpdated").textContent=t(livePrice>0?"Last available price":"Live price unavailable");
-  sectionFeedback("priceFeedback","Live price unavailable; showing the saved bot price where available.",true);
+  const checked=Date.parse((d.snapshot||{}).updatedAt);
+  if(Number((d.snapshot||{}).price)>0&&Number.isFinite(checked))
+   $("spotUpdated").textContent=t("Last checked "+new Date(checked).toLocaleString(locale));
  }
  balanceDisplayPrice=livePrice;balanceDisplayCurrency=displayCurrency;renderExchangeBtcValue();
  $("spot").textContent=t(livePrice>0?money(livePrice,displayCurrency)+"/BTC":"—");
