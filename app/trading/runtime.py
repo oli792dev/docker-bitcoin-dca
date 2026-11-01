@@ -23,6 +23,8 @@ class Runtime:
         self.api = None
         self.service = None
         self.session_validator = lambda token: False
+        self.invalidate_sessions = lambda: None
+        self._configuration_uncertain = False
         self.password_attempts = AttemptLimiter(capacity=1)
         self.startup_pending = True
         self.exchange_check_pending = True
@@ -32,6 +34,53 @@ class Runtime:
             self.api = create_exchange(self.settings)
             self._synchronize_state()
         LOG.info('Application configuration loaded' if self.api else 'Waiting for first-run configuration; purchases are paused')
+
+    def shutdown(self):
+        finished = self.worker.shutdown()
+        if finished and self.lock.acquire(timeout=5):
+            try:
+                self.service = None
+                self._close_adapter(self.api)
+            finally:
+                self.lock.release()
+        elif finished:
+            LOG.warning('An account request is still finishing; connection cleanup deferred to process exit')
+        return finished
+
+    @staticmethod
+    def _close_adapter(adapter):
+        if adapter and hasattr(adapter, 'session'):
+            try:
+                adapter.session.close()
+            except Exception:
+                LOG.warning('Previous exchange connection could not be closed cleanly')
+
+    def _recover_configuration(self):
+        """Reload the durable source after an interrupted save; fail closed on any error."""
+        if not self._configuration_uncertain:
+            return
+        with self.store.lock:
+            data = self.store._read(self.store.path)
+            if not data.get('account'):
+                raise RuntimeError('Stored settings could not be verified; transactions remain paused.')
+            # A failed fsync may follow a successful replace. Confirm durability
+            # before letting either the old or the new configuration trade.
+            self.store._write(data)
+            values = runtime_settings(data['settings'])
+            adapter = create_exchange(values) if data['complete'] else None
+            old_api = self.api
+            self.store.data = data
+            self.settings.update(values)
+            self.api = adapter
+            self.service = None
+            self.exchange_check_pending = self.startup_pending = True
+            self.worker.interval = values['check_interval_seconds']
+            self.ready_at = time.monotonic()
+            self.invalidate_sessions()
+            self._close_adapter(old_api)
+            if self.api: self._synchronize_state()
+            self._configuration_uncertain = False
+            LOG.info('Stored settings verified after interrupted save; automatic exchange check required')
 
     def _check_exchange_activity(self):
         """Read-only startup gate; never submit or retry financial requests here."""
@@ -85,6 +134,8 @@ class Runtime:
     def cycle(self):
         from app.trading.bot import run_once, update_dashboard_schedule, latest_recorded_buy_time
         with self.lock:
+            if self.worker.stop.is_set(): return self.worker.interval
+            self._recover_configuration()
             if not self.api:
                 return self.worker.interval
             remaining = self.ready_at - time.monotonic()
@@ -108,6 +159,9 @@ class Runtime:
     def action(self, action, session, token=None):
         from app.trading.bot import manual_withdrawal_service
         with self.lock:
+            if self.worker.stop.is_set(): raise ValueError('Container is stopping; request was not executed.')
+            if self._configuration_uncertain:
+                raise ValueError('Settings storage is being verified; transactions remain paused.')
             if not self.api or not self.settings['manual_withdrawal_enabled']:
                 raise ValueError('Manual withdrawals are disabled in Settings.')
             if self.exchange_check_pending:
@@ -122,6 +176,8 @@ class Runtime:
 
     def save(self, payload):
         with self.lock, self.store.lock:
+            if self.worker.stop.is_set(): raise ValueError('Container is stopping; settings were not changed.')
+            self._recover_configuration()
             if not isinstance(payload, dict) or set(payload) - {'settings', 'username', 'password', 'current_password'}:
                 raise ValueError('Invalid settings request.')
             previous = self.store.snapshot()
@@ -159,12 +215,21 @@ class Runtime:
             settings = runtime_settings(values)
             adapter_changed = self.api is None or identity_changed or values['kraken_withdraw_key'] != previous['settings']['kraken_withdraw_key']
             adapter = create_exchange(settings) if adapter_changed else self.api
+            previous_gate = self.exchange_check_pending
             try:
                 if values['withdrawals_enabled']:
                     adapter.validate_withdrawal_settings(settings)
+                # Set the financial gate before the first fallible write. If any
+                # write fails, only a verified durable reload may release it.
+                self._configuration_uncertain = True
+                self.exchange_check_pending = True
+                self.service = None
+                if identity_changed:
+                    from app.data.activity import write_dashboard_snapshot
+                    write_dashboard_snapshot({'exchange': values['exchange'], 'quote': values['quote'], 'nextPurchaseAt': None, 'nextPurchaseStatus': 'Waiting for account check'})
                 self.store.commit(values, account)
             except Exception:
-                if adapter_changed and hasattr(adapter, 'session'): adapter.session.close()
+                if adapter_changed: self._close_adapter(adapter)
                 raise
             # A shared mapping keeps existing HTTP handlers up to date. Preserve running
             # scheduling metadata for cosmetic feature toggles and account edits.
@@ -173,14 +238,11 @@ class Runtime:
             self.settings.update(settings)
             old_api = self.api
             self.api = adapter
-            if adapter_changed and old_api and hasattr(old_api, 'session'): old_api.session.close()
+            if adapter_changed: self._close_adapter(old_api)
             self.service = None  # Invalidate all previews after any configuration change.
             self.worker.interval = values['check_interval_seconds']
-            if identity_changed:
-                from app.data.activity import write_dashboard_snapshot
-                write_dashboard_snapshot({'exchange': values['exchange'], 'quote': values['quote'], 'nextPurchaseAt': None, 'nextPurchaseStatus': 'Waiting for account check'})
-            if not previous['complete'] or identity_changed or financial_mode_changed:
-                self.exchange_check_pending = True
+            self.exchange_check_pending = previous_gate or not previous['complete'] or identity_changed or financial_mode_changed
+            self._configuration_uncertain = False
             if schedule_changed:
                 self.settings.pop('startup_last_buy_at', None)
                 self.startup_pending = True
@@ -198,6 +260,8 @@ class Runtime:
         if not isinstance(payload, dict) or set(payload) != {'monthlyDeposit'}:
             raise ValueError('Invalid monthly deposit request.')
         with self.store.lock:
+            if self._configuration_uncertain or self.worker.stop.is_set():
+                raise ValueError('Settings are being verified or the container is stopping; try again later.')
             previous = self.store.snapshot()
             if not previous['complete']:
                 raise ValueError('Complete initial configuration first.')
@@ -212,6 +276,7 @@ class Runtime:
     def test_connection(self, payload):
         # Read-only and serialized so a connection test cannot race a financial action.
         with self.lock:
+            if self.worker.stop.is_set(): raise ValueError('Container is stopping; connection test was not started.')
             values = validate(payload, self.store.snapshot()['settings'])
             LOG.info('Exchange connection test started: exchange=%s; quote currency=%s; read-only balance access', values['exchange'], values['quote'])
             started = time.monotonic()

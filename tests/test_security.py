@@ -210,6 +210,7 @@ class ConnectionLimitTests(unittest.TestCase):
         app=object.__new__(runtime.Runtime)
         import threading
         app.lock=threading.RLock();app.api=Mock();app.settings={'manual_withdrawal_enabled':True}
+        app.worker=Mock();app.worker.stop.is_set.return_value=False;app._configuration_uncertain=False
         app.exchange_check_pending=False;app.store=Mock();app.store.snapshot.return_value={'account':{}}
         app.service=Mock(return_value={'ok':True});app.session_validator=web_ui.session_is_valid
         with patch.object(web_ui,'_SESSIONS',{'active':200,'expired':99}),patch.object(web_ui.time,'monotonic',return_value=100):

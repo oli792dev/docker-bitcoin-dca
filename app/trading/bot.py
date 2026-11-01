@@ -671,7 +671,13 @@ def main():
     port = int(os.getenv("WEB_UI_PORT", "6890"))
     if not 1 <= port <= 65535:
         raise ValueError("WEB_UI_PORT must be between 1 and 65535")
-    runtime.worker.start()
-    threading.Thread(target=supervise, args=(runtime.worker,), daemon=True).start()
-    serve(runtime.settings, port, runtime.worker.submit, worker=runtime.worker, runtime=runtime)
-
+    from app.core.lifecycle import shutdown_signals
+    with shutdown_signals(runtime.worker) as stop:
+        runtime.worker.start()
+        threading.Thread(target=supervise, args=(runtime.worker,), daemon=True).start()
+        try:
+            serve(runtime.settings, port, runtime.worker.submit, worker=runtime.worker, runtime=runtime, stop=stop)
+        finally:
+            stop.set()
+            runtime.shutdown()
+            LOG.info('Container shutdown complete; pending transactions remain saved for restart verification')

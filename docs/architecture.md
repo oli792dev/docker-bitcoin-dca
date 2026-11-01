@@ -20,7 +20,7 @@ The application is a Python package organized by responsibility:
 ~~~text
 app/
 ├── __main__.py   # python -m app
-├── webpage/      # HTTPS dashboard, settings, icons and browser assets
+├── webpage/      # HTTPS handlers; templates/ HTML and static/ CSS/JavaScript
 ├── trading/      # Bot, worker, runtime and withdrawals
 ├── exchanges/    # Kraken/Bitvavo adapters and transport helpers
 ├── data/         # Volume storage, activity ledger, analytics and CSV exports
@@ -121,7 +121,7 @@ Kraken funding calls currently use its supported legacy endpoints. Track the [of
 
 ## Shared UI design
 
-`app/webpage/design_system.py` supplies the shared appearance for the dashboard, login, setup and settings, including embedded editors and native dialogs. The volume-saved `appearance` setting selects `light`, `dark` or `system` (default). It is rendered before first paint on the dashboard, sign-in and settings, including embedded editors. Changing it does not reschedule purchases or recreate the exchange adapter. It also adapts to increased contrast, reduced motion, reduced transparency and forced colors. The typography uses the platform system font and relative sizing; fonts are not bundled. Controls provide at least 44 CSS-pixel targets (switches use their containing option cards), visible keyboard focus and skip links. Semantic text/status colors are tested against all principal surfaces at a minimum 4.5:1 contrast; primary button text also passes 4.5:1.
+`app/webpage/static/design-system.css` and the palette helpers in `app/webpage/design_system.py` supply the shared appearance for the dashboard, login, setup and settings, including embedded editors and native dialogs. The volume-saved `appearance` setting selects `light`, `dark` or `system` (default). It is rendered before first paint on the dashboard, sign-in and settings, including embedded editors. Changing it does not reschedule purchases or recreate the exchange adapter. It also adapts to increased contrast, reduced motion, reduced transparency and forced colors. The typography uses the platform system font and relative sizing; fonts are not bundled. Controls provide at least 44 CSS-pixel targets (switches use their containing option cards), visible keyboard focus and skip links. Semantic text/status colors are tested against all principal surfaces at a minimum 4.5:1 contrast; primary button text also passes 4.5:1.
 
 The web design follows the principles of Apple's [Color](https://developer.apple.com/design/human-interface-guidelines/color), [Typography](https://developer.apple.com/design/human-interface-guidelines/typography), [Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility) and [Layout](https://developer.apple.com/design/human-interface-guidelines/layout) guidance. Web zoom and browser text preferences remain available; native-only features are not simulated. Grouped panels, existing mobile overflow, saved views and financial confirmation behavior are retained.
 
@@ -136,3 +136,13 @@ Settings uses keyboard-accessible tabs for Bot Configuration, Exchange, Dashboar
 Planning cost is the estimated order value plus trading fees, without the former 0.5% buffer. The interval is the UTC duration from the last execution to the active deposit deadline divided by `(affordable purchases + 1)`, with the existing minimum interval. The final planned buy therefore precedes the deadline.
 
 Live state retains the active budget deadline and fiat observations across month changes and restarts. If the deadline passes without usable new funds, affordable residual funds remain due rather than being replanned into the next month. Insufficient balances publish `Waiting for deposit` in both purchase time fields. An available fiat increase of at least one cent, adjusted for the last confirmed bot purchase cost, releases the wait and makes the first purchase due. When an upgrade has no prior fiat observation, an initially large balance is treated as the current-cycle budget rather than rapidly spent as old remnants; a single affordable residual order remains due. This detects available funds, not a bank transfer's identity; external releases or credits can also qualify. Pending orders still block new submissions. Exchange minimums, fees, rounding and execution-price changes can leave small residual balances.
+
+## Failure boundaries and shutdown
+
+Settings writes activate a transaction gate before touching persistent files. An interrupted save pauses both purchases and manual withdrawals. The worker reloads and durably verifies `config.json`, discards withdrawal previews, invalidates sessions and repeats the automatic exchange check before trading resumes. A storage failure keeps the gate closed; no manual recovery setting or host/environment import is involved.
+
+Due account checks run before queued manual actions. Manual previews and confirmations leave the existing check deadline unchanged. SIGTERM/SIGINT stop new requests, finish the active worker operation for up to 45 seconds and cancel queued actions. Connections close after the worker finishes; a timed-out operation retains its saved pending request for reconciliation after restart. Compose allows a 60-second stop grace period.
+
+SQLite schema initialization is versioned with `PRAGMA user_version`; normal reads skip table/index initialization. Unsupported newer versions are rejected without modifying activity. Existing ledger data and atomic transaction writes are preserved.
+
+Dashboard, login and settings HTML live in `app/webpage/templates/`; their CSS and JavaScript, including shared styles and scroll behavior, live in `app/webpage/static/`. A cached standard-library loader assembles these local assets into the existing responses. No frontend build tools, CDN or additional requests are required.

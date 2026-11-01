@@ -40,6 +40,34 @@ class ReviewTests(unittest.TestCase):
             if status:r['withdrawalStatus']=status
         return r
 
+    def test_initialized_database_reads_skip_schema_work_and_unknown_versions_fail_closed(self):
+        import sqlite3
+        activity.append_activity_records([self.record()])
+        statements=[];connect=sqlite3.connect
+        def traced(*args,**kwargs):
+            db=connect(*args,**kwargs);db.set_trace_callback(statements.append);return db
+        with patch.object(activity.sqlite3,'connect',side_effect=traced):
+            self.assertEqual(len(activity.read_activity_records()),1)
+        self.assertFalse(any('CREATE ' in statement.upper() for statement in statements))
+        with connect(activity.ACTIVITY_PATH.with_suffix('.sqlite3')) as db:
+            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],1)
+            db.execute('PRAGMA user_version=2')
+        with self.assertRaisesRegex(ValueError,'newer'):activity.read_activity_records()
+        with connect(activity.ACTIVITY_PATH.with_suffix('.sqlite3')) as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM activity').fetchone()[0],1)
+
+    def test_failed_ledger_initialization_retries_without_partial_import(self):
+        records=[self.record('first'),self.record('invalid')]
+        records[1]['row']['datetime']='invalid timestamp'
+        activity.ACTIVITY_PATH.write_text(json.dumps(records))
+        with self.assertRaises(ValueError):activity.read_activity_records()
+        import sqlite3
+        with sqlite3.connect(activity.ACTIVITY_PATH.with_suffix('.sqlite3')) as db:
+            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],0)
+            self.assertEqual(db.execute('SELECT count(*) FROM activity').fetchone()[0],0)
+        activity.ACTIVITY_PATH.write_text(json.dumps([self.record('first')]))
+        self.assertEqual(len(activity.read_activity_records()),1)
+
     def test_json_migration_is_once_and_preserves_source_and_metadata(self):
         r=self.record('old','TransferOut');r['manual']=True
         text=json.dumps({'records':[r]});activity.ACTIVITY_PATH.write_text(text)

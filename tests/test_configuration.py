@@ -41,6 +41,54 @@ class ConfigurationTests(unittest.TestCase):
         self.app.save({'current_password':PASSWORD,'settings': {**CREDENTIALS, **settings}})
         self.app.worker.reconfigure.clear()
 
+    def test_failed_snapshot_write_cannot_apply_settings_or_allow_transactions(self):
+        self.ready();self.app.exchange_check_pending=False
+        old=self.app.api
+        with patch.object(activity,'write_dashboard_snapshot',side_effect=OSError('disk full')):
+            with self.assertRaises(OSError):
+                self.app.save({'settings':{'quote':'USD'},'current_password':PASSWORD})
+        self.assertEqual(self.store.snapshot()['settings']['quote'],'EUR')
+        self.assertEqual(self.app.settings['quote'],'EUR')
+        self.assertIs(self.app.api,old)
+        self.assertTrue(self.app.exchange_check_pending)
+        with self.assertRaisesRegex(ValueError,'storage'):
+            self.app.action('confirm','session','preview')
+        self.app.invalidate_sessions=Mock()
+        with patch.object(self.app,'_check_exchange_activity',return_value=False) as check,patch.object(bot,'run_once') as run:
+            self.app.cycle()
+        check.assert_called_once();run.assert_not_called()
+        self.assertFalse(self.app._configuration_uncertain)
+        self.app.invalidate_sessions.assert_called_once()
+
+    def test_failed_commit_after_replace_reloads_actual_durable_settings(self):
+        self.ready();self.app.exchange_check_pending=False
+        write=self.store._write
+        def replaced_then_failed(data):
+            write(data)
+            raise OSError('directory fsync failed after replace')
+        with patch.object(self.store,'_write',side_effect=replaced_then_failed):
+            with self.assertRaises(OSError):
+                self.app.save({'settings':{'quote':'USD'},'current_password':PASSWORD})
+            self.assertTrue(self.app._configuration_uncertain)
+            with patch.object(bot,'run_once') as run:
+                with self.assertRaises(OSError):self.app.cycle()
+                run.assert_not_called()
+        self.assertEqual(self.app.settings['quote'],'EUR')
+        with patch.object(self.app,'_check_exchange_activity',return_value=False),patch.object(bot,'run_once') as run:
+            self.app.cycle()
+            run.assert_not_called()
+        self.assertEqual(self.app.settings['quote'],'USD')
+        self.assertEqual(self.store.snapshot()['settings']['quote'],'USD')
+        self.assertTrue(self.app.exchange_check_pending)
+
+    def test_failed_first_configuration_can_be_retried_without_manual_recovery(self):
+        self.account()
+        with patch.object(self.store,'commit',side_effect=OSError('disk full')):
+            with self.assertRaises(OSError):self.app.save({'settings':CREDENTIALS})
+        self.app.save({'settings':CREDENTIALS})
+        self.assertTrue(self.store.snapshot()['complete'])
+        self.assertTrue(self.app.exchange_check_pending)
+
     def test_retired_adaptive_settings_do_not_block_existing_volume_startup(self):
         self.ready()
         saved=json.loads(self.store.path.read_text())

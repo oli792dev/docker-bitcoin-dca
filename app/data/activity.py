@@ -69,35 +69,41 @@ def _db():
         connection.create_aggregate('decimal_sum', 1, _DecimalSum)
         try:
             os.chmod(path, 0o600)
-            connection.execute('PRAGMA journal_mode=WAL')
             connection.execute('PRAGMA synchronous=FULL')
-            connection.executescript('''
-                CREATE TABLE IF NOT EXISTS activity(
-                    id TEXT PRIMARY KEY, timestamp INTEGER NOT NULL, kind TEXT, asset TEXT,
-                    simulated INTEGER, exchange TEXT, currency TEXT, shares TEXT, amount TEXT,
-                    fee TEXT, gross TEXT, status TEXT, payload TEXT NOT NULL);
-                CREATE INDEX IF NOT EXISTS activity_period ON activity(asset,timestamp DESC,id);
-                CREATE INDEX IF NOT EXISTS activity_type ON activity(kind,status,timestamp);
-                CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
-                CREATE TABLE IF NOT EXISTS cache(key TEXT PRIMARY KEY,value TEXT,updated REAL);
-            ''')
-            if not connection.execute("SELECT 1 FROM metadata WHERE key='json_migrated'").fetchone():
-                source = ACTIVITY_PATH if ACTIVITY_PATH.exists() else None
-                if source:
-                    payload = json.loads(source.read_text(encoding='utf-8'))
-                    records = payload.get('records', []) if isinstance(payload, dict) else payload
-                    if not isinstance(records, list): raise ValueError('Invalid legacy activity list')
-                    snapshot = read_dashboard_snapshot()
-                    for i, record in enumerate(records):
-                        if not isinstance(record, dict) or not isinstance(record.get('row'), dict): continue
-                        record = dict(record)
-                        record.setdefault('id', f'legacy:{i}')
-                        record.setdefault('exchange', '')
-                        if snapshot.get('exchange'):record.setdefault('legacyExchangeHint',snapshot['exchange'])
-                        if record['row'].get('type') == 'TransferOut':
-                            record.setdefault('withdrawalStatus', 'legacy_unverified')
-                        connection.execute(_INSERT, _values(record))
-                connection.execute("INSERT INTO metadata VALUES('json_migrated','1')")
+            version = connection.execute('PRAGMA user_version').fetchone()[0]
+            if version > 1:
+                raise ValueError('Activity database version is newer than this application supports.')
+            if version == 0:
+                connection.execute('PRAGMA journal_mode=WAL')
+                connection.executescript('''
+                    CREATE TABLE IF NOT EXISTS activity(
+                        id TEXT PRIMARY KEY, timestamp INTEGER NOT NULL, kind TEXT, asset TEXT,
+                        simulated INTEGER, exchange TEXT, currency TEXT, shares TEXT, amount TEXT,
+                        fee TEXT, gross TEXT, status TEXT, payload TEXT NOT NULL);
+                    CREATE INDEX IF NOT EXISTS activity_period ON activity(asset,timestamp DESC,id);
+                    CREATE INDEX IF NOT EXISTS activity_type ON activity(kind,status,timestamp);
+                    CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+                    CREATE TABLE IF NOT EXISTS cache(key TEXT PRIMARY KEY,value TEXT,updated REAL);
+                ''')
+                if not connection.execute("SELECT 1 FROM metadata WHERE key='json_migrated'").fetchone():
+                    source = ACTIVITY_PATH if ACTIVITY_PATH.exists() else None
+                    if source:
+                        payload = json.loads(source.read_text(encoding='utf-8'))
+                        records = payload.get('records', []) if isinstance(payload, dict) else payload
+                        if not isinstance(records, list): raise ValueError('Invalid legacy activity list')
+                        snapshot = read_dashboard_snapshot()
+                        for i, record in enumerate(records):
+                            if not isinstance(record, dict) or not isinstance(record.get('row'), dict): continue
+                            record = dict(record)
+                            record.setdefault('id', f'legacy:{i}')
+                            record.setdefault('exchange', '')
+                            if snapshot.get('exchange'):record.setdefault('legacyExchangeHint',snapshot['exchange'])
+                            if record['row'].get('type') == 'TransferOut':
+                                record.setdefault('withdrawalStatus', 'legacy_unverified')
+                            connection.execute(_INSERT, _values(record))
+                    connection.execute("INSERT INTO metadata VALUES('json_migrated','1')")
+                    connection.commit()
+                connection.execute('PRAGMA user_version=1')
                 connection.commit()
             yield connection
             connection.commit()

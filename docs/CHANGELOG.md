@@ -4,6 +4,15 @@ Release history based on the published [GitHub Releases](https://github.com/oli7
 
 ## Unreleased
 
+- Made Settings more compact with plain two-column form fields, flat switch rows and shorter descriptions while retaining mobile overflow and touch targets.
+
+- Paused transactions after interrupted settings writes until durable settings and exchange activity have been verified again.
+- Prioritized due account checks over queued manual requests without moving their check deadline.
+- Added coordinated SIGTERM/SIGINT shutdown, queued-action cancellation and a 60-second Compose stop grace period.
+- Initialized SQLite tables and indexes only when the schema version requires it; newer unsupported versions fail safely.
+- Separated page templates and CSS/JavaScript assets from Python handlers without adding frontend dependencies.
+- Showed Waiting for startup delay during the configured delay, before the automatic exchange check begins.
+
 - Simplified Settings tabs: removed redundant panels/headings and made login credentials, exchange API access and withdrawal targets directly editable.
 - Increased the final affordable purchase to use remaining fiat while reserving estimated trading fees and respecting exchange precision.
 - Kept automatic withdrawal forecasts available while waiting for deposits; overdue funding assumptions are labeled explicitly.

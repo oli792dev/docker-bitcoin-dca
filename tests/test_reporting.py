@@ -121,6 +121,19 @@ class ScheduleBalanceTests(unittest.TestCase):
         self.assertEqual(status,200)
         return body
 
+    def test_startup_delay_is_shown_before_the_exchange_check(self):
+        from types import SimpleNamespace
+        handler=object.__new__(web_ui.Handler)
+        handler.path='/api/schedule';handler._require_authentication=lambda:True;handler._json=Mock()
+        handler.runtime=SimpleNamespace(exchange_check_pending=True,ready_at=200,store=SimpleNamespace(snapshot=lambda:{'settings':DEFAULTS}))
+        with patch.object(web_ui,'read_dashboard_snapshot',return_value={}),patch.object(web_ui.time,'monotonic',return_value=100):
+            handler.do_GET()
+        self.assertEqual(handler._json.call_args.args[1]['nextPurchaseStatus'],'Waiting for startup delay')
+        self.assertEqual(handler._json.call_args.args[1]['estimatedWithdrawalStatus'],'Waiting for startup delay')
+        with patch.object(web_ui,'read_dashboard_snapshot',return_value={}),patch.object(web_ui.time,'monotonic',return_value=200):
+            handler.do_GET()
+        self.assertEqual(handler._json.call_args.args[1]['nextPurchaseStatus'],'Waiting for automatic exchange check')
+
     def test_matching_balance_is_returned_with_original_currency_and_timestamp(self):
         data=self.response({'quote':'EUR','exchange':'KRAKEN','quoteBalance':'72.7719','updatedAt':'2026-10-29T12:00:00Z'})
         self.assertEqual(data['quoteBalance'],'72.7719')

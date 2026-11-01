@@ -51,7 +51,8 @@ class BitcoinOnlyTests(unittest.TestCase):
             runpy.run_module("app", run_name="__main__")
         runtime_class.assert_called_once_with()
         app.worker.start.assert_called_once_with()
-        serve.assert_called_once_with(self.settings,6890,app.worker.submit,worker=app.worker,runtime=app)
+        serve.assert_called_once_with(self.settings,6890,app.worker.submit,worker=app.worker,runtime=app,stop=serve.call_args.kwargs['stop'])
+        app.shutdown.assert_called_once_with()
 
 
     def test_live_purchase_uses_bitcoin_interface_and_market(self):

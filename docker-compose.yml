@@ -3,6 +3,7 @@ services:
     build: .
     container_name: bitcoin-dca
     restart: unless-stopped
+    stop_grace_period: 60s
     # Configure the account, exchange and bot settings in the web UI.
     environment:
       WEB_UI_PORT: "${WEB_UI_PORT:-6890}"

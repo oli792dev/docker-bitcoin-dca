@@ -34,7 +34,7 @@ class Worker:
     def submit(self, action, session, token=None):
         job_id=str(uuid.uuid4())
         with self.lock:
-            if not self.running: raise ValueError('Bot worker is unavailable; check container health.')
+            if not self.running or self.stop.is_set(): raise ValueError('Bot worker is unavailable; check container health.')
             self.jobs={k:v for k,v in self.jobs.items() if v['expires']>time.monotonic() or v['state'] in ('queued','running')}
             if len(self.jobs)>=128: raise ValueError('Too many queued or recent requests; try again later.')
             job={'session':session,'state':'queued','expires':time.monotonic()+900}
@@ -66,6 +66,17 @@ class Worker:
         self.thread=threading.Thread(target=self.run, name='bitcoin-account-worker',daemon=True)
         self.thread.start()
 
+    def shutdown(self, timeout=45):
+        """Stop accepting work, finish the active operation and leave pending state durable."""
+        with self.lock:
+            self.stop.set()
+        if self.thread and self.thread is not threading.current_thread():
+            self.thread.join(timeout)
+            if self.thread.is_alive():
+                LOG.warning('Worker stop timeout reached; saved pending transactions will be verified after restart')
+                return False
+        return True
+
     def run(self):
         self.running=True
         due=time.monotonic()
@@ -75,9 +86,8 @@ class Worker:
                 if self.reconfigure.is_set():
                     self.reconfigure.clear()
                     due=time.monotonic()
-                try: job_id,action,session,token=self.queue.get(timeout=min(1,max(0,due-time.monotonic())))
-                except queue.Empty:
-                    if time.monotonic()<due: continue
+                # Due checks take precedence even when manual requests keep arriving.
+                if time.monotonic() >= due:
                     try:
                         wait=self.cycle()
                         self.last_error=None
@@ -92,6 +102,14 @@ class Worker:
                             LOG.exception('Account check failed; worker will retry.')
                         due=time.monotonic()+self.interval
                     continue
+                try:
+                    job_id,action,session,token=self.queue.get(timeout=min(1,max(0,due-time.monotonic())))
+                except queue.Empty:
+                    continue
+                if self.stop.is_set():
+                    with self.lock:self.jobs[job_id].update(state='failed',error='Container is stopping; request was not executed.')
+                    self.queue.task_done()
+                    break
                 with self.lock:self.jobs[job_id]['state']='running'
                 try:
                     result=self.action(action,session,token)
@@ -113,7 +131,13 @@ class Worker:
                     self.queue.task_done()
                     self.heartbeat()
         finally:
-            self.running=False
+            with self.lock:
+                self.running=False
+                while True:
+                    try: job_id, *_ = self.queue.get_nowait()
+                    except queue.Empty: break
+                    self.jobs[job_id].update(state='failed',error='Container is stopping; request was not executed.')
+                    self.queue.task_done()
             write_json_atomic(HEALTH_PATH,{'heartbeat':time.time(),'running':False})
 
 
