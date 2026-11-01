@@ -188,7 +188,7 @@ $("pageJump").addEventListener("submit",event=>{
  if(page!==currentPage){currentPage=page;loadAnalytics()}
 });
 async function loadAnalytics(){
- const request=++reportRequest;saveReportView();sectionFeedback("reportFeedback","Updating report…");
+ const request=++reportRequest;saveReportView();sectionFeedback("reportFeedback","");
  try{showError("");const p=selectedPeriod();const response=await fetch("/api/analytics?start="+p.start+"&end="+p.end+"&page="+currentPage+"&limit="+$("pageSize").value);const d=await response.json();if(!response.ok)throw new Error(d.error||"Could not load the report.");if(request!==reportRequest)return;quote=d.quote;
  displayCurrency=["EUR","USD"].includes(d.configuration.displayCurrency)?d.configuration.displayCurrency:(["EUR","USD"].includes(quote)?quote:"EUR");
  const ex=d.exchange==="KRAKEN"?"Kraken":d.exchange==="BITVAVO"?"Bitvavo":d.exchange;document.title="Bitcoin DCA Dashboard";
