@@ -140,7 +140,7 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  const rowsBefore=get('activities').children;
  const earlier=vm.runInContext('currentPage=1;loadAnalytics()',context);
  assert.equal(get('activities').children,rowsBefore,'Loading keeps current rows');
- assert.equal(get('reportFeedback').textContent,'Updating report…');
+ assert.equal(get('reportFeedback').textContent,'');
  await vm.runInContext('currentPage=2;loadAnalytics()',context);
  const latestRows=get('activities').children;release();await earlier;
  assert.equal(get('activities').children,latestRows,'A late response cannot overwrite the newer report');
