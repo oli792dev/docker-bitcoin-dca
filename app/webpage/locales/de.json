@@ -122,7 +122,6 @@
   "Review and save": "Prüfen und speichern",
   "Confirm configuration": "Konfiguration bestätigen",
   "Unchanged settings": "Unveränderte Einstellungen",
-  "Settings are saved in the container’s persistent data directory. Changes take effect without rebuilding the container.": "Die Einstellungen werden dauerhaft im Volume gespeichert. Änderungen wirken ohne Neubau des Containers.",
   "Current login password": "Aktuelles Anmeldepasswort",
   "Confirm sensitive changes with your current login password.": "Bestätige sensible Änderungen mit deinem aktuellen Anmeldepasswort.",
   "Save configuration": "Konfiguration speichern",
