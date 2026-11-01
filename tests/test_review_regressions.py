@@ -248,6 +248,32 @@ class ReviewTests(unittest.TestCase):
             bot.run_once(api,self.settings,300)
         api.buy_btc.assert_called_once()
 
+    def test_observed_fiat_deposits_are_visible_once_but_do_not_change_exports_or_totals(self):
+        now=datetime(2026,10,21,10,tzinfo=bot.ZoneInfo('Europe/Berlin'))
+        api=self.cycle_api();api.balance.return_value=D('10')
+        state={}
+        with patch.object(bot,'local_now',return_value=now),patch.object(bot,'read_state',side_effect=lambda *args:state),patch.object(bot,'save_state'),patch.object(bot,'update_dashboard_snapshot'),patch.object(bot,'update_dashboard_schedule'):
+            bot.run_once(api,self.settings,300,schedule_only=True)
+            baseline=json.loads(json.dumps(state))
+            api.balance.return_value=D('210')
+            bot.run_once(api,self.settings,300,schedule_only=True)
+            # Replay after an interrupted state write must not duplicate the ledger entry.
+            state=json.loads(json.dumps(baseline))
+            bot.run_once(api,self.settings,300,schedule_only=True)
+        deposits=activity.read_activity_records()
+        self.assertEqual(len(deposits),1)
+        self.assertEqual(deposits[0]['row']['amount'],'200')
+        self.assertEqual(deposits[0]['row']['identifier'],'EUR')
+        buy=self.record();out=self.record('out','TransferOut',status='completed',when='2026-10-22T12:00:00Z')
+        expected=reporting.parqet_aggregate_rows([buy,out],'KRAKEN')
+        self.assertEqual(reporting.parqet_aggregate_rows([buy,*deposits,out],'KRAKEN'),expected)
+        activity.append_activity_records([buy,out])
+        records,total,page,groups,balance=activity.read_report(0,2**63-1)
+        self.assertEqual(total,3)
+        self.assertTrue(any(r['row']['type']=='Deposit' for r in records))
+        self.assertTrue(all(g['kind']!='Deposit' for g in groups))
+        self.assertEqual(reporting.parqet_aggregate_rows(activity.parqet_interval_records(0,2**63-1),'KRAKEN'),expected)
+
     def test_early_deposit_advances_deadline_once_and_survives_restart(self):
         from app.trading.funding import observe_deposit
         zone=bot.ZoneInfo('Europe/Berlin')

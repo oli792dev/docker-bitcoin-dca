@@ -4,6 +4,9 @@ Unreleased changes followed by historical version notes, newest first. Dates use
 
 ## Unreleased
 
+- Show observed fiat deposits in activity history without changing BTC totals or Parqet exports.
+- Remove the initial status-check text and consolidate insufficient-funds status into Waiting for deposit.
+
 - Recognize observed early funding on the deposit day and persist the next monthly budget deadline.
 - Keep normal order submission and confirmation green as Bot active; simplify German trading mode and Kraken withdrawal target labels.
 

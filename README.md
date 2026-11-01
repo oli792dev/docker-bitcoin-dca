@@ -64,6 +64,7 @@ The web UI is fully responsive. Dashboard card rows and tables scroll horizontal
 
 - **Status:** beside Settings, green means active, amber waiting/simulation, and red an account-check or connection failure.
 - **Configuration:** exchange, purchase settings and withdrawal target.
+- **Activity:** observed fiat balance increases appear as deposits; they do not affect report purchase totals or Parqet exports. These are balance observations, not verified bank-transfer records.
 - **Schedule:** exchange balances, purchase timing and estimated automatic withdrawal timing. **Expected monthly deposit** is a volume-saved forecast assumption; it adds funds on each deposit day and recalculates future intervals using actual calendar months. It does not initiate deposits or change trading. Forecasts continue while waiting for deposits, show approximate remaining BTC/purchases, and offer expandable assumptions. Overdue deposits are assumed to arrive now and labelled accordingly.
 - **Period Analysis:** date filters, summary, activity status (confirmed, pending, failed or simulated) and CSV export. Activities cannot be deleted through the UI.
 

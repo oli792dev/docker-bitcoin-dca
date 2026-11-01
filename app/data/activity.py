@@ -175,7 +175,7 @@ def read_report(start,end,page=1,limit=20):
     limit=max(1,min(1000,int(limit)))
     with _db() as db:
         db.execute('BEGIN')
-        where="asset='BTC' AND timestamp>? AND timestamp<=?"
+        where="(asset='BTC' OR kind='Deposit') AND timestamp>? AND timestamp<=?"
         total=db.execute('SELECT count(*) FROM activity WHERE '+where,(start,end)).fetchone()[0]
         page=max(1,min(int(page),max(1,(total+limit-1)//limit)))
         rows=db.execute('SELECT payload FROM activity WHERE '+where+' ORDER BY timestamp DESC,id DESC LIMIT ? OFFSET ?', (start,end,limit,(page-1)*limit)).fetchall()

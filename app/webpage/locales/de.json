@@ -412,5 +412,7 @@
   "Automatic withdrawals require live trading; you can configure them now.": "Automatische Auszahlungen erfordern echten Handel; du kannst sie bereits konfigurieren.",
   "BTC price: {price}. BTC per purchase: {quantity}. Threshold: {threshold}. Assumes unchanged price and fees. Monthly deposit: {amount}. Deposit: day {day}, {time} ({zone}).": "BTC-Kurs: {price}. BTC pro Kauf: {quantity}. Schwelle: {threshold}. Setzt unveränderten Kurs und unveränderte Gebühren voraus. Monatliche Einzahlung: {amount}. Einzahlung: Tag {day}, {time} ({zone}).",
   "Current password": "Aktuelles Passwort",
-  "New password": "Neues Passwort"
+  "New password": "Neues Passwort",
+  "Deposit": "Einzahlung",
+  "Observed": "Beobachtet"
 }

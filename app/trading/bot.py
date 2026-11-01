@@ -449,6 +449,13 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
         max(Decimal(0), balance - spent) if not settings["live"] else balance
     )
     next_deposit, deposit_overdue, deposit_received = observe_deposit(state, settings, now, cycle_start, next_deposit, balance)
+    if state.get('observed_deposit'):
+        # Insert before advancing the durable observation; a retry uses the same ledger ID.
+        record = state['observed_deposit']
+        append_activity_records([record])
+        state.pop('observed_deposit')
+        save_state(state_path, state)
+        LOG.info('Fiat deposit observed: amount=%s %s; exchange=%s', record['row']['amount'], quote, settings['exchange'])
     if deposit_received:
         LOG.info('Available %s funding received for the deposit cycle; resuming purchases.', quote)
     # Fee lookup precedes the fresh market-rule check; it is cached by the adapter.
@@ -553,7 +560,7 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
 
     if settings["live"]:
         if available < planned_cost:
-            update_dashboard_schedule(None, "Waiting until the balance covers an order")
+            update_dashboard_schedule(None, "Waiting for deposit")
             log_transition(LOG, api, "purchase-wait", "insufficient-funds", logging.INFO, "Waiting for sufficient available balance: %s %s; minimum order %s %s.", available, quote, order_quote, quote)
             return check_interval
         pending = {

@@ -577,7 +577,7 @@ class Handler(BaseHTTPRequestHandler):
                     status_label = 'Waiting for account check'
                 elif (str(snapshot.get('nextPurchaseStatus','')).startswith(('Waiting','Checking'))
                       and snapshot['nextPurchaseStatus'] != 'Waiting for confirmation that the previous order has ended'):
-                    status_label = snapshot['nextPurchaseStatus']
+                    status_label = ('Waiting for deposit' if snapshot['nextPurchaseStatus'] == 'Waiting until the balance covers an order' else snapshot['nextPurchaseStatus'])
                 elif not self.settings.get('live'):
                     status_label = 'Simulation'
                 else:
