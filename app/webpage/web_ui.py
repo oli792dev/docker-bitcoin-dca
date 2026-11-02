@@ -420,7 +420,7 @@ class Handler(BaseHTTPRequestHandler):
         if not settings.get("parqet_enabled", True):
             hidden += ["#download", "#parqet-actions", "#exportMessage", "#parqet-note", "#manual-export-note"]
         if not settings.get("withdrawals_enabled", False):
-            hidden += ["#automatic-withdrawal-note"]
+            hidden += ["#automatic-withdrawal-note", "#forecastAssumptions"]
         styles = "<style>" + ",".join(hidden) + "{display:none!important}</style>" if hidden else ""
         kraken = settings["exchange"] == "KRAKEN"
         target = settings.get("kraken_withdraw_key" if kraken else "withdraw_address")
