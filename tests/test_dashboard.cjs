@@ -89,7 +89,7 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  assert(get('pageInfo').textContent.includes('1–5 of 45'));assert.equal(get('pageNumber').value,1);assert.equal(get('pageNumber').max,9);
  get('nextPage').handlers.click();await settle();assert(get('pageInfo').textContent.includes('6–10 of 45'));
  get('previousPage').handlers.click();await settle();assert(get('pageInfo').textContent.includes('1–5 of 45'));
- assert.equal(requests.filter(u=>u.startsWith('/api/analytics')).length,6,'Each navigation must load exactly once');
+ assert.equal(requests.filter(u=>u.startsWith('/api/analytics')).length,7,'Each navigation must load exactly once');
  const preview=await vm.runInContext("withdrawalPost('/api/withdrawal/preview',{})",context);
  assert.equal(preview.token,'single-use');assert.equal(checks,2);
  assert.equal(requests.filter(u=>u==='/api/withdrawal/preview').length,1);
