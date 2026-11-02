@@ -142,3 +142,21 @@ test('login stays contained and submits the production form contract', async ({p
   await submit.click();
   expect((await request).postData()).toBe('username=fixture-user&password=fixture-password');
 });
+
+test('all dialog surfaces and action bars match the page background', async ({page}) => {
+  for (const route of ['/', '/settings']) {
+    await page.goto(route);
+    for (const [colorScheme, background] of [['dark', 'rgb(0, 0, 0)'], ['light', 'rgb(245, 245, 247)']]) {
+      await page.emulateMedia({colorScheme});
+      await expect(page.locator('body')).toHaveCSS('background-color', background);
+      for (const dialog of await page.locator('dialog').all()) {
+        await dialog.evaluate(el => el.showModal());
+        await expect(dialog).toHaveCSS('background-color', background);
+        for (const actions of await dialog.locator('.confirmation-actions,.actions').all()) {
+          await expect(actions).toHaveCSS('background-color', background);
+        }
+        await dialog.evaluate(el => el.close());
+      }
+    }
+  }
+});
