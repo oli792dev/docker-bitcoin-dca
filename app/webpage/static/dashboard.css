@@ -368,3 +368,9 @@ __DESIGN_CSS__
 @media(max-width:600px){.redesigned .report-primary{padding:16px}}
 @media(prefers-contrast:more){.redesigned .report-primary{border-color:var(--line)}}
 @media(forced-colors:active){.redesigned .report-primary{border-color:CanvasText}}
+
+/* Supplemental totals and activity use the same surface and inset as headline metrics. */
+.redesigned .report-extra,.redesigned .period-activities .activity-panel{background:var(--panel);border:1px solid transparent;border-radius:var(--corner-radius);padding:20px}
+@media(max-width:600px){.redesigned .report-extra,.redesigned .period-activities .activity-panel{padding:16px}}
+@media(prefers-contrast:more){.redesigned .report-extra,.redesigned .period-activities .activity-panel{border-color:var(--line)}}
+@media(forced-colors:active){.redesigned .report-extra,.redesigned .period-activities .activity-panel{border-color:CanvasText}}
