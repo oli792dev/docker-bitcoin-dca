@@ -288,8 +288,7 @@ __DESIGN_CSS__
 .redesigned .settings-header-actions .logout-button{width:auto;min-height:44px;padding:10px 14px;font-size:.82rem;line-height:1.35;white-space:nowrap}
 @media(max-width:480px){.redesigned .settings-dialog-header{grid-template-columns:minmax(0,1fr) auto;gap:8px}.redesigned .settings-dialog-header h2{grid-column:1;justify-self:start;text-align:left;font-size:1rem}.redesigned .settings-header-actions{grid-column:2}.redesigned .settings-header-actions .logout-button{padding:10px;font-size:.76rem}}
 
-.redesigned .overview-updated{margin:0 0 16px;color:var(--muted);font-size:.76rem;text-align:right}
-@media(max-width:600px){.redesigned .overview-updated{text-align:left}}
+
 
 @media(max-width:600px){.redesigned .report-extra{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
@@ -297,3 +296,7 @@ __DESIGN_CSS__
 .redesigned .withdrawal-disabled .plan-title h2,.redesigned .withdrawal-disabled>#estimatedWithdrawalAt{color:var(--muted)}
 .redesigned .withdrawal-disabled>#estimatedWithdrawalAt{font-size:1.1rem;font-weight:500}
 .redesigned .withdrawal-disabled>:not(.plan-title):not(#estimatedWithdrawalAt),.redesigned .withdrawal-disabled #withdrawalBadge{display:none!important}
+
+.redesigned #automaticWithdrawalCard .plan-footer{margin-top:4px;padding-top:0;border-top:0}
+.redesigned #automaticWithdrawalCard .forecast-assumptions{margin-top:0}
+.redesigned #automaticWithdrawalCard{padding-bottom:12px}

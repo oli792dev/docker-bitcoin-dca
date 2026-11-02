@@ -452,5 +452,6 @@
   "Expected monthly deposit ({currency})": "Erwartete monatliche Einzahlung ({currency})",
   "Actions use saved settings. CSV export uses the selected analysis period.": "Aktionen verwenden die gespeicherten Einstellungen. Der CSV-Export nutzt den ausgewählten Analysezeitraum.",
   "CSV export prepared.": "CSV-Export vorbereitet.",
-  "As of {date}": "Stand {date}"
+  "As of {date}": "Stand {date}",
+  "Exchange last checked {date}": "Börse zuletzt geprüft: {date}"
 }

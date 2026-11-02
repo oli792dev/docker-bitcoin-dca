@@ -107,7 +107,8 @@ async function refreshPurchaseSchedule(){
   const balanceKnown=schedule.quoteBalance!==null&&schedule.quoteBalance!==undefined&&Number.isFinite(Number(schedule.quoteBalance));
   $("quoteBalance").textContent=t(balanceKnown?money(schedule.quoteBalance,schedule.quote):"—");
   const checkedAt=Date.parse(schedule.balanceUpdatedAt);
-  $("accountCheckedAt").textContent=t(Number.isFinite(checkedAt)?"Last checked "+dateLabel(checkedAt,schedule.timezone||"UTC"):"Waiting for account check");
+  const exchangeChecked=t(Number.isFinite(checkedAt)?'Exchange last checked {date}':'Waiting for account check').replace('{date}',dateLabel(checkedAt,schedule.timezone||'UTC'));
+  $('botStatus').title=exchangeChecked;$('botStatus').setAttribute('aria-description',exchangeChecked);
   nextPurchaseTimestamp=Number.isFinite(target)?target:null;
 
   nextPurchaseMessage=schedule.nextPurchaseStatus||"Not scheduled";
