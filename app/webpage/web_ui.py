@@ -25,6 +25,8 @@ from app.trading.forecast import forecast_details, withdrawal_forecast
 from app.webpage.design_system import DESIGN_CSS, apply_appearance
 from app.webpage.favicon_assets import APPLE_TOUCH_ICON_PNG, FAVICON_ICO, FAVICON_MASK_SVG, FAVICON_PNG, FAVICON_SVG
 from app.webpage.i18n import localize_page, translate
+from app.webpage.reports import ReportService
+from app.webpage.reports import period as _period
 from app.webpage.scroll_ui import SCROLL_CSS, SCROLL_SCRIPT
 from app.webpage.status import dashboard_status, exchange_check_status
 from app.webpage.templates import load_page
@@ -56,18 +58,6 @@ LOGIN_HTML = LOGIN_HTML.replace("__DESIGN_CSS__", DESIGN_CSS)
 def _login_page(error="", appearance="system", language="en"):
     page = apply_appearance(LOGIN_HTML.replace("{{ERROR}}", html.escape(translate(error, language))), appearance)
     return localize_page(page, language)
-
-
-def _period(query):
-    try:
-        start_ms = int(query["start"][0])
-        end_ms = int(query["end"][0])
-    except (KeyError, ValueError, IndexError):
-        raise ValueError("start and end must be Unix timestamps in milliseconds") from None
-    now_ms = int(datetime.now(UTC).timestamp() * 1000)
-    if start_ms < 0 or end_ms <= start_ms or end_ms > now_ms + 60_000:
-        raise ValueError("Invalid period; end must be after start and not in the future")
-    return start_ms, end_ms
 
 
 def session_is_valid(token):
@@ -726,52 +716,25 @@ class Handler(BaseHTTPRequestHandler):
                         return
                     LOG.info("Parqet CSV export requested")
                 start_ms, end_ms = _period(query)
+                reports = ReportService(
+                    parqet_interval_records,
+                    parqet_aggregate_rows,
+                    parqet_csv,
+                    read_report,
+                    read_dashboard_snapshot,
+                    build_report,
+                )
                 if parsed.path == "/api/export.csv":
-                    selected_records = parqet_interval_records(start_ms, end_ms)
-                    real_records = [record for record in selected_records if not record.get("simulated")]
-                    if not any(
-                        record["row"].get("type") == "TransferOut" and record.get("withdrawalStatus") == "completed"
-                        for record in real_records
-                    ):
-                        raise ValueError(
-                            "No confirmed bot-recorded BTC withdrawal was found in the selected period. "
-                            "The Parqet export requires a purchase and a withdrawal. "
-                            "Choose a period that includes a withdrawal, or export after your first withdrawal."
-                        )
-                    if not any(record["row"].get("type") == "Buy" for record in real_records):
-                        raise ValueError(
-                            "No real bot purchase was found since the previous confirmed withdrawal. "
-                            "The Parqet export requires a real purchase and a withdrawal; purchases made in Simulation are excluded."
-                        )
-                    rows = parqet_aggregate_rows(selected_records, self.settings["exchange"])
-                    if not rows:
-                        raise ValueError(
-                            "The selected period must contain at least one real purchase "
-                            "and one bot-recorded BTC withdrawal."
-                        )
+                    csv_data, row_count = reports.export(start_ms, end_ms, self.settings["exchange"])
                     filename = "parqet_btc_" + str(start_ms) + "_" + str(end_ms) + ".csv"
-                    csv_data = parqet_csv(rows)
                     self._send(200, csv_data, "text/csv; charset=utf-8", filename)
                     LOG.info(
-                        "Parqet CSV export response sent: rows=%s; selected period=%s..%s", len(rows), start_ms, end_ms
+                        "Parqet CSV export response sent: rows=%s; selected period=%s..%s", row_count, start_ms, end_ms
                     )
                 else:
                     page = int(query.get("page", ["1"])[0])
                     limit = int(query.get("limit", ["10"])[0])
-                    page_records, total, page, totals, balance = read_report(start_ms, end_ms, page, limit)
-                    snapshot = read_dashboard_snapshot()
-                    snapshot["trackedBtc"] = str(balance)
-                    if snapshot.get("quote") not in (None, self.settings["quote"]):
-                        snapshot["price"] = "0"
-                    result = build_report(self.settings, totals, snapshot, page_records)
-                    limit = max(1, min(1000, limit))
-                    result["pagination"] = {
-                        "page": page,
-                        "pageSize": limit,
-                        "total": total,
-                        "pages": max(1, (total + limit - 1) // limit),
-                    }
-                    self._json(200, result)
+                    self._json(200, reports.analytics(start_ms, end_ms, page, limit, self.settings))
                 return
             self._json(404, {"error": "Not found"})
         except ValueError as exc:

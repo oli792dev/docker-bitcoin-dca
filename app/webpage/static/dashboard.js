@@ -36,7 +36,7 @@ function renderWithdrawalProgress(balance,price,threshold,enabled){
 function updateStatusLight(tone){
  $('botStatusLight').className='status-light status-'+(['active','waiting','error'].includes(tone)?tone:'waiting');
 }
-let dashboardRefreshSeconds=30,scheduleRefreshTimer=null;
+let dashboardRefreshSeconds=30,scheduleRefreshTimer=null,lastReportData=null,lastAccountMarket=null;
 async function refreshPurchaseSchedule(){
  const request=++scheduleRequest;
  try{
@@ -50,11 +50,18 @@ async function refreshPurchaseSchedule(){
   $('botStatusLabel').textContent=t(schedule.botStatusLabel||'Bot active');
   updateStatusLight(schedule.botStatusTone||(schedule.botStatusWarning?'error':'waiting'));
   if(schedule.accountMarketPrice){
-   const market=schedule.accountMarketPrice;
+   const market=schedule.accountMarketPrice;lastAccountMarket=market;
    balanceDisplayPrice=Number(market.price);balanceDisplayCurrency=market.currency;
    $('spot').textContent=money(market.price,market.currency)+'/BTC';
 
    renderExchangeBtcValue();
+   if(lastReportData){
+    displayCurrency=market.currency;
+    const rates=Object.fromEntries(Object.entries(market.conversionRates||{[quote]:Number(market.conversionRate)||1}).map(([currency,rate])=>[currency,Number(rate)]));
+    rates[displayCurrency]=1;
+    renderReportMoney(lastReportData,Number(market.price),rates);
+    activityRates=rates;renderActivities();
+   }
   }
   const detail=schedule.forecastDetails;
   $('forecastProgress').textContent=detail?t('About {btc} BTC · {buys} purchases remaining'.replace('{btc}',Number(detail.remainingBtc).toLocaleString(locale,{maximumFractionDigits:8})).replace('{buys}',detail.remainingPurchases)):'';
@@ -65,8 +72,8 @@ async function refreshPurchaseSchedule(){
   if(schedule.configuredBuyAmount!==undefined){
    const minimumMode=Number(schedule.configuredBuyAmount)===0;
    const effective=Number(schedule.effectiveBuyAmount);
-   $("orderSummary").textContent=t(schedule.finalPurchase&&effective>0?btc(effective):minimumMode?(effective>0?btc(effective):"—"):btc(schedule.configuredBuyAmount));
-   $("orderSummaryNote").textContent=t(schedule.finalPurchase?"Final purchase · uses remaining fiat":minimumMode?"(exchange minimum)"+(effective>0?"":" · waiting for account check"):"");
+   $("orderSummary").textContent=t(effective>0?btc(effective):minimumMode?"—":btc(schedule.configuredBuyAmount));
+   $("orderSummaryNote").textContent=t(schedule.finalPurchase?"Final purchase · uses remaining fiat":(minimumMode||effective>Number(schedule.configuredBuyAmount))?"(exchange minimum)"+(effective>0?"":" · waiting for account check"):"");
   }
   $("quoteBalanceLabel").textContent=t("Available "+schedule.quote+" balance");
   const balanceKnown=schedule.quoteBalance!==null&&schedule.quoteBalance!==undefined&&Number.isFinite(Number(schedule.quoteBalance));
@@ -234,12 +241,12 @@ async function loadAnalytics(){
  try{showError("");const p=selectedPeriod();const response=await fetch("/api/analytics?start="+p.start+"&end="+p.end+"&page="+currentPage+"&limit="+$("pageSize").value);const d=await response.json();if(!response.ok)throw new Error(d.error||"Could not load the report.");if(request!==reportRequest)return;quote=d.quote;$('selectedPeriodLabel').textContent=dateLabel(p.start)+' – '+dateLabel(p.end);
  displayCurrency=["EUR","USD"].includes(d.configuration.displayCurrency)?d.configuration.displayCurrency:(["EUR","USD"].includes(quote)?quote:"EUR");
  document.title="Bitcoin DCA Dashboard";
- let livePrice=Number((d.snapshot||{}).price||0),currencyRates={[quote]:1};
+ let livePrice=Number((d.snapshot||{}).price||0),currencyRates={[quote]:1},marketUpdatedAt=Date.parse((d.snapshot||{}).updatedAt)/1000||0;
  const currencies=[...new Set([...Object.keys(d.summaryByCurrency||{}),...Object.keys(d.depositsByCurrency||{})])];
  try{
   const priceResponse=await fetch("/api/market-price?currency="+displayCurrency+"&currencies="+encodeURIComponent(currencies.join(",")));const market=await priceResponse.json();if(!priceResponse.ok)throw new Error(market.error||"Could not load current BTC price.");
   if(request!==reportRequest)return;
-  fxRate=Number(market.conversionRate);livePrice=Number(market.price);currencyRates=Object.fromEntries(Object.entries(market.conversionRates||{[quote]:fxRate})
+  marketUpdatedAt=Number(market.updatedAt)||marketUpdatedAt;fxRate=Number(market.conversionRate);livePrice=Number(market.price);currencyRates=Object.fromEntries(Object.entries(market.conversionRates||{[quote]:fxRate})
    .map(([currency,rate])=>[currency,Number(rate)]).filter(([,rate])=>Number.isFinite(rate)&&rate>0));
   currencyRates[displayCurrency]=1;
 
@@ -249,8 +256,19 @@ async function loadAnalytics(){
   if(!(livePrice>0)&&balanceDisplayCurrency===quote&&balanceDisplayPrice>0)livePrice=balanceDisplayPrice;
 
  }
+ if(lastAccountMarket&&lastAccountMarket.currency===displayCurrency&&Number(lastAccountMarket.updatedAt)>marketUpdatedAt){
+  livePrice=Number(lastAccountMarket.price);
+  currencyRates=Object.fromEntries(Object.entries(lastAccountMarket.conversionRates||currencyRates).map(([currency,rate])=>[currency,Number(rate)]));
+  currencyRates[displayCurrency]=1;
+ }
  balanceDisplayPrice=livePrice;balanceDisplayCurrency=displayCurrency;renderExchangeBtcValue();
  $("spot").textContent=t(livePrice>0?money(livePrice,displayCurrency)+"/BTC":"—");
+ lastReportData=d;renderReportMoney(d,livePrice,currencyRates);
+ activityRates=currencyRates;activityRows=d.activities;activityTotal=d.pagination.total;activityPages=d.pagination.pages;currentPage=d.pagination.page;renderActivities();
+ }catch(e){if(request===reportRequest)showError(e.message)}
+ finally{if(request===reportRequest){$("periodReport").ariaBusy="false";sectionFeedback("reportFeedback","")}}
+}
+function renderReportMoney(d,livePrice,currencyRates){
  let depositTotal=0,depositConversionAvailable=true;
  for(const [currency,values] of Object.entries(d.depositsByCurrency||{})){
   if(!Number.isFinite(currencyRates[currency])){depositConversionAvailable=false;continue}
@@ -279,9 +297,6 @@ async function loadAnalytics(){
  $("buyVolume").textContent=t(moneyAvailable?money(converted.buyVolume,displayCurrency):"—");$("avgPrice").textContent=t(moneyAvailable?"Average: "+money(Number(d.summary.boughtBtc)>0?converted.buyVolume/Number(d.summary.boughtBtc):0,displayCurrency)+"/BTC":"Conversion unavailable");
  $("tradeFees").textContent=t(moneyAvailable?money(converted.tradeFees,displayCurrency):"—");$("withdrawBtc").textContent=t(btc(d.summary.withdrawnBtc));
  $("withdrawFees").textContent=t(moneyAvailable?money(converted.withdrawalFees,displayCurrency):"—");$("netBtc").textContent=t(btc(d.summary.netBtc));
- activityRates=currencyRates;activityRows=d.activities;activityTotal=d.pagination.total;activityPages=d.pagination.pages;currentPage=d.pagination.page;renderActivities();
- }catch(e){if(request===reportRequest)showError(e.message)}
- finally{if(request===reportRequest){$("periodReport").ariaBusy="false";sectionFeedback("reportFeedback","")}}
 }
 let exportDialogRequest=0,exportIntervalError='';
 function exportDialogMessage(message){$('exportDialogMessage').textContent=t(message);$('exportDialogMessage').classList.toggle('hidden',!message)}

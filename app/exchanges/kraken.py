@@ -61,6 +61,7 @@ def _canonical_asset(value):
 class Kraken:
     exchange_name = "KRAKEN"
     supports_withdrawal_idempotency = False
+    supports_unanchored_funding_verification = True
 
     def __init__(self, quote_currency, withdraw_key="", api_key=None, api_secret=None):
         self.key = api_key
@@ -301,6 +302,13 @@ class Kraken:
         return Decimal(str(quote_amount)) * self._fee_rates[symbol][1]
 
     def balance(self, currency):
+        return self._account_balance(currency, available=True)
+
+    def booked_balance(self, currency):
+        """Booked cash excludes trade holds and credit availability changes."""
+        return self._account_balance(currency, available=False)
+
+    def _account_balance(self, currency, *, available):
         if self._balance_scope_depth:
             if (
                 self._balance_cache is None
@@ -316,6 +324,8 @@ class Kraken:
         for code, info in balances.items():
             if _canonical_asset(code) == wanted:
                 item = info if isinstance(info, dict) else {"balance": info}
+                if not available:
+                    return Decimal(str(item.get("balance", "0")))
                 return max(
                     Decimal(0),
                     Decimal(str(item.get("balance", "0")))
@@ -325,11 +335,11 @@ class Kraken:
                 )
         return Decimal(0)
 
-    def fiat_deposits(self, currency, start_ms=0, end_ms=None):
-        """Booked fiat deposits, with stable ledger IDs and complete pagination."""
+    def _fiat_ledger(self, currency, start_ms, end_ms, kind):
+        """Read a complete, bounded ledger window or fail closed."""
         params = {
             "asset": currency,
-            "type": "deposit",
+            "type": kind,
             "start": str(int(start_ms) // 1000),
             "end": str(int(end_ms) // 1000 if end_ms is not None else int(time.time())),
             "ofs": 0,
@@ -357,6 +367,11 @@ class Kraken:
                 raise KrakenAPIError("Kraken deposit ledger is incomplete")
         else:
             raise KrakenAPIError("Kraken deposit ledger page limit reached")
+        return result
+
+    def fiat_deposits(self, currency, start_ms=0, end_ms=None):
+        """Booked fiat deposits, with stable ledger IDs and complete pagination."""
+        result = self._fiat_ledger(currency, start_ms, end_ms, "deposit")
         deposits = []
         for ledger_id, item in result.items():
             if item.get("type") != "deposit" or _canonical_asset(item.get("asset", "")) != currency:
@@ -375,6 +390,57 @@ class Kraken:
                 }
             )
         return deposits
+
+    def non_deposit_balance_change(self, currency, start_ms, end_ms, baseline, current):
+        """A full ledger chain proves booked proceeds without inventing deposits.
+
+        Empty reads or a missing/delayed ledger row never release the funding gate.
+        Both endpoint balances and every intervening balance must reconcile.
+        """
+        if baseline is None:
+            # Older checkpoints only knew available funds. A recent booked ledger
+            # balance supplies evidence; stable available funds alone do not.
+            anchors = self._fiat_ledger(currency, max(0, start_ms - 86400000), max(0, start_ms - 1), "all")
+            prior = []
+            for item in anchors.values():
+                timestamp = int(Decimal(str(item["time"])) * 1000)
+                if _canonical_asset(item.get("asset", "")) == currency and timestamp < start_ms:
+                    prior.append((timestamp, Decimal(str(item["balance"]))))
+            if not prior:
+                return False
+            latest = max(stamp for stamp, _ in prior)
+            balances = {balance for stamp, balance in prior if stamp == latest}
+            if len(balances) != 1:
+                return False
+            baseline = balances.pop()
+            if not baseline.is_finite():
+                raise KrakenAPIError("Invalid Kraken ledger anchor")
+        rows = self._fiat_ledger(currency, start_ms, end_ms, "all")
+        entries = []
+        for item in rows.values():
+            timestamp = int(Decimal(str(item["time"])) * 1000)
+            if _canonical_asset(item.get("asset", "")) != currency or not start_ms <= timestamp <= end_ms:
+                continue
+            amount = Decimal(str(item["amount"]))
+            fee = Decimal(str(item.get("fee", "0")))
+            balance = Decimal(str(item["balance"]))
+            if not all(value.is_finite() for value in (amount, fee, balance)) or fee < 0:
+                raise KrakenAPIError("Invalid Kraken account ledger amounts")
+            # Only an explicitly booked trade credit proves sale proceeds.
+            # Unknown credits, including deposit subtypes, remain unverified.
+            if amount > 0 and item.get("type") != "trade":
+                return False
+            entries.append((timestamp, amount - fee, balance))
+        if not entries:
+            return baseline == current
+        # Equal-time rows may have unspecified API ordering. A mismatched chain
+        # remains blocked rather than guessing an ordering or omitting a row.
+        running = baseline
+        for _, change, balance in sorted(entries, key=lambda row: row[0]):
+            running += change
+            if running != balance:
+                return False
+        return running == current
 
     def btc_withdrawals(self, start_ms=0, end_ms=None):
         params = {

@@ -108,7 +108,7 @@ __SCROLL_CSS__
 __DESIGN_CSS__
 /* Compact forms: the controls define fields; no additional tile borders. */
 .settings-page{--section-gap:16px;--field-gap:16px;--control-gap:4px;}
-.settings-page .settings-tab-panel,.settings-page .credential-editor{padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;gap:var(--space-lg);}
+.settings-page .settings-tab-panel,.settings-page .credential-editor{padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;}
 .settings-page .settings-card-grid{column-gap:var(--space-xl);row-gap:var(--space-lg);align-items:start;}
 .settings-page .settings-card-grid>div:not(.option-card){padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;}
 .settings-page .option-card{min-height:64px;padding:var(--space-sm) 0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none;gap:var(--space-md);}
@@ -171,10 +171,10 @@ __DESIGN_CSS__
 /* Consistent field hierarchy on setup and Settings, in both appearances. */
 .settings-page label,.settings-page .option-card strong{color:var(--text);font-size:.88rem;font-weight:600;line-height:1.5;}
 .settings-page .option-card small,.settings-page .field-description,.settings-page .hint{color:var(--muted);font-weight:400;}
-.settings-footer-actions{display:flex;align-items:center;justify-content:space-between;gap:var(--space-lg);flex-wrap:wrap;}
-.settings-quick-actions{display:flex;align-items:center;gap:var(--space-md);flex-wrap:wrap;}
+.settings-footer-actions{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;}
+.settings-quick-actions{display:flex;align-items:center;flex-wrap:wrap;}
 .settings-footer-actions>#save{margin-left:auto;}
-.settings-action-feedback{display:flex;align-items:flex-start;gap:var(--space-md);margin-top:var(--space-sm);}
+.settings-action-feedback{display:flex;align-items:flex-start;margin-top:var(--space-sm);}
 .settings-action-feedback p{flex:1;min-width:0;max-height:96px;overflow:auto;margin:0;font-size:.82rem;overflow-wrap:anywhere;}
 .settings-action-feedback button{flex:0 0 44px;width:44px;min-height:var(--button-height);padding:0;font-size:1.18rem;}
 .settings-quick-actions button{font-size:.82rem;}

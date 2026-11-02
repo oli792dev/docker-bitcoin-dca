@@ -5,3 +5,8 @@
 __pycache__/
 *.py[cod]
 /docs/web-ui-browser-preview.html
+
+# Development-only browser dependencies and failure artifacts.
+node_modules/
+test-results/
+playwright-report/

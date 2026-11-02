@@ -14,3 +14,9 @@ README.md
 .ruff_cache
 pyproject.toml
 requirements-dev.txt
+
+node_modules
+test-results
+playwright-report
+package.json
+package-lock.json

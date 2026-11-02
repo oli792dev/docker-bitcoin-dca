@@ -1,0 +1,104 @@
+const {test, expect} = require('playwright/test');
+const {execFileSync} = require('node:child_process');
+const path = require('node:path');
+const root = path.resolve(__dirname, '../..');
+const pages = JSON.parse(execFileSync(process.env.PYTHON || 'python3', ['-m', 'tests.browser.pages'], {cwd: root, encoding: 'utf8'}));
+const analytics = {
+  quote: 'EUR', configuration: {displayCurrency: 'EUR', liveTrading: false, withdrawalsEnabled: false},
+  snapshot: {price: 60000}, summary: {boughtBtc: .01, buyCount: 1, withdrawnBtc: 0, netBtc: .01},
+  summaryByCurrency: {EUR: {buyVolume: 500, tradeFees: 1}}, depositsByCurrency: {EUR: {amount: 600}},
+  activities: [], pagination: {total: 0, pages: 1, page: 1},
+};
+test.beforeEach(async ({page}) => {
+  await page.route('**/*', async route => {
+    const url = new URL(route.request().url());
+    if (url.origin !== 'https://dca.test') throw new Error(`Unexpected external request: ${url.origin}`);
+    if (pages[url.pathname]) return route.fulfill({contentType: 'text/html', body: pages[url.pathname]});
+    const data = url.pathname === '/api/analytics' ? analytics
+      : url.pathname === '/api/market-price' ? {price: 60000, conversionRate: 1, conversionRates: {EUR: 1}}
+      : url.pathname === '/api/schedule' ? {botStatusLabel: 'Fixture ready', dashboardRefreshSeconds: 3600, quote: 'EUR', quoteBalance: 600}
+      : url.pathname === '/api/withdrawals' ? [] : {};
+    return route.fulfill({contentType: 'application/json', body: JSON.stringify(data)});
+  });
+});
+async function noPageOverflow(page) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+}
+async function rect(locator) { return locator.boundingBox(); }
+
+test('dashboard controls, analysis spacing and modal scroll restoration', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('#investedTotal')).toContainText('501');
+  await expect(page.locator('#botStatusLabel')).toHaveText('Fixture ready');
+  await noPageOverflow(page);
+  for (const id of ['monthRange', 'customRange', 'openSettings']) {
+    expect((await rect(page.locator(`#${id}`))).height).toBeGreaterThanOrEqual(44);
+  }
+  const heading = await rect(page.locator('.analysis-header'));
+  const report = await rect(page.locator('#periodReport'));
+  expect(report.y).toBeGreaterThanOrEqual(heading.y + heading.height);
+  async function verticalGap(first, second) {
+    const a = await rect(page.locator(first));
+    const b = await rect(page.locator(second));
+    return Math.round(b.y - a.y - a.height);
+  }
+  await expect.poll(() => verticalGap('.report-primary', '.report-details>summary')).toBe(8);
+  await page.locator('.report-details>summary').click();
+  await expect.poll(() => verticalGap('.report-details>summary', '.report-extra')).toBe(8);
+  await expect.poll(() => verticalGap('.report-extra', '.period-activities>summary')).toBe(8);
+  await expect.poll(() => verticalGap('.period-activities>summary', '.activity-panel')).toBe(8);
+  const button = page.locator('#openSettings');
+  await button.evaluate(el => { el.textContent = 'A deliberately long translated settings button label that must wrap'; el.style.width = '160px'; });
+  expect((await rect(button)).height).toBeGreaterThan(44);
+  await page.locator('#editCustomRange').scrollIntoViewIfNeeded();
+  const scrollBefore = await page.evaluate(() => scrollY);
+  await page.locator('#editCustomRange').click();
+  await expect(page.locator('#rangeDialog')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).position)).toBe('fixed');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#rangeDialog')).not.toBeVisible();
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).position)).not.toBe('fixed');
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(scrollBefore);
+});
+
+test('settings tabs stay single line and fields scroll within the content', async ({page}) => {
+  await page.goto('/settings');
+  await expect(page.locator('#settingsForm')).toBeVisible();
+  await noPageOverflow(page);
+  const tabs = page.getByRole('tab');
+  for (const tab of await tabs.all()) {
+    expect(await tab.evaluate(el => getComputedStyle(el).whiteSpace)).toBe('nowrap');
+    expect((await rect(tab)).height).toBeGreaterThanOrEqual(44);
+  }
+  const time = page.locator('#deposit_time');
+  const pair = await rect(page.locator('#depositDateFields'));
+  const timeBox = await rect(time);
+  expect(timeBox.x).toBeGreaterThanOrEqual(pair.x - 1);
+  expect(timeBox.x + timeBox.width).toBeLessThanOrEqual(pair.x + pair.width + 1);
+  const content = page.locator('#settingsContent');
+  expect(await content.evaluate(el => ['auto', 'scroll'].includes(getComputedStyle(el).overflowY))).toBe(true);
+  // A short window must scroll fields rather than grow the whole settings page.
+  await page.setViewportSize({...page.viewportSize(), height: 550});
+  await content.evaluate(el => { el.scrollTop = el.scrollHeight; });
+  expect(await content.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+  await page.locator('#exchangeConnectionTab').click();
+  await expect(page.locator('#kraken_api_key')).toBeVisible();
+  const key = page.locator('#kraken_api_key');
+  expect(await key.locator('..').locator('label').evaluate(el => ['left', 'start'].includes(getComputedStyle(el).textAlign))).toBe(true);
+  await page.locator('#dashboardOptionsTab').click();
+  await expect(page.locator('#language')).toBeVisible();
+  await page.locator('#dashboardOptionsTab').press('Home');
+  await expect(page.locator('#botConfigurationTab')).toHaveAttribute('aria-selected', 'true');
+});
+
+test('login stays contained and submits the production form contract', async ({page}) => {
+  await page.goto('/login');
+  await noPageOverflow(page);
+  const submit = page.getByRole('button', {name: 'Sign in'});
+  expect((await rect(submit)).height).toBeGreaterThanOrEqual(44);
+  await page.locator('#username').fill('fixture-user');
+  await page.locator('#password').fill('fixture-password');
+  const request = page.waitForRequest(r => r.method() === 'POST' && new URL(r.url()).pathname === '/login');
+  await submit.click();
+  expect((await request).postData()).toBe('username=fixture-user&password=fixture-password');
+});

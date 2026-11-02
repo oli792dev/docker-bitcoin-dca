@@ -160,24 +160,37 @@ def parqet_interval_records(start, end):
         db.execute("BEGIN")
         completed = "asset='BTC' AND kind='TransferOut' AND simulated=0 AND status='completed'"
         ending = db.execute(
-            "SELECT timestamp,exchange FROM activity WHERE "
+            "SELECT timestamp,exchange,json_extract(payload,'$.accountIdentity') FROM activity WHERE "
             + completed
             + " AND timestamp>? AND timestamp<=? ORDER BY timestamp DESC,id DESC LIMIT 1",
             (start, end),
         ).fetchone()
         if ending is None:
             return []
-        latest, exchange = ending
+        latest, exchange, identity = ending
+        account_filter = ""
+        account_args = ()
+        if identity:
+            account_filter = """ AND (json_extract(payload,'$.accountIdentity')=? OR (
+                json_extract(payload,'$.accountIdentity') IS NULL AND
+                EXISTS(SELECT 1 FROM metadata WHERE key='legacy_account:' || activity.exchange || ':' || activity.currency AND value=?)
+            ))"""
+            account_args = (identity, identity)
         previous = db.execute(
-            "SELECT max(timestamp) FROM activity WHERE " + completed + " AND exchange=? AND timestamp<?",
-            (exchange, latest),
+            "SELECT max(timestamp) FROM activity WHERE "
+            + completed
+            + " AND exchange=? AND timestamp<?"
+            + account_filter,
+            (exchange, latest, *account_args),
         ).fetchone()[0]
         lower = previous if previous is not None else -1
         return [
             json.loads(r[0])
             for r in db.execute(
-                "SELECT payload FROM activity WHERE asset='BTC' AND exchange=? AND timestamp>? AND timestamp<=? ORDER BY timestamp,id",
-                (exchange, lower, latest),
+                "SELECT payload FROM activity WHERE asset='BTC' AND exchange=? AND timestamp>? AND timestamp<=?"
+                + account_filter
+                + " ORDER BY timestamp,id",
+                (exchange, lower, latest, *account_args),
             )
         ]
 
@@ -298,12 +311,36 @@ def get_activity_record(activity_id):
         return json.loads(row[0]) if row else None
 
 
-def latest_real_buy(exchange=None):
+def bind_legacy_account(exchange, quote, account_identity):
+    """Bind untagged history once; changing API keys cannot claim another account's history."""
+    key = "legacy_account:" + exchange + ":" + quote
+    with _db() as db:
+        db.execute("INSERT OR IGNORE INTO metadata(key,value) VALUES(?,?)", (key, account_identity))
+
+
+def legacy_account_matches(exchange, quote, account_identity):
     with _db() as db:
         row = db.execute(
-            "SELECT timestamp FROM activity WHERE asset='BTC' AND kind='Buy' AND simulated=0"
-            + (" AND exchange=?" if exchange else "")
-            + " ORDER BY timestamp DESC LIMIT 1",
-            (exchange,) if exchange else (),
+            "SELECT value FROM metadata WHERE key=?", ("legacy_account:" + exchange + ":" + quote,)
+        ).fetchone()
+        return row is not None and row[0] == account_identity
+
+
+def latest_real_buy(exchange=None, account_identity=None):
+    with _db() as db:
+        where = "asset='BTC' AND kind='Buy' AND simulated=0"
+        args = []
+        if exchange:
+            where += " AND exchange=?"
+            args.append(exchange)
+        if account_identity:
+            where += """ AND (
+                json_extract(payload,'$.accountIdentity')=? OR (
+                    json_extract(payload,'$.accountIdentity') IS NULL AND
+                    EXISTS(SELECT 1 FROM metadata WHERE key='legacy_account:' || activity.exchange || ':' || activity.currency AND value=?)
+                ))"""
+            args.extend((account_identity, account_identity))
+        row = db.execute(
+            "SELECT timestamp FROM activity WHERE " + where + " ORDER BY timestamp DESC LIMIT 1", args
         ).fetchone()
         return datetime.fromtimestamp(row[0] / 1000, UTC) if row else None

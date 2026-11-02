@@ -134,7 +134,7 @@ th,td{padding:10px var(--space-sm);font-size:13px;}
 .report-heading h2,.panel-heading h2{font-size:19px;}
 }
 .dashboard-footnotes{margin-top:30px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);line-height:1.7;overflow-wrap:anywhere;}
-.dashboard-footnotes h2{color:#c2cde0;font-size:14px;margin:0 0 var(--space-md);}
+.dashboard-footnotes h2{color:#c2cde0;margin:0 0 var(--space-md);}
 .dashboard-footnotes ol{list-style:none;margin:0;padding:0;}
 .dashboard-footnotes li{padding-left:0;margin-bottom:14px;scroll-margin-top:20px;}
 .dashboard-footnotes strong{color:var(--muted);font-weight:600;}
@@ -191,9 +191,9 @@ body.header-actions-hidden .top-actions{opacity:0;transform:translateY(-8px);vis
 @media (max-width:600px){
 .btc-balance-card #manualWithdraw{min-height:44px;}
 }
-.dashboard-footnotes li>strong{display:block;font-size:14px;font-weight:700;letter-spacing:.01em;color:#c2cde0;margin-bottom:10px;}
+.dashboard-footnotes li>strong{display:block;font-weight:700;letter-spacing:.01em;color:#c2cde0;margin-bottom:10px;}
 .note-subsection{margin-top:20px;}
-.dashboard-footnotes .note-subheading{font-size:14px;font-weight:700;letter-spacing:.01em;color:#c2cde0;line-height:1.5;margin:0 0 10px;}
+.dashboard-footnotes .note-subheading{font-weight:700;letter-spacing:.01em;color:#c2cde0;line-height:1.5;margin:0 0 10px;}
 .dashboard-footnotes{font-size:11px;}
 .dashboard-footnotes h2,.dashboard-footnotes li>strong,.dashboard-footnotes .note-subheading{font-size:13px;}
 .pagination #previousPage,.pagination #nextPage,.pagination #goToPage{padding:var(--space-sm) var(--space-md);font-size:12px;line-height:1.5;font-weight:700;border-radius:var(--corner-radius)
@@ -301,12 +301,12 @@ __DESIGN_CSS__
 .redesigned .analysis-header .feedback-wrap:has(.hidden){display:none;}
 .redesigned .report-primary{display:grid;}
 .redesigned .report-primary .value{font-size:1.45rem;}
-.redesigned .report-details{margin-top:var(--space-lg);color:var(--muted);font-size:.82rem;}
+.redesigned .report-details{color:var(--muted);font-size:.82rem;}
 .redesigned .report-extra{display:grid;}
 .redesigned .report-extra .value{font-size:1.2rem;}
 .redesigned .activity-panel{padding:0;background:transparent;border:0;margin:var(--space-lg) 0 0;}
 .redesigned .tablewrap{border:0;border-radius:0;background:transparent;padding:0;}
-.redesigned .dashboard-footnotes{font-size:.76rem;border:0;margin-top:var(--space-lg);padding:0;}
+.redesigned .dashboard-footnotes{font-size:.76rem;border:0;}
 .redesigned [hidden]{display:none!important;}
 @media (max-width:800px){
 .redesigned .balance-overview{gap:20px;}
@@ -359,7 +359,7 @@ __DESIGN_CSS__
 .redesigned .analysis-header{margin-bottom:var(--space-md);}
 .redesigned .selected-period-label{margin:0 0 var(--space-xl);color:var(--text);font-weight:500;line-height:1.5;font-variant-numeric:tabular-nums;}
 .redesigned .report-primary{margin:0;}
-.redesigned .report-details{padding:0;border:0;}
+.redesigned .report-details{border:0;}
 .report-range-dialog{width:min(620px,calc(100vw - 32px));}
 .report-range-dialog .controls{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:var(--space-lg);gap:var(--space-lg);}
 .report-range-dialog .controls .field:first-child{grid-column:1/-1;}
@@ -379,7 +379,7 @@ __DESIGN_CSS__
 @media (pointer:coarse){
 .redesigned .period-shortcuts button{min-height:var(--button-height);}
 }
-.redesigned .period-activities{border:0;padding-top:0;margin-top:24px;}
+.redesigned .period-activities{border:0;padding-top:0;}
 .redesigned :is(.report-details>.report-extra,.period-activities>.activity-panel,.dashboard-footnotes>ol){margin-top:var(--space-sm);}
 .redesigned .report-extra .value{color:var(--text);font-weight:600;}
 .parqet-export-dialog{width:min(620px,calc(100vw - 32px));}
@@ -419,8 +419,6 @@ __DESIGN_CSS__
 @media (max-width:600px){
 .redesigned .balance-overview{padding-bottom:20px;}
 .redesigned .metric>.value{font-size:1.45rem;}
-.redesigned .plan-card{padding:16px;}
-.redesigned .report-primary{gap:20px 16px;}
 }
 @media (prefers-contrast:more){
 .redesigned .plan-card{border-color:var(--line);}
@@ -441,21 +439,11 @@ __DESIGN_CSS__
 @media (max-width:600px){
 .redesigned .period-shortcuts button{flex:1 0 auto;}
 }
-/* The analysis headline metrics form one surface, matching the schedule cards. */
-.redesigned .report-primary{}
-@media (max-width:600px){
-.redesigned .report-primary{padding:16px;}
-}
 @media (prefers-contrast:more){
 .redesigned .report-primary{border-color:var(--line);}
 }
 @media (forced-colors:active){
 .redesigned .report-primary{border-color:CanvasText;}
-}
-/* Supplemental totals and activity use the same surface and inset as headline metrics. */
-.redesigned .report-extra,.redesigned .period-activities .activity-panel{}
-@media (max-width:600px){
-.redesigned .report-extra,.redesigned .period-activities .activity-panel{padding:16px;}
 }
 @media (prefers-contrast:more){
 .redesigned .report-extra,.redesigned .period-activities .activity-panel{border-color:var(--line);}
@@ -465,9 +453,6 @@ __DESIGN_CSS__
 }
 /* Account balances share the appearance-aware card surface. */
 .redesigned .balance-overview{margin-bottom:16px;}
-@media (max-width:600px){
-.redesigned .balance-overview{padding:16px;}
-}
 @media (prefers-contrast:more){
 .redesigned .balance-overview{border-color:var(--line);}
 }

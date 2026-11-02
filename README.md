@@ -40,13 +40,13 @@ Create an exchange API key with these permissions:
 
 Use Test connection to check balances and deposit-history access without placing transactions. Existing Kraken keys also need Query ledger entries. Keep credentials in the web settings; never commit credentials or `.env`.
 
-In Settings → Bot Configuration, choose the purchase currency, BTC amount, deposit day/time and timezone. An amount of `0` uses the exchange minimum. New installations use Simulation; activate live trading only when ready. Settings also control withdrawals, dashboard language, display currency and appearance. Changes apply after saving.
+In Settings → Bot Configuration, choose the purchase currency, BTC amount, deposit day/time and timezone. An amount of `0` or below the exchange minimum uses that minimum; Next purchase shows the effective planned amount. New installations use Simulation; activate live trading only when ready. Settings also control withdrawals, dashboard language, display currency and appearance. Changes apply after saving.
 
 ## How it works
 
 - Account checks refresh balances, BTC prices and scheduling, normally every five minutes. Browser visits do not trigger exchange price requests.
 - The purchase interval is the time from the last purchase to the next deposit date/time divided by `(affordable purchases + 1)`. The final affordable purchase uses the remaining fiat, subject to fees and exchange minimums. Small remnants may remain.
-- A fiat balance increase triggers API verification of only that deposit window. Confirmed early deposits advance the deadline to the next month; delayed deposits show Waiting for deposit. Older deposit history is not imported.
+- A booked fiat increase triggers API verification of that deposit window; released order reservations are not deposits. Confirmed early deposits advance planning to the next month. Unverified credits pause automatic transactions; older deposit history is not imported.
 - Automatic withdrawals compare the value of all available exchange BTC against your threshold. Manual withdrawals require confirmation and use the same saved target. Both require live trading and send the available BTC less withdrawal fees.
 - Pending or unverifiable exchange transactions block further submissions until reconciled, including after restarts. Run one bot per exchange account.
 
@@ -54,7 +54,7 @@ Expected monthly deposit in Settings → Bot Configuration affects only the with
 
 ## Reports and Parqet
 
-The dashboard shows balances and upcoming purchases/withdrawals. Analysis summarizes purchases, deposits, withdrawals, fees and current purchase value. Month and Year load automatically; Custom date range opens date controls and confirmed withdrawal intervals. Activities include purchases, confirmed fiat deposits, withdrawals and fees. From initially uses the volume-saved first container start; subsequent changes are also volume-saved. To resets to now. Existing volumes establish this timestamp on their first start with this feature.
+The dashboard shows balances and upcoming purchases/withdrawals. Current analysis value and profit/loss refresh with the saved account price. Analysis summarizes purchases, deposits, withdrawals, fees and current purchase value. MTD, YTD, 30d, 90d and 1y load automatically. Custom restores your custom period; its edit button opens date controls and confirmed withdrawal intervals. Activities include purchases, confirmed fiat deposits, withdrawals and fees. From initially uses the volume-saved first container start; subsequent changes are also volume-saved. To resets to now. Existing volumes establish this timestamp on their first start with this feature.
 
 Manual withdrawal and Parqet export are available on the left of the Settings footer. Export opens a selector for confirmed withdrawal cycles.
 
@@ -62,7 +62,7 @@ The Parqet CSV exports one consolidated Buy row for the complete cycle ending at
 
 ## Data and updates
 
-All settings, credentials, activity and state persist in `bitcoin-dca-webui-data`. Reuse and back up this volume. Passwords are hashed; API secrets are stored in its private configuration file, so protect volume access and backups.
+All settings, credentials, activity and state persist in `bitcoin-dca-webui-data`. Reuse and back up this volume. Changing the active API key starts a separate scheduling/account boundary and requires a new exchange check; history is retained. Rotating only the API secret preserves that boundary. Passwords are hashed; API secrets are stored in its private configuration file, so protect volume access and backups.
 
 After updating the source, run `docker compose up -d --build`. Do not run `docker compose down -v`: it deletes the data volume.
 

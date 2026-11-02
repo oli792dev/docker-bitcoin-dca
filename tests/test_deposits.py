@@ -89,6 +89,82 @@ class DepositTests(unittest.TestCase):
         self.assertEqual(api.fiat_deposits.call_count,2)
         self.assertEqual(api.fiat_deposits.call_args.args[1],int((now+timedelta(minutes=10)).timestamp()*1000))
 
+    def test_released_hold_does_not_create_unverified_deposit(self):
+        now=datetime(2026,11,1,9,tzinfo=timezone.utc)
+        settings={'exchange':'KRAKEN','quote':'EUR'}
+        api=type('BookedAPI', (), {'booked_balance': lambda api, currency: Decimal('200')})(); api.fiat_deposits=Mock()
+        state={}
+        sync_deposits(api,settings,state,now,Decimal('100'))
+        sync_deposits(api,settings,state,now,Decimal('200'))
+        self.assertNotIn('pending',state['fiat_observation'])
+        api.fiat_deposits.assert_not_called()
+
+    def test_booked_increase_checks_even_when_new_funds_are_held(self):
+        now=datetime(2026,11,1,9,tzinfo=timezone.utc)
+        settings={'exchange':'KRAKEN','quote':'EUR'}
+        values=iter([Decimal('200'),Decimal('300')]); api=type('BookedAPI', (), {'booked_balance': lambda api, currency: next(values)})(); api.fiat_deposits=Mock()
+        api.fiat_deposits.return_value=[]
+        state={}
+        sync_deposits(api,settings,state,now,Decimal('100'))
+        sync_deposits(api,settings,state,now,Decimal('100'))
+        self.assertIn('pending',state['fiat_observation'])
+        api.fiat_deposits.assert_called_once()
+
+    def test_kraken_complete_credit_chain_classifies_sales_but_not_missing_deposits(self):
+        api=object.__new__(Kraken)
+        row={'type':'trade','asset':'ZEUR','time':'1793516400.125','amount':'100','fee':'1','balance':'199'}
+        api.private=Mock(return_value={'count':1,'ledger':{'sale':row}})
+        self.assertTrue(api.non_deposit_balance_change('EUR',0,1793520000000,Decimal('100'),Decimal('199')))
+        self.assertFalse(api.non_deposit_balance_change('EUR',0,1793520000000,Decimal('0'),Decimal('199')))
+        api.private=Mock(return_value={'count':1,'ledger':{'deposit':{**row,'type':'deposit'}}})
+        self.assertFalse(api.non_deposit_balance_change('EUR',0,1793520000000,Decimal('100'),Decimal('199')))
+
+    def test_non_deposit_proceeds_clear_pending_without_activity_or_deposit_confirmation(self):
+        now=datetime(2026,11,1,9,tzinfo=timezone.utc)
+        settings={'exchange':'KRAKEN','quote':'EUR'}
+        values=iter([Decimal('100'),Decimal('200')])
+        api=type('CreditAPI', (), {'booked_balance': lambda api, currency: next(values),
+            'non_deposit_balance_change':lambda api,*args: True})()
+        api.fiat_deposits=Mock(return_value=[])
+        state={}
+        sync_deposits(api,settings,state,now,Decimal('100'))
+        self.assertEqual(sync_deposits(api,settings,state,now,Decimal('200')),([],0))
+        self.assertNotIn('pending',state['fiat_observation'])
+        self.assertEqual(state['fiat_observation']['confirmed'],[])
+
+    def test_booked_adapter_balances_ignore_order_holds(self):
+        api=object.__new__(Kraken)
+        api._balance_scope_depth=0
+        api.private=Mock(return_value={'ZEUR':{'balance':'200','hold_trade':'100','credit':'10','credit_used':'2'}})
+        self.assertEqual(api.balance('EUR'),Decimal('108'))
+        self.assertEqual(api.booked_balance('EUR'),Decimal('200'))
+        api=Bitvavo(api_key='fixture-key',api_secret='fixture-secret')
+        api.request=Mock(return_value=[{'symbol':'EUR','available':'100','inOrder':'100'}])
+        with api.balance_snapshot():
+            self.assertEqual(api.balance('EUR'),Decimal('100'))
+            self.assertEqual(api.booked_balance('EUR'),Decimal('200'))
+        api.request.assert_called_once()
+
+    def test_unverified_or_failed_proceeds_read_retains_window(self):
+        from datetime import timedelta
+        now=datetime(2026,11,1,9,tzinfo=timezone.utc)
+        settings={'exchange':'KRAKEN','quote':'EUR'}
+        values=iter([Decimal('100'),Decimal('200'),Decimal('200'),Decimal('200')])
+        api=type('CreditAPI', (), {'booked_balance': lambda api, currency: next(values),
+            'non_deposit_balance_change':lambda api,*args: api.classify(*args)})()
+        api.classify=Mock(side_effect=[False,requests.ConnectionError('offline'),False])
+        api.fiat_deposits=Mock(return_value=[])
+        state={}
+        sync_deposits(api,settings,state,now,Decimal('100'))
+        sync_deposits(api,settings,state,now+timedelta(minutes=1),Decimal('200'))
+        pending=dict(state['fiat_observation']['pending'])
+        with self.assertRaises(requests.ConnectionError):
+            sync_deposits(api,settings,state,now+timedelta(days=2),Decimal('200'))
+        sync_deposits(api,settings,state,now+timedelta(days=3),Decimal('200'))
+        self.assertEqual(state['fiat_observation']['pending'],pending)
+        self.assertEqual(state['fiat_observation']['confirmed'],[])
+        self.assertTrue(all(call.args[1]==int(now.timestamp()*1000) for call in api.fiat_deposits.call_args_list))
+
     def test_worker_prices_keep_purchase_price_if_conversion_is_unavailable(self):
         api=Mock();api.price.return_value=Decimal(88000)
         self.assertEqual(collect_prices(api,{'quote':'EUR','exchange':'KRAKEN'},Decimal(80000)),{'EUR':'80000','USD':'88000'})

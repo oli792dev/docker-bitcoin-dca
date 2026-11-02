@@ -1,0 +1,6 @@
+{
+  "name": "bitcoin-dca-browser-tests",
+  "private": true,
+  "scripts": {"test:browser": "playwright test --config tests/browser/playwright.config.cjs"},
+  "devDependencies": {"playwright": "1.62.1"}
+}

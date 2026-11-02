@@ -24,6 +24,7 @@ from app.data.activity import (
     get_activity_record,
     latest_real_buy,
     ledger_balance,
+    legacy_account_matches,
     read_dashboard_snapshot,
     withdrawal_records,
     write_dashboard_snapshot,
@@ -68,9 +69,13 @@ def local_now(timezone_name):
     return datetime.now(ZoneInfo(timezone_name))
 
 
-def latest_recorded_buy_time(exchange=None):
+def latest_recorded_buy_time(exchange=None, account_identity=None):
     """Return the newest real Bitcoin buy from persistent UI activity."""
-    return latest_real_buy(exchange) if exchange else latest_real_buy()
+    return (
+        latest_real_buy(exchange, account_identity=account_identity)
+        if account_identity
+        else (latest_real_buy(exchange) if exchange else latest_real_buy())
+    )
 
 
 def read_state(path, cycle_key):
@@ -166,6 +171,8 @@ def persist_bot_withdrawal(api, withdrawal, result, settings, context):
         "withdrawalAddress": withdrawal.get("address"),
         "withdrawalNetwork": withdrawal.get("network"),
     }
+    if settings.get("account_identity"):
+        record["accountIdentity"] = settings["account_identity"]
     context["record_id"] = record["id"]
     return append_activity_records([record])
 
@@ -208,6 +215,17 @@ def persist_bot_buy(api, order, settings, event_id, fallback_timestamp_ms):
     for record in records:
         record["exchange"] = settings["exchange"]
         record["purchaseStatus"] = "confirmed"
+        identity = settings.get("account_identity")
+        if identity:
+            record["accountIdentity"] = identity
+            legacy = get_activity_record(record["id"])
+            same_legacy = (
+                legacy
+                and legacy.get("accountIdentity") is None
+                and legacy_account_matches(settings["exchange"], settings["quote"], identity)
+            )
+            if not legacy or not (legacy.get("accountIdentity") == identity or same_legacy):
+                record["id"] = "account:" + identity + ":" + record["id"]
     return records, append_activity_records(records)
 
 
@@ -409,90 +427,22 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
     )
 
 
+def _reconciliation_io():
+    from app.trading.orders import ReconciliationIO
+
+    return ReconciliationIO(save_state, update_dashboard_schedule, persist_bot_buy, requests.RequestException)
+
+
 def defer_order_check(state, state_path, settings):
-    delay = settings["order_status_check_seconds"]
-    state["pending_order"]["nextStatusCheckAt"] = int(time.time() * 1000) + delay * 1000
-    save_state(state_path, state)
-    return delay
+    from app.trading.orders import defer_order_check as defer
+
+    return defer(state, state_path, settings, _reconciliation_io())
 
 
 def reconcile_pending_order(api, state, state_path, settings, check_interval):
-    pending = state["pending_order"]
-    symbol = f"BTC-{settings['quote']}"
-    delay = settings["order_status_check_seconds"]
-    update_dashboard_schedule(None, "Waiting for confirmation that the previous order has ended")
-    if pending.get("exchange", settings["exchange"]) != settings["exchange"] or pending.get("symbol") != symbol:
-        LOG.error("Pending order belongs to a different exchange or market; refusing another purchase.")
-        return delay
-    due_ms = int(pending.get("nextStatusCheckAt", int(pending.get("submittedAt", 0)) + delay * 1000))
-    remaining_ms = due_ms - int(time.time() * 1000)
-    if remaining_ms > 0:
-        return max(1, (remaining_ms + 999) // 1000)
+    from app.trading.orders import reconcile_pending_order as reconcile
 
-    try:
-        order = api.get_order(symbol, pending["clientOrderId"], pending.get("exchangeOrderId"))
-    except requests.RequestException as exc:
-        LOG.warning(
-            "%s order %s could not be confirmed: %s. No new order will be sent; checking again in %ss.",
-            settings["exchange"],
-            pending.get("exchangeOrderId") or pending["clientOrderId"],
-            exc,
-            delay,
-        )
-        return defer_order_check(state, state_path, settings)
-
-    status = str(order.get("status", "")).lower()
-    if status not in ("closed", "filled", "canceled", "cancelled", "expired", "rejected"):
-        log_transition(
-            LOG,
-            api,
-            "order-wait",
-            (pending["clientOrderId"], status),
-            logging.INFO,
-            "%s order %s exists but has not ended (status=%s); no new purchase; checking again in %ss.",
-            settings["exchange"],
-            pending.get("exchangeOrderId") or pending["clientOrderId"],
-            status or "unknown",
-            delay,
-        )
-        return defer_order_check(state, state_path, settings)
-
-    records, added = persist_bot_buy(api, order, settings, pending["clientOrderId"], int(pending.get("submittedAt", 0)))
-    if not records:
-        filled_raw = order.get("vol_exec", order.get("filledAmount"))
-        filled = Decimal(str(filled_raw)) if filled_raw is not None else None
-        if filled is None or filled > 0 or status == "filled":
-            LOG.warning(
-                "Order %s ended but its fill details are incomplete; keeping it pending.", pending["clientOrderId"]
-            )
-            return defer_order_check(state, state_path, settings)
-        state.pop("pending_order", None)
-        save_state(state_path, state)
-        LOG.warning(
-            "Order %s ended without a fill (status=%s); no purchase recorded.", pending["clientOrderId"], status
-        )
-        return check_interval
-
-    order_cost = sum(
-        (Decimal(record["row"]["amount"]) + Decimal(record["row"].get("fee", "0")) for record in records),
-        Decimal(0),
-    )
-    state["spent"] = str(Decimal(state.get("spent", "0")) + order_cost)
-    state["last_order_at"] = max(
-        datetime.fromisoformat(record["row"]["datetime"].replace("Z", "+00:00")) for record in records
-    ).isoformat()
-    state["last_order_quote"] = str(order_cost)
-    state.pop("pending_order", None)
-    save_state(state_path, state)
-    settings["startup_last_buy_at"] = None
-    LOG.info(
-        "Confirmed %s order %s ended (status=%s); saved %s activity record(s). Recalculating the purchase schedule.",
-        settings["exchange"],
-        pending.get("exchangeOrderId") or pending["clientOrderId"],
-        status,
-        added,
-    )
-    return None
+    return reconcile(api, state, state_path, settings, check_interval, _reconciliation_io())
 
 
 @serialized

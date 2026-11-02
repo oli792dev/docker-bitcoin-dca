@@ -298,7 +298,7 @@ class ConfigurationTests(unittest.TestCase):
             self.app.ready_at = 0
             with patch.object(bot, 'latest_recorded_buy_time', return_value=None) as history:
                 self.app.cycle()
-            history.assert_called_once_with('KRAKEN')
+            history.assert_called_once_with('KRAKEN', account_identity=self.app.settings['account_identity'])
             run.assert_called_once()
 
     def test_exchange_switch_resets_old_schedule_without_changing_history(self):
@@ -311,7 +311,54 @@ class ConfigurationTests(unittest.TestCase):
         self.assertNotIn('last_order_at', json.loads(self.app.state_path.read_text()))
         self.assertEqual(json.loads((self.root / 'previous-account-state.json').read_text())['spent'], '20')
         self.assertEqual(activity.read_dashboard_snapshot()['exchange'], 'BITVAVO')
-        latest.assert_called_once_with('BITVAVO')
+        latest.assert_called_once_with('BITVAVO', account_identity=self.app.settings['account_identity'])
+
+    def test_new_api_key_resets_account_checkpoints_and_arming(self):
+        self.ready(startup_delay_seconds=0)
+        self.app._synchronize_state()
+        state=json.loads(self.app.state_path.read_text())
+        state.update(withdrawal_armed=True,fiat_observation={'balance':'200'},last_order_at='2026-10-30T10:00:00Z')
+        self.app.state_path.write_text(json.dumps(state))
+        self.app.save({'current_password':PASSWORD,'settings':{'kraken_api_key':'different-account-key'}})
+        self.app._synchronize_state()
+        state=json.loads(self.app.state_path.read_text())
+        self.assertNotIn('withdrawal_armed',state)
+        self.assertNotIn('fiat_observation',state)
+        self.assertNotIn('last_order_at',state)
+        self.assertNotIn('different-account-key',self.app.state_path.read_text())
+
+    def test_secret_rotation_preserves_account_binding_and_arming(self):
+        self.ready(startup_delay_seconds=0)
+        self.app._synchronize_state()
+        state=json.loads(self.app.state_path.read_text())
+        state.update(withdrawal_armed=True,last_order_at='2026-10-30T10:00:00Z')
+        self.app.state_path.write_text(json.dumps(state))
+        self.app.save({'current_password':PASSWORD,'settings':{'kraken_api_secret':'bmV3LXNlY3JldA=='}})
+        self.app._synchronize_state()
+        self.assertEqual(json.loads(self.app.state_path.read_text()),state)
+
+    def test_stored_new_api_key_cannot_discard_unresolved_request(self):
+        self.ready(startup_delay_seconds=0)
+        self.app._synchronize_state()
+        state=json.loads(self.app.state_path.read_text())
+        state['pending_order']={'id':'unresolved'}
+        self.app.state_path.write_text(json.dumps(state))
+        self.app.settings['kraken_api_key']='other-account'
+        with self.assertRaisesRegex(ValueError,'Resolve pending'):
+            self.app._synchronize_state()
+        self.assertEqual(json.loads(self.app.state_path.read_text()),state)
+
+    def test_legacy_binding_preserves_pending_fiat_window(self):
+        self.ready(startup_delay_seconds=0)
+        pending={'start':'2026-10-30T10:00:00Z'}
+        state={'configuration_account':['KRAKEN','EUR'],'fiat_observation':{
+            'identity':['KRAKEN','EUR'],'balance':'200','pending':pending},'withdrawal_armed':True}
+        self.app.state_path.write_text(json.dumps(state))
+        self.app._synchronize_state()
+        state=json.loads(self.app.state_path.read_text())
+        self.assertEqual(state['fiat_observation']['pending'],pending)
+        self.assertEqual(state['fiat_observation']['identity'],state['configuration_account'])
+        self.assertTrue(state['withdrawal_armed'])
 
     def test_enabling_live_trading_does_not_reuse_simulated_execution_state(self):
         self.ready(startup_delay_seconds=0)

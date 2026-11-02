@@ -149,6 +149,17 @@ class Bitvavo:
             (Decimal(a.get("available", "0")) for a in accounts if a.get("symbol", "").upper() == currency), Decimal(0)
         )
 
+    def booked_balance(self, currency):
+        accounts = self._reads.read("balances", lambda: self.request("GET", "/balance", private=True))
+        return next(
+            (
+                Decimal(a.get("available", "0")) + Decimal(a["inOrder"])
+                for a in accounts
+                if a.get("symbol", "").upper() == currency
+            ),
+            Decimal(0),
+        )
+
     def validate_withdrawal_settings(self, settings):
         if not settings.get("withdraw_address"):
             raise ValueError("WITHDRAW_ADDRESS is required for Bitvavo automatic withdrawals")
@@ -231,6 +242,67 @@ class Bitvavo:
                 }
             )
         return deposits
+
+    def non_deposit_balance_change(self, currency, start_ms, end_ms, baseline, current):
+        """Reconcile complete bounded account history before treating credits as sale proceeds."""
+        if baseline is None:
+            return False
+        rows = []
+        seen = set()
+        expected_pages = None
+        for page in range(1, 201):
+            result = self.request(
+                "GET",
+                "/account/history",
+                params={
+                    "fromDate": start_ms,
+                    "toDate": end_ms,
+                    "page": page,
+                    "maxItems": 100,
+                },
+                private=True,
+            )
+            if not isinstance(result, dict) or not isinstance(result.get("items"), list):
+                raise ValueError("Bitvavo account history could not be verified")
+            total = result.get("totalPages")
+            if type(total) is not int or not 1 <= total <= 200 or result.get("currentPage") != page:
+                raise ValueError("Invalid Bitvavo account-history pagination")
+            if expected_pages is not None and expected_pages != total:
+                raise ValueError("Bitvavo account history changed while paging")
+            expected_pages = total
+            items = result["items"]
+            if page < total and len(items) != 100:
+                raise ValueError("Incomplete Bitvavo account history")
+            for item in items:
+                if not isinstance(item, dict) or not item.get("transactionId") or item["transactionId"] in seen:
+                    raise ValueError("Invalid or repeated Bitvavo account-history entry")
+                seen.add(item["transactionId"])
+                rows.append(item)
+            if page == total:
+                break
+        else:
+            raise ValueError("Bitvavo account-history page limit reached")
+        delta = Decimal(0)
+        positive_credit = False
+        for item in rows:
+            stamp = datetime.fromisoformat(item["executedAt"].replace("Z", "+00:00"))
+            if stamp.tzinfo is None or not start_ms <= int(stamp.timestamp() * 1000) <= end_ms:
+                raise ValueError("Bitvavo account-history entry is outside its requested window")
+            received = Decimal(str(item.get("receivedAmount", "0")))
+            sent = Decimal(str(item.get("sentAmount", "0")))
+            fee = Decimal(str(item.get("feesAmount", "0")))
+            if any(not value.is_finite() or value < 0 for value in (received, sent, fee)):
+                raise ValueError("Invalid Bitvavo account-history amounts")
+            if item.get("receivedCurrency") == currency and received > 0:
+                if item.get("type") != "sell":
+                    return False
+                positive_credit = True
+                delta += received
+            if item.get("sentCurrency") == currency:
+                delta -= sent
+            if item.get("feesCurrency") == currency:
+                delta -= fee
+        return positive_credit and baseline + delta == current
 
     def btc_withdrawals(self, start_ms=0, end_ms=None):
         # Split saturated time windows so equal timestamps are never skipped.

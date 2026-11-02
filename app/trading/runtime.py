@@ -9,6 +9,7 @@ from app.core.configuration import ConfigStore, account_values, runtime_settings
 from app.core.security import AttemptLimiter, PasswordConfirmationError
 from app.data.storage import STATE_PATH
 from app.exchanges.exchange import create_exchange
+from app.trading.identity import account_identity
 
 LOG = logging.getLogger("bitcoin-dca.settings")
 IDENTITY_FIELDS = ("exchange", "quote", "kraken_api_key", "kraken_api_secret", "bitvavo_api_key", "bitvavo_api_secret")
@@ -23,6 +24,7 @@ class Runtime:
         self.store = store or ConfigStore()
         self.state_path = Path(state_path) if state_path is not None else STATE_PATH
         self.settings = runtime_settings(self.store.snapshot()["settings"])
+        self.settings["account_identity"] = account_identity(self.settings)
         self.api = None
         self.service = None
         self.session_validator = lambda token: False
@@ -74,6 +76,7 @@ class Runtime:
             # before letting either the old or the new configuration trade.
             self.store._write(data)
             values = runtime_settings(data["settings"])
+            values["account_identity"] = account_identity(values)
             adapter = create_exchange(values) if data["complete"] else None
             old_api = self.api
             self.store.data = data
@@ -141,14 +144,23 @@ class Runtime:
     def _synchronize_state(self):
         from app.data.activity import write_json_atomic
 
-        identity = [self.settings["exchange"], self.settings["quote"]]
+        identity = [self.settings["exchange"], self.settings["quote"], account_identity(self.settings)]
         state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
+        if state.get("configuration_account") in (None, identity[:2]):
+            from app.data.activity import bind_legacy_account
+
+            bind_legacy_account(self.settings["exchange"], self.settings["quote"], identity[2])
+            observation = state.get("fiat_observation", {})
+            if observation.get("identity") == identity[:2]:
+                observation["identity"] = identity
         if (
-            state.get("configuration_account", identity) != identity
+            state.get("configuration_account", identity) not in (identity, identity[:2])
             or state.get("configuration_live", self.settings["live"]) != self.settings["live"]
         ):
             if self.unresolved():
-                raise ValueError("Resolve pending transactions before changing the exchange or purchase currency.")
+                raise ValueError(
+                    "Resolve pending transactions before changing exchange, account credentials or purchase currency."
+                )
             # Keep historical activity untouched; old account scheduling must not carry over.
             write_json_atomic(self.state_path.with_name("previous-account-state.json"), state)
             state = {}
@@ -177,7 +189,9 @@ class Runtime:
                     update_dashboard_schedule(None, "Waiting for open exchange orders or withdrawals")
                     return self.worker.interval
             if self.startup_pending:
-                self.settings["startup_last_buy_at"] = latest_recorded_buy_time(self.settings["exchange"])
+                self.settings["startup_last_buy_at"] = latest_recorded_buy_time(
+                    self.settings["exchange"], account_identity=self.settings["account_identity"]
+                )
                 self.settings["startup_schedule_log_pending"] = True
                 LOG.info(
                     "Startup history: last real Bitcoin purchase on %s=%s; aligning the purchase schedule",
@@ -267,6 +281,7 @@ class Runtime:
                     "Resolve pending orders, withdrawals and queued requests before changing exchange, credentials, currency or trading mode."
                 )
             settings = runtime_settings(values)
+            settings["account_identity"] = account_identity(settings)
             adapter_changed = (
                 self.api is None
                 or identity_changed

@@ -42,6 +42,7 @@ class UiEventLogTests(unittest.TestCase):
     def test_export_rejection_is_logged(self):
         h=self.handler("unused")
         h.path="/api/export.csv?start=0&end=1000"
+        h.settings={"exchange":"KRAKEN"}
         with patch.object(web_ui,"parqet_interval_records",return_value=[]):
             with self.assertLogs(web_ui.LOG,level="INFO") as logs:h.do_GET()
         self.assertEqual(h._json.call_args.args[0],400)

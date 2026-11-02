@@ -16,9 +16,17 @@ strict = true
 follow_imports = "silent"
 files = [
   "app/core/contracts.py",
+  "app/core/security.py",
+  "app/core/logging_utils.py",
+  "app/data/storage.py",
+  "app/trading/identity.py",
+  "app/trading/orders.py",
+  "app/trading/deposit_types.py",
+  "app/trading/deposits.py",
   "app/core/planning.py",
   "app/core/deposit_calendar.py",
   "app/exchanges/contracts.py",
   "app/webpage/status.py",
+  "app/webpage/reports.py",
   "app/trading/forecast.py",
 ]
