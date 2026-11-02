@@ -93,7 +93,7 @@ body.compact-brand-visible .compact-brand-bar{opacity:1;transform:translateY(0);
 .top-actions{transition:opacity .3s ease,transform .38s cubic-bezier(.22,1,.36,1),visibility .38s}
 body.header-actions-hidden .top-actions{opacity:0;transform:translateY(-8px);visibility:hidden;pointer-events:none}
 @media(max-width:600px){.compact-brand-inner{padding:9px 12px;gap:10px}.compact-brand-inner span{font-size:17px}}
-@media(prefers-reduced-motion:reduce){.compact-brand-bar,.top-actions{transition:none}}
+
 
 /* Compact header controls share one row and wrap only when space is limited. */
 .top{align-items:center;flex-wrap:wrap}
@@ -136,7 +136,7 @@ details.panel:not([open])>summary{border-radius:var(--corner-radius)}
 }
 
 .top{margin-bottom:12px}
-@media(prefers-reduced-motion:reduce){}
+
 
 .compact-brand-bar{pointer-events:none}
 body.compact-brand-visible .compact-brand-bar{pointer-events:auto}

@@ -19,7 +19,15 @@
    window.scrollTo(previous.x,previous.y);root.style.scrollBehavior=behavior;
   }
  }
- const observer=new MutationObserver(update);
+ const observer=new MutationObserver((records=[])=>{
+  update();
+  for(const {target:dialog} of records){
+   if(dialog.open&&dialog.animate){
+    dialog.getAnimations().forEach(animation=>animation.cancel());
+    dialog.animate([{opacity:0,transform:'translateY(10px)'},{opacity:1,transform:'translateY(0)'}],{duration:220,easing:'cubic-bezier(.2,.8,.2,1)'});
+   }
+  }
+ });
  dialogs.forEach(dialog=>observer.observe(dialog,{attributes:true,attributeFilter:['open']}));
  update();
 })();
