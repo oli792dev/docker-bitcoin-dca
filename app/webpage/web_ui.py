@@ -489,7 +489,7 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == "/api/schedule":
                 snapshot = read_dashboard_snapshot()
                 exchange_check_pending = bool(self.runtime and self.runtime.exchange_check_pending)
-                exchange_status = ('Waiting for startup delay' if exchange_check_pending and time.monotonic() < self.runtime.ready_at else 'Waiting for automatic exchange check')
+                exchange_status = ('Waiting for startup delay' if exchange_check_pending and time.monotonic() < self.runtime.ready_at else 'Waiting for exchange check')
                 if exchange_check_pending:
                     snapshot = {**snapshot, 'nextPurchaseAt':None, 'nextPurchaseStatus':exchange_status}
                 balance_matches = (snapshot.get("quote") == self.settings["quote"]
@@ -510,7 +510,7 @@ class Handler(BaseHTTPRequestHandler):
                     status_label = exchange_status
                 elif not balance_matches:
                     status_label = 'Waiting for account check'
-                elif (str(snapshot.get('nextPurchaseStatus','')).startswith(('Waiting','Checking'))
+                elif (str(snapshot.get('nextPurchaseStatus','')).startswith(('Waiting','Checking','Verifying'))
                       and snapshot['nextPurchaseStatus'] != 'Waiting for confirmation that the previous order has ended'):
                     status_label = ('Waiting for deposit' if snapshot['nextPurchaseStatus'] == 'Waiting until the balance covers an order' else snapshot['nextPurchaseStatus'])
                 elif not self.settings.get('live'):

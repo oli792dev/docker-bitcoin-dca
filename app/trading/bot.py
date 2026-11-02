@@ -467,7 +467,7 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
     cycle_data = {'market_prices':market_prices,'balance':balance,'price':price,'market':market,'fee_rate':fee_rate,'btc_balance':exchange_btc}
     update_dashboard_snapshot(settings, balance, price, exchange_btc, market_prices)
     if state.get('fiat_observation',{}).get('pending'):
-        update_dashboard_schedule(None, 'Waiting for automatic exchange check')
+        update_dashboard_schedule(None, 'Verifying deposit')
         log_transition(LOG, api, 'deposit-verification', 'pending', logging.INFO,
                        'Fiat balance increased; waiting for exchange deposit confirmation before new automatic transactions.')
         return check_interval
