@@ -358,7 +358,7 @@ __DESIGN_CSS__
 .redesigned .withdrawal-disabled>:not(.plan-title):not(#estimatedWithdrawalAt),.redesigned .withdrawal-disabled #withdrawalBadge{display:none!important;}
 .redesigned .analysis-header{margin-bottom:var(--space-md);}
 .redesigned .selected-period-label{margin:0 0 var(--space-xl);color:var(--text);font-weight:500;line-height:1.5;font-variant-numeric:tabular-nums;}
-.redesigned .report-primary{margin:0 0 var(--space-lg);}
+.redesigned .report-primary{margin:0;}
 .redesigned .report-details{padding:0;border:0;}
 .report-range-dialog{width:min(620px,calc(100vw - 32px));}
 .report-range-dialog .controls{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:var(--space-lg);gap:var(--space-lg);}
@@ -375,12 +375,12 @@ __DESIGN_CSS__
 .redesigned .withdrawal-disabled .plan-title{margin-bottom:0;}
 .redesigned .withdrawal-disabled #estimatedWithdrawalAt{display:none!important;}
 /* Supplemental details stay within their section, without divider bars. */
-.redesigned .dashboard-footnotes>ol{padding-top:8px;}
+.redesigned .dashboard-footnotes>ol{padding-top:0;}
 @media (pointer:coarse){
 .redesigned .period-shortcuts button{min-height:var(--button-height);}
 }
 .redesigned .period-activities{border:0;padding-top:0;margin-top:24px;}
-.redesigned .period-activities .activity-panel{margin-top:8px;}
+.redesigned :is(.report-details>.report-extra,.period-activities>.activity-panel,.dashboard-footnotes>ol){margin-top:var(--space-sm);}
 .redesigned .report-extra .value{color:var(--text);font-weight:600;}
 .parqet-export-dialog{width:min(620px,calc(100vw - 32px));}
 .parqet-export-dialog .field{margin-top:16px;}
@@ -394,7 +394,6 @@ __DESIGN_CSS__
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary::before{content:"";flex:0 0 var(--icon-size);width:var(--icon-size);height:var(--icon-size);background:currentColor;-webkit-mask:var(--icon-chevron) center/contain no-repeat;mask:var(--icon-chevron) center/contain no-repeat;transition:transform 150ms ease;}
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)[open]>summary::before{transform:rotate(90deg);}
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary:hover{color:var(--accent);}
-.redesigned .report-extra{padding-top:var(--space-sm);}
 /* Quiet surfaces and a deliberate hierarchy for financial data. */
 .redesigned .balance-overview{padding-bottom:28px;}
 .redesigned .metric>.value{font-weight:600;letter-spacing:-.035em;line-height:1.22;margin-top:8px;}
