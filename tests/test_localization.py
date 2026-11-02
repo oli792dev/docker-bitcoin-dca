@@ -14,7 +14,7 @@ class LocalizationTests(TestCase):
     def test_german_pages_cover_navigation_notes_and_accessibility_labels(self):
         dashboard=localize_page(dashboard_page(),'de')
         self.assertIn('<html lang="de">',dashboard)
-        self.assertIn('>Zeitraumanalyse<',dashboard)
+        self.assertIn('>Analyse<',dashboard)
         self.assertIn('>Prüfe diese Überweisung sorgfältig.',dashboard)
         self.assertTrue('title="Anwendungseinstellungen"' in dashboard)
         self.assertIn('Kaufintervall = Zeit vom letzten Kauf',dashboard)

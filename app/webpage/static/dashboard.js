@@ -28,6 +28,33 @@ function renderPurchaseCountdown(){
  renderCountdown("withdrawalCountdown",estimatedWithdrawalTimestamp);
  if(estimatedWithdrawalTimestamp===null)$("withdrawalCountdown").textContent=t("Not estimated");
 }
+function renderWithdrawalProgress(balance,price,threshold,enabled){
+ const known=enabled&&Number.isFinite(balance)&&price>0&&threshold>0;
+ $('withdrawalProgress').hidden=!known;
+ $('withdrawalProgress').value=known?Math.min(100,Math.max(0,balance*price/threshold*100)):0;
+ $('withdrawalProgressLabel').textContent=known?t('{value} of {threshold}').replace('{value}',money(balance*price,quote)).replace('{threshold}',money(threshold,quote)):t(enabled?'Waiting for account check':'Automatic withdrawals disabled');
+}
+function renderPurchaseChart(series,rates,price,currency,available,range=selectedPeriod()){
+ const chart=$('purchaseChart');chart.replaceChildren();chart.hidden=true;
+ $('chartStart').textContent='';$('chartEnd').textContent='';
+ if(!series?.length){$('chartMessage').textContent=t('No real purchases in this period.');return}
+ if(!available||!(price>0)||series.some(point=>Object.keys(point.costs).some(c=>!(rates[c]>0)))){$('chartMessage').textContent=t('Conversion unavailable');return}
+ let cost=0,quantity=0;
+ const points=series.map(point=>{quantity+=Number(point.btc);cost+=Object.entries(point.costs).reduce((sum,[c,v])=>sum+Number(v)*rates[c],0);return {time:Number(point.timestamp),cost,value:quantity*price}});
+ const start=range.start,end=range.end;
+ const max=Math.max(...points.map(p=>Math.max(p.cost,p.value)),1)*1.1;
+ const x=time=>60+Math.max(0,Math.min(1,(time-start)/Math.max(1,end-start)))*930;
+ const y=value=>220-value/max*190;
+ const svg=(tag,attrs,text)=>{const node=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [k,v] of Object.entries(attrs))node.setAttribute(k,String(v));if(text!==undefined)node.textContent=text;chart.appendChild(node);return node};
+ for(let i=0;i<4;i++){const value=max*i/3;svg('path',{d:'M60 '+y(value)+' H990',stroke:'var(--line)',fill:'none'});svg('text',{x:0,y:y(value)+4,fill:'var(--muted)','font-size':11},money(value,currency))}
+ for(const [key,color] of [['cost','var(--muted)'],['value','var(--accent)']]){
+  let path='M60 220';for(const point of points)path+=' H'+x(point.time)+' V'+y(point[key]);path+=' H990';
+  svg('path',{d:path,stroke:color,'stroke-width':key==='value'?3:2,fill:'none','vector-effect':'non-scaling-stroke'});
+ }
+ svg('title',{},t('Cumulative purchases and their value at the current BTC price'));
+ chart.hidden=false;$('chartMessage').textContent='';
+ $('chartStart').textContent=new Date(start).toLocaleDateString(locale);$('chartEnd').textContent=new Date(end).toLocaleDateString(locale);
+}
 function updateStatusLight(tone){
  $('botStatusLight').className='status-light status-'+(['active','waiting','error'].includes(tone)?tone:'waiting');
 }
@@ -53,6 +80,8 @@ async function refreshPurchaseSchedule(){
   $('forecastAssumptions').hidden=!detail;
   if(detail)$('forecastAssumptionsText').textContent=t('BTC price: {price}. BTC per purchase: {quantity}. Threshold: {threshold}. Assumes unchanged price and fees. Monthly deposit: {amount}. Deposit: day {day}, {time} ({zone}).'.replace('{price}',money(detail.price,detail.quote)).replace('{quantity}',btc(detail.quantity)).replace('{threshold}',money(detail.threshold,detail.quote)).replace('{amount}',detail.monthlyDeposit?money(detail.monthlyDeposit,detail.quote):t('Not configured')).replace('{day}',detail.depositDay).replace('{time}',detail.depositTime).replace('{zone}',detail.timezone));
   $("monthlyDepositCurrency").textContent=t(schedule.quote);
+  const depositDate=Date.parse(schedule.nextDepositAt);
+  $('nextDepositAt').textContent=Number.isFinite(depositDate)?t('Next deposit: {date}').replace('{date}',new Date(depositDate).toLocaleString(locale,{timeZone:schedule.timezone||'UTC',dateStyle:'medium',timeStyle:'short'})):'';
   if(!monthlyDepositDirty&&!monthlyDepositSaving)$("monthlyDeposit").value=schedule.expectedMonthlyDeposit??"";
   if(schedule.configuredBuyAmount!==undefined){
    const minimumMode=Number(schedule.configuredBuyAmount)===0;
@@ -80,6 +109,9 @@ async function refreshPurchaseSchedule(){
   $("estimatedWithdrawalAt").textContent=t(estimatedWithdrawalTimestamp===null?"Not estimated":new Date(estimatedWithdrawalTimestamp).toLocaleString(locale,{timeZone:schedule.timezone||"UTC",timeZoneName:"short"}));
   $("estimatedWithdrawalStatus").textContent=t(estimatedWithdrawalTimestamp===null?(schedule.estimatedWithdrawalStatus||"Waiting for account check"):(schedule.estimatedWithdrawalStatus||"Estimate at the current BTC price, deposit and purchase interval"));
   $("withdrawalCountdownStatus").textContent=t(estimatedWithdrawalTimestamp===null?$("estimatedWithdrawalStatus").textContent:(schedule.estimatedWithdrawalStatus||"Estimate at the current BTC price, deposit and purchase interval"));
+  $('orderSummary').textContent=$('buyAmount').textContent;
+  $('orderSummaryNote').textContent=$('buyAmountNote').textContent;
+  renderWithdrawalProgress(exchangeBtcBalance,Number(schedule.purchaseCurrencyPrice),Number(schedule.withdrawalThreshold),schedule.withdrawalsEnabled);
   renderPurchaseCountdown();
   sectionFeedback("scheduleFeedback","");
  }catch(e){if(request===scheduleRequest){$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");updateStatusLight("error");sectionFeedback("scheduleFeedback","")}}
@@ -159,8 +191,18 @@ async function loadIntervals(){
  for(let i=1;i<withdrawals.length;i++){const a=withdrawals[i-1],b=withdrawals[i],o=document.createElement("option");o.value=a.timestamp+","+b.timestamp;o.textContent=t(dateLabel(a.timestamp)+" → "+dateLabel(b.timestamp));select.appendChild(o)}
  select.value="";
 }
-$("interval").addEventListener("change",()=>{applySelectedInterval();saveReportFrom();saveReportView();currentPage=1;loadAnalytics()});
-["start","end"].forEach(id=>$(id).addEventListener("change",()=>{$("interval").value="";saveReportView();if(id==="start")return saveReportFrom()}));
+function selectQuickRange(selected){
+ for(const id of ['monthRange','yearRange','customRange'])$(id).setAttribute('aria-pressed',String(id===selected));
+}
+for(const id of ['monthRange','yearRange','customRange'])$(id).addEventListener('click',async()=>{
+ selectQuickRange(id);
+ if(id==='customRange'){$('start').focus();return}
+ const now=new Date(),start=new Date(now.getFullYear(),id==='yearRange'?0:now.getMonth(),1);
+ $('start').value=localInput(start.getTime());$('end').value=localInput(now.getTime());$('interval').value='';
+ await saveReportFrom();currentPage=1;loadAnalytics();
+});
+$("interval").addEventListener("change",()=>{selectQuickRange("customRange");applySelectedInterval();saveReportFrom();saveReportView();currentPage=1;loadAnalytics()});
+["start","end"].forEach(id=>$(id).addEventListener("change",()=>{selectQuickRange("customRange");$("interval").value="";saveReportView();if(id==="start")return saveReportFrom()}));
 function activityStatus(row){
  if(row.type==="Deposit")return row.depositStatus==="confirmed"?{label:"Confirmed ✓",tone:"confirmed"}:{label:"—",tone:"muted"};
  if(row.simulated)return {label:"Simulation",tone:"muted"};
@@ -251,6 +293,11 @@ async function loadAnalytics(){
   $("profitLoss").textContent=t(money(profitLoss,displayCurrency));
   $("profitLoss").className="value "+(profitLoss>=0?"positive":"negative");
  }else{$("profitLoss").textContent=t("—");$("profitLoss").className="value"}
+ $('investedTotal').textContent=moneyAvailable?money(converted.buyVolume+converted.tradeFees,displayCurrency):'—';
+ $('periodValue').textContent=livePrice>0?money(Number(d.summary.boughtBtc)*livePrice,displayCurrency):'—';
+ renderPurchaseChart(d.purchaseSeries,currencyRates,livePrice,displayCurrency,moneyAvailable,p);
+ $('modeBadge').textContent=t(d.configuration.liveTrading?'Live':'Simulation');
+ $('withdrawalBadge').textContent=t(d.configuration.withdrawalsEnabled?'Enabled':'Disabled');
  $("settingExchange").textContent=t(ex);$("settingQuoteCurrency").textContent=t(quote);$("tradingMode").textContent=t(d.configuration.liveTrading?"Live":"Simulation");
  const amountSnapshot=d.snapshot||{};
  const effectiveMinimum=amountSnapshot.exchange===d.exchange&&amountSnapshot.quote===quote?Number((amountSnapshot.withdrawalForecastPlan||{}).orderAmount):NaN;
@@ -309,7 +356,7 @@ async function loadWithdrawalConfiguration(){
  $("withdrawalDestination").textContent=t(destinationText);$("automaticWithdrawalDestination").textContent=t(destinationText);
  const target=d.target||"";
  $("withdrawalTarget").textContent=target?(d.exchange==="BITVAVO"&&target.length>22?target.slice(0,10)+"…"+target.slice(-8):target):"Not configured";
- $("withdrawalTarget").title=target;
+ $("withdrawalTarget").title=target;$("planWithdrawalTarget").textContent=target?t("Destination: {target}").replace("{target}",$("withdrawalTarget").textContent):t("Not configured");
  $("withdrawMessage").textContent=t(d.reason||"Manual withdrawals are available. Automatic withdrawals may remain disabled.");
  return d;
 }

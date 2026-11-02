@@ -190,3 +190,102 @@ __DESIGN_CSS__
 .status-light.status-error{background:var(--red)}
 
 #thresholdCard.threshold-inactive .value{color:var(--muted);opacity:.55}
+
+/* Dashboard redesign: balances, next actions, analysis, then activity. */
+.redesigned main{max-width:1160px;padding-top:24px}
+.redesigned h1{font-size:1.2rem;letter-spacing:-.025em}
+.redesigned .dashboard-logo{width:44px;height:44px;flex-basis:44px}
+.redesigned .top{padding:12px 0 28px;margin-bottom:0}
+.redesigned .top-actions{flex-direction:row;align-items:center;gap:16px}
+.redesigned .balance-overview{display:grid;grid-template-columns:1.1fr 1.1fr 1fr;gap:32px;padding:12px 0 32px}
+.redesigned .metric{min-width:0}
+.redesigned .metric-label{font-size:.82rem;color:var(--muted);line-height:1.45}
+.redesigned .metric>.value{font-size:1.9rem;margin-top:8px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.redesigned .metric .small{font-size:.76rem}
+.redesigned .balance-overview .withdraw-action{align-items:flex-start;margin-top:12px}
+.redesigned .balance-overview #manualWithdraw{font-size:.76rem;padding:8px 12px;background:transparent}
+.redesigned .planning-overview{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
+.redesigned .plan-card{min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:var(--corner-radius);padding:24px;display:flex;flex-direction:column;align-items:stretch}
+.redesigned .plan-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}
+.redesigned .plan-title h2{font-size:1rem;margin:0}
+.redesigned .plan-title>span{color:var(--muted);font-size:.76rem}
+.redesigned .plan-card>.value{font-size:1.5rem;line-height:1.4;overflow-wrap:anywhere}
+.redesigned .plan-countdown{color:var(--accent);font-size:.88rem;font-variant-numeric:tabular-nums;margin-top:8px}
+.redesigned .plan-footer{border-top:1px solid var(--line);padding-top:16px;margin-top:24px;color:var(--muted);font-size:.82rem}
+.redesigned .plan-footer #orderSummaryNote{display:block;margin-top:6px}
+.redesigned .forecast-amount{display:grid;grid-template-columns:1fr minmax(90px,125px);align-items:center;gap:16px}
+.redesigned .forecast-amount label{margin:0}
+.redesigned progress{appearance:none;-webkit-appearance:none;border:0;width:100%;height:5px;border-radius:var(--corner-radius);margin:20px 0 6px;background:var(--line);color:var(--accent)}
+.redesigned progress::-webkit-progress-bar{background:var(--line);border-radius:var(--corner-radius)}
+.redesigned progress::-webkit-progress-value{background:var(--accent);border-radius:var(--corner-radius)}
+.redesigned progress::-moz-progress-bar{background:var(--accent);border-radius:var(--corner-radius)}
+.redesigned .configuration-details{font-size:.82rem;color:var(--muted);margin-bottom:28px}
+.redesigned .configuration-details summary,.redesigned .report-details summary{min-height:44px;cursor:pointer;padding:10px 0}
+.redesigned .configuration-scroll{overflow:visible}
+.redesigned .configuration-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-flow:row;grid-template-rows:none;gap:20px;margin-top:16px}
+.redesigned .configuration-grid .card{padding:0;background:transparent;border:0}
+.redesigned .configuration-grid .value{font-size:1rem}
+.redesigned .analysis-section,.redesigned .activities-section{border-top:1px solid var(--line);padding-top:30px;margin-top:28px}
+.redesigned .analysis-header{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:24px}
+.redesigned .analysis-header h2,.redesigned .activities-section>h2{font-size:1.35rem;margin:0}
+.redesigned .analysis-header .bottom-actions{margin:0}
+.redesigned .analysis-header .feedback-wrap{flex-basis:100%;margin:0}
+.redesigned .analysis-header .feedback-wrap:has(.hidden){display:none}
+.redesigned .report-primary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:24px;margin:28px 0}
+.redesigned .report-primary .value{font-size:1.45rem}
+.redesigned .purchase-chart{background:var(--panel);border-radius:var(--corner-radius);padding:22px}
+.redesigned .purchase-chart h3{font-size:.88rem;margin:0 0 12px}
+.redesigned .purchase-chart svg{display:block;width:100%;height:240px;overflow:visible}
+.redesigned .purchase-chart svg[hidden]{display:none}
+.redesigned .chart-legend{display:flex;gap:24px;flex-wrap:wrap;font-size:.76rem;color:var(--muted)}
+.redesigned .chart-legend i{display:inline-block;width:14px;height:3px;background:var(--accent);margin:0 7px 3px 0}
+.redesigned .chart-legend i.cost-line{background:var(--muted)}
+.redesigned .chart-dates{display:flex;justify-content:space-between;color:var(--muted);font-size:.7rem;margin:8px 0 16px}
+.redesigned .report-details{margin-top:18px;color:var(--muted);font-size:.82rem}
+.redesigned .report-extra{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;padding:16px 0}
+.redesigned .report-extra .value{font-size:1.2rem}
+.redesigned .activity-panel{padding:0;background:transparent;border:0;margin:20px 0 0}
+.redesigned .activity-panel .activity-heading{margin-bottom:12px}
+.redesigned .tablewrap{border:0;border-radius:0;background:transparent;padding:0}
+.redesigned .pagination{flex-wrap:wrap}
+.redesigned .dashboard-footnotes{font-size:.76rem;border-top:1px solid var(--line);padding-top:16px}
+.redesigned .dashboard-footnotes>summary{color:var(--muted);font-size:.82rem;min-height:44px;cursor:pointer}
+.redesigned .settings-account-action{padding:8px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:flex-end;flex:0 0 auto}
+.redesigned .settings-account-action form{margin:0}
+.redesigned .settings-account-action button{font-size:.82rem;padding:8px 12px}
+.redesigned [hidden]{display:none!important}
+@media(max-width:800px){
+ .redesigned .report-primary{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .redesigned .balance-overview{gap:20px}
+ .redesigned .metric>.value{font-size:1.4rem}
+}
+@media(max-width:600px){
+ .redesigned main{padding-top:max(16px,env(safe-area-inset-top))}
+ .redesigned .top{flex-wrap:wrap;gap:16px;padding-bottom:24px}
+ .redesigned .dashboard-brand h1{font-size:1rem}
+ .redesigned .dashboard-logo{width:36px;height:36px;flex-basis:36px}
+ .redesigned .top-actions{flex:1 0 100%;justify-content:space-between}
+ .redesigned .bot-status{max-width:none}
+ .redesigned .balance-overview{grid-template-columns:1fr 1fr;gap:24px 16px}
+ .redesigned .balance-overview>.metric:last-child{grid-column:1/-1;border-top:1px solid var(--line);padding-top:16px}
+ .redesigned .balance-overview>.metric:last-child .value{font-size:1.2rem}
+ .redesigned .planning-overview{grid-template-columns:1fr;gap:16px}
+ .redesigned .plan-card{padding:20px}
+ .redesigned .plan-card>.value{font-size:1.3rem}
+ .redesigned .configuration-grid,.redesigned .report-extra{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .redesigned .forecast-amount{grid-template-columns:1fr minmax(80px,110px)}
+ .redesigned .analysis-header{gap:16px}
+ .redesigned .analysis-header button{font-size:.82rem}
+ .redesigned .controls{grid-template-columns:1fr}
+ .redesigned .purchase-chart{padding:16px 12px}
+ .redesigned .purchase-chart svg{height:200px}
+ .redesigned .chart-legend{gap:12px}
+ .redesigned .report-primary{gap:24px 16px}
+ .redesigned .report-primary .value{font-size:1.3rem}
+}
+
+.redesigned .period-shortcuts{display:flex;gap:4px;border:1px solid var(--line);background:var(--surface);border-radius:var(--corner-radius);padding:4px;margin-left:auto}
+.redesigned .period-shortcuts button{font-size:.76rem;min-height:44px;padding:8px 14px;background:transparent;color:var(--muted);border:1px solid transparent;border-radius:var(--corner-radius)}
+.redesigned .period-shortcuts button[aria-pressed=true]{background:var(--panel);color:var(--text);border-color:var(--line)}
+.redesigned .period-shortcuts button:hover{background:var(--hover);color:var(--text)}
+@media(max-width:600px){.redesigned .period-shortcuts{order:3;flex-basis:100%;margin:0}.redesigned .period-shortcuts button{flex:1;padding:8px}.redesigned .analysis-header .bottom-actions{margin-left:auto}}

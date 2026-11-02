@@ -52,6 +52,30 @@ class ActivityStatusTests(TestCase):
         append.assert_called_once_with(records)
 
 
+class PurchaseChartTests(TestCase):
+    def test_chart_uses_all_real_buys_and_keeps_currencies_separate(self):
+        import tempfile
+        from pathlib import Path
+        from app.data import activity
+        with tempfile.TemporaryDirectory() as folder,patch.object(activity,'ACTIVITY_PATH',Path(folder)/'activity.json'):
+            records=[]
+            for index in range(150):
+                row={'type':'Buy','identifier':'BTC','shares':'.001','amount':'80','fee':'.2',
+                     'price':'80000','currency':'USD' if index%2 else 'EUR',
+                     'datetime':datetime.fromtimestamp(1000+index,tz=timezone.utc).isoformat()}
+                records.append({'id':str(index),'exchange':'KRAKEN','row':row})
+            records.append({**records[0],'id':'simulation','simulated':True})
+            records.append({'id':'deposit','depositStatus':'confirmed','row':{**records[0]['row'],'type':'Deposit','identifier':'EUR','shares':'0','amount':'500'}})
+            activity.append_activity_records(records)
+            series=activity.read_purchase_series(999000,1150000)
+            self.assertLessEqual(len(series),120)
+            self.assertEqual(sum(D(point['btc']) for point in series),D('.150'))
+            for currency in ('EUR','USD'):
+                self.assertEqual(sum(D(point['costs'].get(currency,'0')) for point in series),D('6015'))
+            self.assertEqual(activity.read_purchase_series(2000000,3000000),[])
+            self.assertEqual(sum(D(point['btc']) for point in activity.read_purchase_series(1000000,1001000)),D('.001'))
+
+
 class MonthlyForecastTests(unittest.TestCase):
     def setUp(self):
         self.now=datetime(2026,10,29,tzinfo=timezone.utc)

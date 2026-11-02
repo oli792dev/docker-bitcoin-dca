@@ -183,6 +183,24 @@ def read_report(start,end,page=1,limit=20):
         return ([json.loads(r[0]) for r in rows],total,page,_totals(db,start,end),_balance(_totals(db,0,2**63-1)))
 
 
+def read_purchase_series(start, end):
+    """Bounded purchase buckets for the full selected period, not the table page."""
+    width=max(1,(int(end)-int(start)+119)//120)
+    with _db() as db:
+        rows=db.execute("""SELECT (timestamp-?-1)/?, currency,
+            decimal_sum(shares), decimal_sum(amount), decimal_sum(fee)
+            FROM activity WHERE asset='BTC' AND kind='Buy' AND simulated=0
+            AND timestamp>? AND timestamp<=? GROUP BY 1,currency ORDER BY 1""",
+            (start,width,start,end)).fetchall()
+    buckets={}
+    for index,currency,shares,amount,fee in rows:
+        point=buckets.setdefault(index,{'timestamp':min(end,start+(index+1)*width),
+                                     'btc':'0','costs':{}})
+        point['btc']=str(Decimal(point['btc'])+Decimal(shares))
+        point['costs'][currency]=str(Decimal(amount)+Decimal(fee))
+    return list(buckets.values())
+
+
 def withdrawal_records(unresolved=False):
     query = "SELECT payload FROM activity WHERE asset='BTC' AND kind='TransferOut' AND simulated=0"
     if unresolved: query += " AND status NOT IN ('completed','failed','canceled','cancelled')"

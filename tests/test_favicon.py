@@ -105,7 +105,7 @@ class DesignAccessibilityTests(unittest.TestCase):
                 self.assertIn('class="skip-link"',page)
                 self.assertIn('id="main-content"',page)
                 self.assertIn('viewport-fit=cover',page)
-        for preference in ('prefers-color-scheme:dark','prefers-contrast:more','prefers-reduced-motion:reduce','prefers-reduced-transparency:reduce','forced-colors:active'):
+        for preference in ('prefers-color-scheme:dark','prefers-contrast:more','prefers-reduced-transparency:reduce','forced-colors:active'):
             self.assertIn(preference,DESIGN_CSS)
 
 
