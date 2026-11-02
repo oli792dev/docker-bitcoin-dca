@@ -215,3 +215,6 @@ summary::before,summary::after{transition:transform 180ms var(--motion-ease),col
 
 /* Menu dismissal actions share the quiet, borderless Cancel style. */
 .settings-header-actions button.secondary,.feedback-close.secondary,#dismissSettingsAction.secondary{border-color:transparent;background:var(--surface)}
+
+/* Center dismissal glyphs independently of the text baseline. */
+.settings-header-actions #closeSettings,.feedback-close,#dismissSettingsAction{display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1;text-align:center}
