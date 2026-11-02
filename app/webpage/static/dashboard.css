@@ -362,3 +362,9 @@ __DESIGN_CSS__
 .redesigned .period-shortcuts{max-width:100%;min-width:0;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--muted) var(--surface)}
 .redesigned .period-shortcuts button{flex-shrink:0;white-space:nowrap}
 @media(max-width:600px){.redesigned .period-shortcuts button{flex:1 0 auto}}
+
+/* The analysis headline metrics form one surface, matching the schedule cards. */
+.redesigned .report-primary{background:var(--panel);border:1px solid transparent;border-radius:var(--corner-radius);padding:20px}
+@media(max-width:600px){.redesigned .report-primary{padding:16px}}
+@media(prefers-contrast:more){.redesigned .report-primary{border-color:var(--line)}}
+@media(forced-colors:active){.redesigned .report-primary{border-color:CanvasText}}
