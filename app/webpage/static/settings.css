@@ -21,7 +21,7 @@ label{display:block;color:var(--muted);margin-bottom:var(--control-gap);font-siz
 input,select{height:48px;width:100%;min-width:0;max-width:100%;background:#0d1525;border:1px solid var(--line);color:var(--text);border-radius:var(--corner-radius);padding:var(--space-md);font:inherit;}
 input,select,button,.button{min-height:44px;}
 .hint{color:var(--muted);font-size:12px;line-height:1.6;}
-button,.button{background:var(--accent);color:#0b1730;border:1px solid transparent;border-radius:var(--corner-radius);padding:11px var(--space-lg);font:600 14px system-ui;cursor:pointer;text-decoration:none;display:inline-block;transition:box-shadow .2s;}
+button,.button{background:var(--accent);color:#0b1730;border:1px solid transparent;border-radius:var(--corner-radius);padding:8px var(--space-lg);font:600 14px system-ui;cursor:pointer;text-decoration:none;display:inline-block;transition:box-shadow .2s;}
 button:disabled{opacity:.5;cursor:wait;}
 .secondary{background:#101a2d;border-color:var(--line);color:var(--text);}
 .actions{display:flex;gap:var(--space-md);flex-wrap:wrap;align-items:center;}
@@ -155,7 +155,7 @@ __DESIGN_CSS__
 .settings-page .settings-tabs button{min-width:max-content;flex:1 0 auto;white-space:nowrap;overflow-wrap:normal;}
 .settings-page .settings-tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;}
 @media (max-width:600px){
-.settings-page .settings-tabs button{width:auto;padding:var(--space-sm) 10px;}
+.settings-page .settings-tabs button{width:auto;padding:8px 10px;}
 }
 /* WebKit time controls must fit their grid column, including narrow iPhones. */
 .settings-page input[type=time]{display:block;box-sizing:border-box;inline-size:100%;max-inline-size:100%;min-inline-size:0;appearance:none;-webkit-appearance:none;overflow:hidden;}
@@ -176,12 +176,12 @@ __DESIGN_CSS__
 .settings-footer-actions>#save{margin-left:auto;}
 .settings-action-feedback{display:flex;align-items:flex-start;gap:var(--space-md);margin-top:var(--space-sm);}
 .settings-action-feedback p{flex:1;min-width:0;max-height:96px;overflow:auto;margin:0;font-size:.82rem;overflow-wrap:anywhere;}
-.settings-action-feedback button{flex:0 0 44px;width:44px;min-height:44px;padding:0;font-size:1.18rem;}
+.settings-action-feedback button{flex:0 0 44px;width:44px;min-height:var(--button-height);padding:0;font-size:1.18rem;}
 .settings-quick-actions button{font-size:.82rem;}
 .settings-footer [hidden]{display:none!important;}
 @media (max-width:600px){
 .settings-quick-actions{flex:1 0 100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
-.settings-quick-actions button{min-width:0;padding:10px;font-size:.76rem;}
+.settings-quick-actions button{min-width:0;padding:8px 10px;font-size:.76rem;}
 .settings-footer-actions>#save{width:100%;margin:0;}
 }
 /* Uniform label/control/help spacing across all four Settings tabs. */
@@ -198,11 +198,11 @@ __DESIGN_CSS__
 .settings-page .review-list dd{margin-bottom:var(--space-md);}
 /* Same compact segmented appearance as the analysis period selector. */
 .settings-page .settings-tabs{gap:2px;padding:3px;border:0;background:var(--surface);border-radius:var(--corner-radius);}
-.settings-page .settings-tabs button{min-height:32px;padding:5px 12px;border:0;background:transparent;color:var(--muted);font-size:.76rem;font-weight:500;border-radius:var(--corner-radius);}
+.settings-page .settings-tabs button{min-height:var(--button-height);padding:8px 12px;border:0;background:transparent;color:var(--muted);font-size:.76rem;font-weight:500;border-radius:var(--corner-radius);}
 .settings-page .settings-tabs button[aria-selected=true],.settings-page .settings-tabs button[aria-selected=true]:hover{background:var(--selection);color:var(--text);border:0;font-weight:600;}
 .settings-page .settings-tabs button:not(:disabled):hover{background:var(--hover);color:var(--text);}
 @media (pointer:coarse){
-.settings-page .settings-tabs button{min-height:44px;}
+.settings-page .settings-tabs button{min-height:var(--button-height);}
 }
 /* Grouped Settings lists: labels and help on the left, controls on the right. */
 .settings-page .settings-groups,.settings-page .settings-tab-panel,.settings-page .credential-editor{gap:var(--space-xl);}
@@ -250,12 +250,12 @@ __DESIGN_CSS__
 .settings-page .setting-pair{gap:0 var(--space-md);}
 .settings-page .setting-switch{min-height:64px;gap:var(--space-lg);}
 }
-.settings-page #testConnection{min-height:32px;padding:6px 10px;font-size:.76rem;line-height:1.35;}
+.settings-page #testConnection{min-height:var(--button-height);padding:8px 10px;font-size:.76rem;line-height:1.35;}
 @media (min-width:601px){
 .settings-page #credentials .setting-row{grid-template-columns:minmax(0,1fr) minmax(160px,48%);}
 }
 @media (pointer:coarse){
-.settings-page #testConnection{min-height:44px;}
+.settings-page #testConnection{min-height:var(--button-height);}
 }
 /* Features and Login share the right-hand Dashboard column. */
 .settings-page .dashboard-secondary{display:flex;flex-direction:column;gap:var(--space-xl);min-width:0;}

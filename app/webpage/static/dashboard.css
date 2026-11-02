@@ -52,7 +52,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .page-size{display:flex;align-items:center;gap:var(--space-sm);color:var(--muted);font-size:12px;}
 .page-size select{width:auto;padding:7px 10px;}
 .pagination{margin-top:var(--space-md);}
-.pagination button{padding:var(--space-sm) var(--space-md);}
+.pagination button{padding:8px var(--space-md);}
 .pagination .notice{margin:0;text-align:center;}
 main,.panel,.grid,.card,.field,.top>div{min-width:0;}
 main{width:100%;}
@@ -224,7 +224,7 @@ th.num,td.num{text-align:right;font-variant-numeric:tabular-nums;font-feature-se
 .settings-dialog .settings-dialog-header h2{grid-column:2;grid-row:1;margin:0;line-height:1.3;text-align:center;}
 .settings-dialog-header button{grid-column:3;grid-row:1;justify-self:end;}
 .settings-dialog iframe{display:block;width:100%;height:min(76dvh,850px);border:0;background:#121a2d;}
-.settings-dialog-header button{padding:5px 10px;min-height:32px;font-size:inherit;border-radius:var(--corner-radius);}
+.settings-dialog-header button{padding:8px 10px;min-height:var(--button-height);font-size:inherit;border-radius:var(--corner-radius);}
 .confirmation-dialog::backdrop{background:#060b17aa;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);}
 .confirmation-dialog h2{font-size:20px;margin-bottom:var(--space-md);}
 .confirmation-values{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:var(--space-md);margin:22px 0;}
@@ -247,7 +247,7 @@ th.num,td.num{text-align:right;font-variant-numeric:tabular-nums;font-feature-se
 .feedback-wrap>.export-feedback{min-width:0;flex:1;margin:0;}
 .feedback-wrap:has(>.export-feedback.hidden){display:none;}
 .feedback-wrap>.hidden+.feedback-close{display:none;}
-.feedback-close{flex:0 0 24px;width:24px;min-height:24px;padding:0;margin-top:10px;font-size:16px;line-height:22px;border-radius:var(--corner-radius);}
+.feedback-close{flex:0 0 24px;width:24px;min-height:var(--button-height);padding:0;margin-top:10px;font-size:16px;line-height:22px;border-radius:var(--corner-radius);}
 .withdraw-action{gap:0;}
 .withdraw-action>.feedback-wrap{width:100%;}
 .withdraw-action .feedback-close{margin-top:var(--space-xs);}
@@ -331,23 +331,23 @@ __DESIGN_CSS__
 .redesigned .report-primary .value{font-size:1.3rem;}
 }
 .redesigned .period-shortcuts{display:flex;gap:2px;border:0;background:var(--surface);border-radius:var(--corner-radius);padding:3px;margin-left:auto;}
-.redesigned .period-shortcuts button{font-size:.76rem;min-height:32px;padding:5px 12px;background:transparent;color:var(--muted);border:0;border-radius:var(--corner-radius);}
+.redesigned .period-shortcuts button{font-size:.76rem;min-height:var(--button-height);padding:8px 12px;background:transparent;color:var(--muted);border:0;border-radius:var(--corner-radius);}
 .redesigned .period-shortcuts button[aria-pressed=true],.redesigned .period-shortcuts button[aria-pressed=true]:hover{background:var(--selection);color:var(--text);border:0;font-weight:600;}
 .redesigned .period-shortcuts button:hover{background:var(--hover);color:var(--text);}
 @media (max-width:600px){
 .redesigned .period-shortcuts{order:3;flex-basis:100%;margin:0;}
-.redesigned .period-shortcuts button{padding:5px 8px;}
+.redesigned .period-shortcuts button{padding:8px 8px;}
 .redesigned .analysis-header .bottom-actions{margin-left:auto;}
 }
 .redesigned .settings-dialog-header{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);}
 .redesigned .settings-header-actions{grid-column:3;grid-row:1;justify-self:end;display:flex;align-items:center;gap:var(--space-sm);}
 .redesigned .settings-header-actions form{margin:0;}
-.redesigned .settings-header-actions .logout-button{width:auto;min-height:44px;padding:10px 14px;font-size:.82rem;line-height:1.35;white-space:nowrap;}
+.redesigned .settings-header-actions .logout-button{width:auto;min-height:var(--button-height);padding:8px 14px;font-size:.82rem;line-height:1.35;white-space:nowrap;}
 @media (max-width:480px){
 .redesigned .settings-dialog-header{grid-template-columns:minmax(0,1fr) auto;gap:var(--space-sm);}
 .redesigned .settings-dialog-header h2{grid-column:1;justify-self:start;text-align:left;font-size:1rem;}
 .redesigned .settings-header-actions{grid-column:2;}
-.redesigned .settings-header-actions .logout-button{padding:10px;font-size:.76rem;}
+.redesigned .settings-header-actions .logout-button{padding:8px 10px;font-size:.76rem;}
 }
 @media (max-width:600px){
 .redesigned .report-extra{grid-template-columns:repeat(2,minmax(0,1fr));}
@@ -377,7 +377,7 @@ __DESIGN_CSS__
 /* Supplemental details stay within their section, without divider bars. */
 .redesigned .dashboard-footnotes>ol{padding-top:8px;}
 @media (pointer:coarse){
-.redesigned .period-shortcuts button{min-height:44px;}
+.redesigned .period-shortcuts button{min-height:var(--button-height);}
 }
 .redesigned .period-activities{border:0;padding-top:0;margin-top:24px;}
 .redesigned .period-activities .activity-panel{margin-top:8px;}
@@ -546,3 +546,5 @@ __DESIGN_CSS__
 
 /* Activity pagination shares the borderless secondary-button treatment. */
 .redesigned .pagination :is(#previousPage,#nextPage,#goToPage){border-color:transparent;background:var(--surface);color:var(--accent)}
+
+.controls>button,.report-controls .controls button.report-control{height:auto;min-height:var(--button-height);max-height:none}

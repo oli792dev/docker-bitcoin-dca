@@ -9,7 +9,7 @@ h1{font-size:27px;margin:6px 0 4px;}
 .login-brand h1{min-width:0;margin:0;line-height:1.25;}
 label{display:block;color:var(--muted);font-size:12px;margin:15px 0 6px;}
 input{width:100%;padding:12px 13px;color:var(--text);background:#0c1425;border:1px solid var(--line);border-radius:var(--corner-radius);font:inherit;outline:none;}
-button{width:100%;margin-top:22px;padding:12px;border:1px solid var(--accent);border-radius:var(--corner-radius);background:var(--accent);color:#081122;font:inherit;font-weight:700;cursor:pointer;}
+button{width:100%;margin-top:22px;padding:8px 12px;border:1px solid var(--accent);border-radius:var(--corner-radius);background:var(--accent);color:#081122;font:inherit;font-weight:700;cursor:pointer;}
 .error{min-height:20px;margin:12px 0 0;color:var(--red);font-size:13px;}
 .foot{margin-top:20px;color:var(--muted);font-size:12px;}
 @media (max-width:480px){

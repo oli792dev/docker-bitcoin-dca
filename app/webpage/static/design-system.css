@@ -1,4 +1,4 @@
-:root{--corner-radius:12px;--space-xs:4px;--space-sm:8px;--space-md:12px;--space-lg:16px;--space-xl:24px;}
+:root{--button-height:44px;--corner-radius:12px;--space-xs:4px;--space-sm:8px;--space-md:12px;--space-lg:16px;--space-xl:24px;}
 /* Semantic surfaces, system typography and a shared 4-point spacing scale. */
 :root{color-scheme:light dark;--panel-padding:20px;--section-space:24px;--subsection-space:16px;--tile-gap:16px;--section-gap:24px;--field-gap:16px;--card-padding:16px;--control-gap:8px;font-size:106.25%;accent-color:var(--primary);}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
@@ -24,7 +24,7 @@ a{color:var(--accent);text-underline-offset:3px;}
 button,.button,input,select{font-family:inherit;font-size:.94rem;line-height:1.35;min-height:44px;border-radius:var(--corner-radius);}
 input,select{background:var(--control);color:var(--text);border:1px solid var(--control-line);padding:10px var(--space-md);max-width:100%;min-width:0;}
 input::placeholder{color:var(--muted);opacity:1;}
-button,.button{background:var(--primary);color:var(--on-primary);border:1px solid transparent;font-weight:600;padding:10px var(--space-lg);box-shadow:none;}
+button,.button{background:var(--primary);color:var(--on-primary);border:1px solid transparent;font-weight:600;padding:8px var(--space-lg);box-shadow:none;}
 button.secondary,.button.secondary{background:var(--surface);color:var(--accent);border-color:var(--control-line);}
 button:disabled,input:disabled,select:disabled{opacity:.55;cursor:not-allowed;}
 button:not(:disabled):hover,.button:hover{filter:none!important;transform:none!important;box-shadow:none!important;}
@@ -33,7 +33,7 @@ button:not(:disabled):not(.secondary):hover,.button:not(.secondary):hover{backgr
 button.secondary:not(:disabled):not(#previousPage):not(#nextPage):not(#goToPage):hover,.button.secondary:hover{background:var(--hover);}
 }
 button:not(:disabled):active,.button:active{filter:none!important;transform:none!important;box-shadow:none!important;}
-.top-actions button,.top-actions .logout-button{font:600 .94rem/1.35 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;min-height:44px;padding:10px var(--space-lg);border-radius:var(--corner-radius);}
+.top-actions button,.top-actions .logout-button{font:600 .94rem/1.35 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;min-height:var(--button-height);padding:8px var(--space-lg);border-radius:var(--corner-radius);}
 .btc-balance-card #manualWithdraw{font-size:.82rem;padding:10px 14px;min-height:44px;border-radius:var(--corner-radius);}
 /* Disclosure headers are grouped surfaces rather than decorative banners. */
 details.panel{border-radius:var(--corner-radius);overflow:hidden;isolation:isolate;background-clip:padding-box;border-color:var(--line);}
@@ -61,13 +61,13 @@ th,td{border-color:var(--line);}
 .negative,.error,.status-failed,.section-feedback.is-error,.inline-status.is-error,#status.error,#passwordConfirmationError,.export-feedback{color:var(--red);}
 .status-pending{color:var(--warning);}
 .status-muted{color:var(--muted);}
-.feedback-close,.settings-dialog-header button{min-width:44px;min-height:44px;width:44px;padding:0;font-size:1.18rem;line-height:1;border-radius:var(--corner-radius);}
+.feedback-close,.settings-dialog-header button{min-width:44px;min-height:var(--button-height);width:44px;padding:0;font-size:1.18rem;line-height:1;border-radius:var(--corner-radius);}
 .feedback-close{flex:0 0 44px;margin-top:0;}
 .withdraw-action .feedback-close{margin-top:0;}
 /* Keyboard-accessible section tabs retain unsaved inputs in their panels. */
 .settings-page #settingsForm>.panel{margin:0;}
 .settings-tabs{display:flex;gap:var(--space-xs);align-items:center;flex-wrap:nowrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--corner-radius);padding:var(--space-xs);}
-.settings-tabs button{flex:1 0 auto;white-space:nowrap;font-size:.82rem;font-weight:500;background:transparent;color:var(--muted);border:1px solid transparent;min-height:44px;padding:10px var(--space-lg);border-radius:var(--corner-radius);}
+.settings-tabs button{flex:1 0 auto;white-space:nowrap;font-size:.82rem;font-weight:500;background:transparent;color:var(--muted);border:1px solid transparent;min-height:var(--button-height);padding:8px var(--space-lg);border-radius:var(--corner-radius);}
 .settings-tabs button[aria-selected="true"]{background:var(--panel);color:var(--text);border-color:var(--line);font-weight:600;}
 .settings-tabs button:not(:disabled):hover{background:var(--hover);color:var(--text);}
 .settings-tabs button[aria-selected="true"]:hover{background:var(--panel);}
@@ -117,7 +117,7 @@ dialog h2,.confirmation-dialog h2{font-size:1.18rem;font-weight:600;}
 .login-brand h1{font-size:1.6rem;}
 .login-page label{font-size:.82rem;margin-top:var(--space-lg);margin-bottom:var(--space-xs);}
 .login-page input{font-size:1rem;min-height:48px;}
-.login-page button{margin-top:var(--space-lg);min-height:48px;}
+.login-page button{margin-top:var(--space-lg);min-height:var(--button-height);}
 .login-support,.login-support code{font-size:.7rem;line-height:1.6;color:var(--muted);}
 .login-support>span{color:var(--red);}
 .login-page .error:empty{display:none;}
@@ -242,3 +242,6 @@ details:is(.report-details,.period-activities,.dashboard-footnotes)[open]::detai
 .ui-icon{display:inline-block;flex:0 0 var(--icon-size);width:var(--icon-size);height:var(--icon-size);background:currentColor;pointer-events:none}
 .icon-close{-webkit-mask:var(--icon-close) center/contain no-repeat;mask:var(--icon-close) center/contain no-repeat}
 @media(forced-colors:active){.ui-icon,.range-edit-icon{forced-color-adjust:none;background:ButtonText}}
+
+/* Shared sizing for text and icon buttons; wrapped labels can grow naturally. */
+button,.button{box-sizing:border-box;min-height:var(--button-height);height:auto;max-height:none;padding-block:8px}
