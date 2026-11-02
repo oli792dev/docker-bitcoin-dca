@@ -218,3 +218,6 @@ summary::before,summary::after{transition:transform 180ms var(--motion-ease),col
 
 /* Center dismissal glyphs independently of the text baseline. */
 .settings-header-actions #closeSettings,.feedback-close,#dismissSettingsAction{display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1;text-align:center}
+
+/* The sign-in card uses the same borderless surface as dashboard cards. */
+.login-page .card{border-color:transparent}
