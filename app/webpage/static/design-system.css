@@ -174,3 +174,33 @@ html{scroll-padding-top:calc(88px + env(safe-area-inset-top))}
 }
 .report-controls .controls button.report-control{display:flex;align-items:center;justify-content:center;gap:8px}
 @media(prefers-contrast:more){.report-controls .controls .report-control{border-width:2px}}
+
+/* Functional motion: disclosure, modal presentation and input feedback. */
+:root{--motion-ease:cubic-bezier(.2,.8,.2,1)}
+@supports (interpolate-size:allow-keywords){
+ details.panel{interpolate-size:allow-keywords}
+ details.panel::details-content{
+  height:0;opacity:0;overflow:clip;
+  transition:height 240ms var(--motion-ease),opacity 180ms ease,content-visibility 240ms allow-discrete;
+ }
+ details.panel[open]::details-content{height:auto;opacity:1}
+}
+dialog{
+ opacity:0;transform:translateY(6px);
+ transition:opacity 150ms ease,transform 150ms var(--motion-ease),display 150ms allow-discrete,overlay 150ms allow-discrete;
+}
+dialog[open]{opacity:1;transform:translateY(0);transition-duration:200ms}
+dialog::backdrop{opacity:0;transition:opacity 150ms ease,display 150ms allow-discrete,overlay 150ms allow-discrete}
+dialog[open]::backdrop{opacity:1;transition-duration:200ms}
+@starting-style{
+ dialog[open]{opacity:0;transform:translateY(6px)}
+ dialog[open]::backdrop{opacity:0}
+}
+button,.button{transition:background-color 120ms ease,border-color 120ms ease,color 120ms ease}
+/* No bounce or glow; the existing pressed colors provide tactile feedback. */
+.compact-brand-bar{transform:translateY(-6px);transition:transform 240ms var(--motion-ease),opacity 220ms ease,visibility 240ms}
+.top-actions{transition:opacity 180ms ease,transform 220ms var(--motion-ease),visibility 220ms}
+@media(prefers-reduced-motion:reduce){
+ details.panel::details-content,dialog,dialog::backdrop,button,.button,.compact-brand-bar,.top-actions{transition:none!important;animation:none!important}
+ dialog,dialog[open],.compact-brand-bar,body.compact-brand-visible .compact-brand-bar,body.header-actions-hidden .top-actions{transform:none}
+}
