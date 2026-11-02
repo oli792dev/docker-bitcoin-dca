@@ -1,10 +1,13 @@
 """Safari icons: explicit PNG, pinned-tab mask and cacheable public responses."""
 import io
+import json
 import struct
+import tempfile
+from pathlib import Path
 import unittest
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from app.webpage import favicon_assets
 from app.webpage import web_ui
 
@@ -52,13 +55,53 @@ class FaviconTests(unittest.TestCase):
             self.assertEqual(touch['sizes'],'180x180')
             self.assertNotEqual(regular[0]['href'],touch['href'])
             self.assertEqual(regular[0]['type'],'image/png')
-            self.assertTrue(any(link.get('rel')=='apple-touch-icon' and link['href']=='/bitcoin-dca-icon-v4.png' for link in parser.links))
+            self.assertTrue(any(link.get('rel')=='apple-touch-icon' and link['href']=='/apple-touch-icon.png?v=5' for link in parser.links))
             self.assertTrue(any(link.get('rel')=='mask-icon' and link['href']=='/safari-pinned-tab-v4.svg' and link['color']=='#4285d4' for link in parser.links))
 
         svg=ET.fromstring(favicon_assets.FAVICON_MASK_SVG)
         self.assertEqual(svg.attrib['viewBox'],'0 0 16 16')
         self.assertEqual(len(svg),1);self.assertTrue(svg[0].tag.endswith('path'))
         self.assertEqual(svg[0].attrib['fill'],'#000000')
+
+    def test_homescreen_manifest_is_public_and_resolves_only_public_assets(self):
+        handler=object.__new__(web_ui.Handler);handler.path='/manifest.webmanifest'
+        handler._send=Mock();handler._require_authentication=Mock(side_effect=AssertionError('Manifest must be public'))
+        handler.do_GET()
+        code,body,mime=handler._send.call_args.args
+        self.assertEqual(code,200)
+        self.assertEqual(mime,'application/manifest+json; charset=utf-8')
+        data=json.loads(body)
+        self.assertEqual(data['start_url'],'/')
+        self.assertEqual(data['scope'],'/')
+        self.assertEqual(data['display'],'standalone')
+        self.assertEqual(data['name'],'Bitcoin DCA Dashboard')
+        for icon in data['icons']:
+            self.assertTrue(icon['src'].startswith('/'))
+            handler.path=icon['src'];handler._send.reset_mock();handler.do_GET()
+            self.assertEqual(handler._send.call_args.args[0],200)
+        handler._require_authentication.assert_not_called()
+
+    def test_all_pages_declare_homescreen_metadata_before_any_authentication(self):
+        from app.webpage.settings_ui import PAGE
+        for page in (web_ui.HTML,web_ui.LOGIN_HTML,PAGE):
+            self.assertIn('rel="manifest" href="/manifest.webmanifest"',page)
+            self.assertIn('name="apple-mobile-web-app-capable" content="yes"',page)
+            self.assertIn('name="apple-mobile-web-app-title" content="Bitcoin DCA"',page)
+            self.assertIn('rel="apple-touch-icon" type="image/png" sizes="180x180" href="/apple-touch-icon.png?v=5"',page)
+
+    def test_only_public_ca_certificate_can_be_downloaded_without_login(self):
+        with tempfile.TemporaryDirectory() as directory:
+            ca=Path(directory)/'ca.pem';ca.write_bytes(b'public CA certificate')
+            (Path(directory)/'ca-key.pem').write_bytes(b'PRIVATE CA KEY')
+            handler=object.__new__(web_ui.Handler);handler.path='/local-ca.crt'
+            handler._send=Mock();handler._require_authentication=Mock(side_effect=AssertionError('CA must be public'))
+            with patch.object(web_ui,'LOCAL_CA_PATH',ca,create=True):handler.do_GET()
+            handler._send.assert_called_once_with(200,b'public CA certificate','application/x-x509-ca-cert',filename='bitcoin-dca-ca.crt')
+            handler._require_authentication.assert_not_called()
+            self.assertNotIn(b'PRIVATE CA KEY',handler._send.call_args.args[1])
+            ca.unlink();handler._send.reset_mock()
+            with patch.object(web_ui,'LOCAL_CA_PATH',ca,create=True):handler.do_GET()
+            self.assertEqual(handler._send.call_args.args[0],404)
 
     def test_normal_responses_remain_no_store(self):
         handler=object.__new__(web_ui.Handler)

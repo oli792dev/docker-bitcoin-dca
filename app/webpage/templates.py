@@ -4,6 +4,8 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
+from app.webpage.web_app import WEB_APP_HEAD
+
 _ROOT = Path(__file__).parent
 _PAGES = frozenset(("dashboard", "login", "settings", "scroll"))
 
@@ -19,7 +21,9 @@ def load_asset(name):
 def load_page(name):
     if name not in _PAGES:
         raise ValueError("Unknown bundled page.")
-    page = (_ROOT / "templates" / (name + ".html")).read_text(encoding="utf-8")
+    page = (
+        (_ROOT / "templates" / (name + ".html")).read_text(encoding="utf-8").replace("__WEB_APP_HEAD__", WEB_APP_HEAD)
+    )
 
     def asset(match):
         return load_asset(match[1])
