@@ -77,7 +77,7 @@ Setup and Settings log account creation, configuration completion, changed field
 
 ## Settings and activity UI
 
-The first setup step creates login credentials; the second configures the bot without repeating them. Settings later opens in a dashboard dialog with Bot Configuration, Exchange, Dashboard and Login tabs. Credentials and withdrawal targets are directly editable in their tabs; all changes share one review/save action. Connection-test results appear beside the button. Cosmetic settings do not reschedule purchases.
+The first setup step creates login credentials; the second configures the bot without repeating them. Settings later opens in a dashboard dialog with Bot Configuration, Exchange and Dashboard tabs. Login credentials are grouped under Dashboard; API credentials and withdrawal targets are under Exchange; all changes share one review/save action. Connection-test results appear beside the button. Cosmetic settings do not reschedule purchases.
 
 Settings keeps the tab bar and review/save footer outside its vertically scrolling content region. Tab changes reset that region; invalid fields reveal their tab before focus moves to them. Flat form rows retain 44 CSS-pixel controls, separate switch labels/descriptions and keyboard navigation inside scroll regions. Short displays hide the redundant brand header to preserve content space. Settings fields reflow into a single column on mobile, with no horizontal field scrolling. Mobile tabs wrap into two rows while the tab bar and save footer stay fixed.
 

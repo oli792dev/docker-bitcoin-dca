@@ -155,3 +155,6 @@ __DESIGN_CSS__
 .settings-page #credentials input::placeholder{font-size:.72rem;letter-spacing:normal}
 @media(min-width:601px){.settings-page #credentials .setting-row{grid-template-columns:minmax(0,1fr) minmax(160px,48%)}}
 @media(pointer:coarse){.settings-page #testConnection{min-height:44px}}
+
+/* Login is a full-width group within Dashboard settings. */
+.settings-page #dashboardCredentials{grid-column:1/-1}

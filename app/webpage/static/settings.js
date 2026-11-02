@@ -58,7 +58,7 @@ if(initial.embedded){
  document.body.classList.add('embedded');$('settingsNavigationHeading').hidden=true;$('back').hidden=true;$('pageHeading').hidden=true;
  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('review').open&&!$('discardDialog').open){event.preventDefault();requestSettingsClose()}});
 }
-const settingsTabDefinitions=[['botConfiguration','Bot Configuration'],['exchangeConnection','Exchange'],['dashboardOptions','Dashboard'],['dashboardCredentials','Login']];
+const settingsTabDefinitions=[['botConfiguration','Bot Configuration'],['exchangeConnection','Exchange'],['dashboardOptions','Dashboard']];
 const settingsTabs=[];
 function activateSettingsTab(id,focus=false){
  if($('settingsContent'))$('settingsContent').scrollTop=0;
@@ -77,7 +77,7 @@ if(!initial.createAccount){
   settingsTabs.push({id,panel,button});$('settingsTabs').append(button);
  }
  let rememberedTab='botConfiguration';
- try{const saved=localStorage.getItem('bitcoinDcaSettingsTab');if(settingsTabs.some(item=>item.id===saved))rememberedTab=saved}catch(e){}
+ try{const storedTab=localStorage.getItem('bitcoinDcaSettingsTab'),saved=storedTab==='dashboardCredentials'?'dashboardOptions':storedTab;if(settingsTabs.some(item=>item.id===saved))rememberedTab=saved}catch(e){}
  activateSettingsTab(initial.complete?rememberedTab:'exchangeConnection');
  let invalidTabOpened=false;
  $('settingsForm').addEventListener('invalid',event=>{if(invalidTabOpened)return;const item=settingsTabs.find(item=>item.panel.contains(event.target));if(item){activateSettingsTab(item.id);invalidTabOpened=true;setTimeout(()=>{invalidTabOpened=false},0)}},true);
