@@ -123,6 +123,8 @@ async function refreshPurchaseSchedule(){
   $("withdrawalCountdownStatus").textContent=t(estimatedWithdrawalTimestamp===null?$("estimatedWithdrawalStatus").textContent:(schedule.estimatedWithdrawalStatus||"Estimate at the current BTC price, deposit and purchase interval"));
   renderWithdrawalProgress(exchangeBtcBalance,Number(schedule.purchaseCurrencyPrice),Number(schedule.withdrawalThreshold),schedule.withdrawalsEnabled);
   renderPurchaseCountdown();
+  $('automaticWithdrawalCard').classList.toggle('withdrawal-disabled',!schedule.withdrawalsEnabled);
+  if(!schedule.withdrawalsEnabled)$('estimatedWithdrawalAt').textContent=t('Automatic withdrawals disabled');
   sectionFeedback("scheduleFeedback","");
  }catch(e){if(request===scheduleRequest){$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");updateStatusLight("error");sectionFeedback("scheduleFeedback","")}}
 }
