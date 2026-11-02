@@ -42,6 +42,7 @@ DEFAULTS = dict(
     language="en",
     appearance="system",
     display_currency="EUR",
+    dashboard_refresh_seconds=30,
     expected_monthly_deposit="",
     **{key: "" for key in SECRET_FIELDS},
 )
@@ -144,6 +145,8 @@ def validate(values, previous=None, require_credentials=True):
             if not 60 <= result["check_interval_seconds"] <= 86400
             else "order_status_check_seconds",
         )
+    if not 5 <= result["dashboard_refresh_seconds"] <= 3600:
+        raise ConfigurationError("Dashboard refresh interval must be 5–3600 seconds.", "dashboard_refresh_seconds")
     try:
         ZoneInfo(result["timezone"])
     except (ZoneInfoNotFoundError, ValueError):

@@ -116,6 +116,18 @@ class ConfigurationTests(unittest.TestCase):
         self.assertTrue(self.store.snapshot()['complete'])
         self.assertTrue(self.app.exchange_check_pending)
 
+    def test_dashboard_refresh_is_persisted_without_rescheduling_exchange_checks(self):
+        self.ready();api=self.app.api;self.app.worker.reconfigure.clear()
+        interval=self.app.worker.interval
+        self.app.save({'settings':{'dashboard_refresh_seconds':75}})
+        self.assertEqual(config.ConfigStore(self.store.path).snapshot()['settings']['dashboard_refresh_seconds'],75)
+        self.assertEqual(self.app.worker.interval,interval)
+        self.assertFalse(self.app.worker.reconfigure.is_set())
+        self.assertIs(self.app.api,api)
+        for value in (0,4,3601,30.5,'30',True):
+            with self.subTest(value=value),self.assertRaises(ValueError):
+                config.validate({'dashboard_refresh_seconds':value},require_credentials=False)
+
     def test_language_change_is_saved_without_rescheduling_or_replacing_exchange(self):
         self.ready();api=self.app.api;self.api_factory.reset_mock()
         self.app.worker.reconfigure.clear()

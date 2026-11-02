@@ -36,6 +36,7 @@ function renderWithdrawalProgress(balance,price,threshold,enabled){
 function updateStatusLight(tone){
  $('botStatusLight').className='status-light status-'+(['active','waiting','error'].includes(tone)?tone:'waiting');
 }
+let dashboardRefreshSeconds=30,scheduleRefreshTimer=null;
 async function refreshPurchaseSchedule(){
  const request=++scheduleRequest;
  try{
@@ -43,6 +44,8 @@ async function refreshPurchaseSchedule(){
   if(response.status===401){window.location.reload();return}
   if(!response.ok)throw new Error("Schedule unavailable");
   const schedule=await response.json();if(request!==scheduleRequest)return;const target=Date.parse(schedule.nextPurchaseAt),serverTime=Date.parse(schedule.serverTime);
+  const refresh=Number(schedule.dashboardRefreshSeconds);
+  if(Number.isInteger(refresh)&&refresh>=5&&refresh<=3600)dashboardRefreshSeconds=refresh;
   scheduleClockOffset=Number.isFinite(serverTime)?serverTime-Date.now():0;
   $('botStatusLabel').textContent=t(schedule.botStatusLabel||'Bot active');
   updateStatusLight(schedule.botStatusTone||(schedule.botStatusWarning?'error':'waiting'));
@@ -90,9 +93,9 @@ async function refreshPurchaseSchedule(){
   $('automaticWithdrawalCard').classList.toggle('withdrawal-disabled',!schedule.withdrawalsEnabled);
   $('withdrawalHeading').textContent=t(schedule.withdrawalsEnabled?'Automatic withdrawal':'Automatic withdrawal disabled');
  }catch(e){if(request===scheduleRequest){$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");updateStatusLight("error")}}
+ finally{if(request===scheduleRequest){clearTimeout(scheduleRefreshTimer);scheduleRefreshTimer=setTimeout(refreshPurchaseSchedule,dashboardRefreshSeconds*1000)}}
 }
 setInterval(renderPurchaseCountdown,1000);
-setInterval(refreshPurchaseSchedule,30000);
 
 function showError(message){$("error").textContent=t(message||"");$("error").classList.toggle("hidden",!message)}
 function logUiEvent(event){

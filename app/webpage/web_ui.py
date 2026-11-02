@@ -137,6 +137,7 @@ class Handler(BaseHTTPRequestHandler):
             {
                 "accountMarketPrice": account_price,
                 "botStatusLabel": status.label,
+                "dashboardRefreshSeconds": self.settings.get("dashboard_refresh_seconds", 30),
                 "botStatusTone": status.tone,
                 "botStatusWarning": status.warning,
                 "startupDelayActive": bool(

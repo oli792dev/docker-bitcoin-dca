@@ -114,7 +114,7 @@ if(!initial.createAccount){
  $('settingsForm').addEventListener('invalid',event=>{if(invalidTabOpened)return;const item=settingsTabs.find(item=>item.panel.contains(event.target));if(item){activateSettingsTab(item.id);invalidTabOpened=true;setTimeout(()=>{invalidTabOpened=false},0)}},true);
 }
 $('quote').addEventListener('change',updatePurchaseCurrencyLabel);selectedExchange();$('exchange').addEventListener('change',()=>{for(const prefix of ['kraken','bitvavo'])for(const part of ['key','secret'])$(prefix+'_api_'+part).value='';connectionMessage('');selectedExchange()});
-function values(){const result={};for(const input of document.querySelectorAll('[data-setting]')){if(input.id==='withdraw_threshold'&&input.disabled){result[input.id]=initial.settings.withdraw_threshold;continue}result[input.id]=input.id==='check_interval_seconds'?Math.round(Number(input.value)*60):input.type==='checkbox'?input.checked:input.type==='number'&&['deposit_day','startup_delay_seconds','check_interval_seconds','order_status_check_seconds'].includes(input.id)?Number(input.value):input.value}return result}
+function values(){const result={};for(const input of document.querySelectorAll('[data-setting]')){if(input.id==='withdraw_threshold'&&input.disabled){result[input.id]=initial.settings.withdraw_threshold;continue}result[input.id]=input.id==='check_interval_seconds'?Math.round(Number(input.value)*60):input.type==='checkbox'?input.checked:input.type==='number'&&['deposit_day','startup_delay_seconds','check_interval_seconds','order_status_check_seconds','dashboard_refresh_seconds'].includes(input.id)?Number(input.value):input.value}return result}
 $('accountForm').addEventListener('submit',async e=>{e.preventDefault();if($('newPassword').value!==$('confirmPassword').value){message('Passwords do not match.',true,'confirmPassword');return}const b=e.submitter;b.disabled=true;try{await request('/api/setup/account',{username:$('newUsername').value,password:$('newPassword').value});location.href='/settings'}catch(err){message(err.message,true,err.field)}finally{b.disabled=false}});
 $('testConnection').addEventListener('click',async()=>{if(!exchangeCredentialsReady())return;const b=$('testConnection');b.disabled=true;b.ariaBusy='true';b.textContent=t('Testing…');connectionMessage('Testing connection…');try{connectionMessage((await request('/api/settings/test',values())).message)}catch(err){connectionMessage(err.message,true)}finally{b.disabled=false;b.ariaBusy='false';b.textContent=t('Test connection')}});
 function needsPassword(){
@@ -141,7 +141,7 @@ function renderReview(){
  }
  const target=settings=>settings.exchange==='KRAKEN'?'Kraken · '+(settings.kraken_withdraw_key||t('Not configured')):'Bitvavo · '+(settings.withdraw_address||t('Not configured'))+' · '+(settings.withdraw_network||'BTC');
  add('Withdrawal target',target(before),target(after));
- for(const [key,label] of [['buy_amount','BTC per purchase'],['deposit_day','Deposit day'],['deposit_time','Deposit time'],['expected_monthly_deposit','Expected monthly deposit'],['startup_delay_seconds','Startup delay'],['check_interval_seconds','Account check interval'],['order_status_check_seconds','Open order check interval'],['withdraw_threshold','Automatic withdrawal threshold']]){
+ for(const [key,label] of [['buy_amount','BTC per purchase'],['deposit_day','Deposit day'],['deposit_time','Deposit time'],['expected_monthly_deposit','Expected monthly deposit'],['dashboard_refresh_seconds','Dashboard refresh interval'],['startup_delay_seconds','Startup delay'],['check_interval_seconds','Account check interval'],['order_status_check_seconds','Open order check interval'],['withdraw_threshold','Automatic withdrawal threshold']]){
   const format=(settings)=>key==='buy_amount'?(Number(settings[key])===0?'Exchange minimum':number(settings[key])+' BTC'):['withdraw_threshold','expected_monthly_deposit'].includes(key)?(settings[key]===''?t('Not configured'):number(settings[key])+' '+settings.quote):key==='check_interval_seconds'?number(settings[key]/60)+t(' minutes'):number(settings[key])+(key.endsWith('_seconds')?t(' seconds'):'');
   add(label,format(before),format(after));
  }
@@ -215,7 +215,7 @@ if(typeof window!=='undefined'&&window.addEventListener){
 
 if(initial.embedded)window.parent.postMessage({type:'dca-settings-ready'},location.origin);
 
-for(const id of [...fields.map(field=>field[0]),'username','current_password','password','passwordConfirm','newUsername','newPassword','confirmPassword','exchange','quote','kraken_api_key','kraken_api_secret','bitvavo_api_key','bitvavo_api_secret','kraken_withdraw_key','withdraw_address','withdraw_network','timezone','language','appearance','display_currency']){
+for(const id of [...fields.map(field=>field[0]),'username','current_password','password','passwordConfirm','newUsername','newPassword','confirmPassword','exchange','quote','kraken_api_key','kraken_api_secret','bitvavo_api_key','bitvavo_api_secret','kraken_withdraw_key','withdraw_address','withdraw_network','timezone','language','appearance','display_currency','dashboard_refresh_seconds']){
  const input=$(id);if(input)input.addEventListener('input',()=>clearFieldError(input));
 }
 
