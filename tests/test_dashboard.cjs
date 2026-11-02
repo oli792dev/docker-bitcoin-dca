@@ -141,10 +141,11 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  assert.equal(get('interval').value,'');assert.equal(get('end').value,vm.runInContext('localInput(Date.now())',context));
 
  const beforeCancel=get('start').value,savedCount=requests.filter(url=>url==='/api/settings/report-period').length;
- await get('customRange').handlers.click();assert.equal(get('rangeDialog').open,true);get('start').value='2026-10-03T10:00:00';get('start').handlers.change();get('cancelRange').handlers.click();assert.equal(get('start').value,beforeCancel);assert.equal(requests.filter(url=>url==='/api/settings/report-period').length,savedCount);
- await get('customRange').handlers.click();get('interval').value=get('interval').children[1].value;get('interval').handlers.change();assert.equal(Date.parse(get('start').value),Number(get('interval').value.split(',')[0]));
+ await get('editCustomRange').handlers.click();assert.equal(get('rangeDialog').open,true);get('start').value='2026-10-03T10:00:00';get('start').handlers.change();get('cancelRange').handlers.click();assert.equal(get('start').value,beforeCancel);assert.equal(requests.filter(url=>url==='/api/settings/report-period').length,savedCount);
+ await get('editCustomRange').handlers.click();get('interval').value=get('interval').children[1].value;get('interval').handlers.change();assert.equal(Date.parse(get('start').value),Number(get('interval').value.split(',')[0]));
  get('start').value='2026-10-04T11:12:13';get('start').handlers.change();get('rangeForm').handlers.submit({preventDefault(){}});await settle();
  assert.equal(get('rangeDialog').open,false);assert.equal(requests.filter(url=>url==='/api/settings/report-period').length,savedCount+1);
+ const customStart=get('start').value,customEnd=get('end').value;await get('monthRange').handlers.click();await settle();await get('customRange').handlers.click();await settle();assert.equal(get('start').value,customStart);assert.equal(get('end').value,customEnd);assert.equal(get('rangeDialog').open,false);await get('yearRange').handlers.click();await settle();await get('editCustomRange').handlers.click();assert.equal(get('start').value,customStart);get('cancelRange').handlers.click();assert.equal(vm.runInContext('selectedQuickRange',context),'yearRange');await get('customRange').handlers.click();await settle();
  assert(!html.includes('id="refresh"'));assert(html.indexOf('id="start"')>html.indexOf('id="rangeDialog"'),'Date controls belong only in the period dialog');
  const persistedFrom=get('reportFrom').value;get('start').value='';vm.runInContext('restoreReportView()',context);
  assert.equal(get('start').value,vm.runInContext('localInput(Date.parse($("reportFrom").value))',context));

@@ -202,6 +202,7 @@
   "Determined by the exchange": "Wird von der Börse bestimmt",
   "Available BTC minus the exchange fee": "Verfügbare BTC abzüglich Börsengebühr",
   "Confirmation expires after two minutes. No transfer is submitted until you confirm.": "Die Bestätigung ist zwei Minuten gültig. Ohne Bestätigung wird nichts überwiesen.",
+  "Edit custom date range": "Eigenen Zeitraum anpassen",
   "Custom date range": "Eigener Zeitraum",
   "Unverified": "Ungeprüft",
   "Confirmed ✓": "Bestätigt ✓",

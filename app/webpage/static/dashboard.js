@@ -150,20 +150,27 @@ async function loadIntervals(){
  for(let i=1;i<withdrawals.length;i++){const a=withdrawals[i-1],b=withdrawals[i],o=document.createElement("option");o.value=a.timestamp+","+b.timestamp;o.textContent=t(dateLabel(a.timestamp)+" → "+dateLabel(b.timestamp));select.appendChild(o)}
  select.value="";
 }
-let selectedQuickRange='customRange',rangeDraft=null;
+let selectedQuickRange='customRange',rangeDraft=null,customPeriod=null;
+function captureCustomPeriod(){return {start:$('start').value,end:$('end').value,interval:$('interval').value}}
+function restoreCustomPeriod(){if(customPeriod)for(const key of ['start','end','interval'])$(key).value=customPeriod[key]}
 function selectQuickRange(selected){
  selectedQuickRange=selected;
  for(const id of ['monthRange','yearRange','customRange'])$(id).setAttribute('aria-pressed',String(id===selected));
 }
 for(const id of ['monthRange','yearRange','customRange'])$(id).addEventListener('click',async()=>{
+ if(selectedQuickRange==='customRange')customPeriod=captureCustomPeriod();
  if(id==='customRange'){
-  rangeDraft={start:$('start').value,end:$('end').value,interval:$('interval').value,selected:selectedQuickRange};
-  $('rangeError').textContent='';$('rangeDialog').returnValue='';$('rangeDialog').showModal();return
+  restoreCustomPeriod();selectQuickRange(id);await saveReportFrom();currentPage=1;loadAnalytics();return
  }
  selectQuickRange(id);
  const now=new Date(),start=new Date(now.getFullYear(),id==='yearRange'?0:now.getMonth(),1);
  $('start').value=localInput(start.getTime());$('end').value=localInput(now.getTime());$('interval').value='';
  await saveReportFrom();currentPage=1;loadAnalytics();
+});
+$('editCustomRange').addEventListener('click',()=>{
+ rangeDraft={...captureCustomPeriod(),selected:selectedQuickRange};
+ if(selectedQuickRange==='customRange')customPeriod=captureCustomPeriod();
+ restoreCustomPeriod();$('rangeError').textContent='';$('rangeDialog').returnValue='';$('rangeDialog').showModal();
 });
 $("interval").addEventListener("change",()=>{applySelectedInterval();$('rangeError').textContent=''});
 ["start","end"].forEach(id=>$(id).addEventListener("change",()=>{$("interval").value="";$('rangeError').textContent=''}));
@@ -174,7 +181,7 @@ $('rangeDialog').addEventListener('close',()=>{
 });
 $('rangeForm').addEventListener('submit',event=>{
  event.preventDefault();try{selectedPeriod()}catch(error){$('rangeError').textContent=t(error.message);return}
- selectQuickRange('customRange');$('rangeDialog').close('apply');saveReportFrom();saveReportView();currentPage=1;loadAnalytics();
+ customPeriod=captureCustomPeriod();selectQuickRange('customRange');$('rangeDialog').close('apply');saveReportFrom();saveReportView();currentPage=1;loadAnalytics();
 });
 function activityStatus(row){
  if(row.type==="Deposit")return row.depositStatus==="confirmed"?{label:"Confirmed ✓",tone:"confirmed"}:{label:"—",tone:"muted"};
