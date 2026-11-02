@@ -16,7 +16,7 @@ function updateExchangeGuidance(){
  $('exchangeCredentialHint').textContent=t(changed?'Enter the API key and API secret for '+name+'. Saved keys from either exchange are not reused automatically. Confirm the '+name+' withdrawal target if you use withdrawals.':'Leave API fields empty to keep saved '+name+' keys. The withdrawal target below applies to '+name+'.');
  for(const prefix of ['kraken','bitvavo'])for(const part of ['key','secret']){const input=$(prefix+'_api_'+part),active=prefix===$('exchange').value.toLowerCase();input.required=changed&&active;input.placeholder=t(changed&&active?'Required for '+name:(initial.settings[input.id+'_configured']?'Saved · leave empty to keep':'Not configured'))}
 }
-function updatePurchaseCurrencyLabel(){$('withdraw_thresholdLabel').textContent=t('Automatic withdrawal threshold ('+($('quote').value||'EUR')+')')}
+function updatePurchaseCurrencyLabel(){$('withdraw_thresholdLabel').textContent=t('Automatic withdrawal threshold ('+($('quote').value||'EUR')+')');$('expected_monthly_depositLabel').textContent=t('Expected monthly deposit ('+($('quote').value||'EUR')+')')}
 function selectedExchange(){const kraken=$('exchange').value==='KRAKEN';for(const prefix of ['kraken','bitvavo'])for(const part of ['key','secret'])$(prefix+'_api_'+part).parentElement.hidden=(prefix==='kraken')!==kraken;$('krakenTarget').hidden=!kraken;$('bitvavoTarget').hidden=kraken;$('bitvavoNetwork').hidden=kraken;$('quote').options[1].disabled=!kraken;if(!kraken)$('quote').value='EUR';updateExchangeGuidance();updatePurchaseCurrencyLabel()}
 function exchangeCredentialsReady(){if(!exchangeChanged())return true;const prefix=$('exchange').value.toLowerCase();if(!$(prefix+'_api_key').value.trim()||!$(prefix+'_api_secret').value.trim()){activateSettingsTab('exchangeConnection');connectionMessage('Enter '+exchangeName()+' API key and API secret before testing or saving.',true);return false}return true}
 
@@ -26,12 +26,13 @@ const fields=[
  ['startup_delay_seconds','Startup delay (seconds)','0','1','86400','Delay before the first account check after startup or setup.'],
  ['deposit_day','Deposit day (day of month)','1','1','31','Monthly day; shorter months use their last day. Does not initiate deposits.'],
  ['deposit_time','Deposit time','00:00','60','23:59','Expected local deposit time, used to calculate purchase intervals.'],
+ ['expected_monthly_deposit','Expected monthly deposit (purchase currency)','0','0.01',null,'Forecast only. Assumes deposits on the configured day and time; does not transfer money or change actual purchases.'],
  ['check_interval_seconds','Account check interval (seconds)','60','1','86400','Time until the next balance refresh and recalculation of the purchase and withdrawal schedules.'],
  ['order_status_check_seconds','Open order check interval (seconds)','1','1','3600','Recheck submitted orders; unresolved orders block new purchases.'],
  ['withdraw_threshold','Automatic withdrawal threshold (purchase currency)','0.01','any',null,'Withdraw when all available exchange BTC reaches this value in the purchase currency. Requires automatic withdrawals and live trading.']
 ];
 $('purchaseFields').append($('liveTradingCard'));
-for(const [key,title,min,step,max,description] of fields){if(key==='withdraw_threshold')$('purchaseFields').append($('automaticWithdrawalsCard'));const field=document.createElement('div'),label=document.createElement('label'),input=document.createElement('input'),hint=document.createElement('small');label.htmlFor=key;label.id=key+'Label';label.textContent=t(title);input.id=key;input.type=key==='deposit_time'?'time':'number';if(input.type==='number')input.inputMode=['buy_amount','withdraw_threshold'].includes(key)?'decimal':'numeric';input.required=true;input.dataset.setting='';input.min=min;input.step=step;if(max)input.max=max;hint.id=key+'Hint';hint.className='hint field-description';hint.textContent=t(description);input.setAttribute('aria-describedby',hint.id);field.append(label,input,hint);$('purchaseFields').append(field)}
+for(const [key,title,min,step,max,description] of fields){if(key==='withdraw_threshold')$('purchaseFields').append($('automaticWithdrawalsCard'));const field=document.createElement('div'),label=document.createElement('label'),input=document.createElement('input'),hint=document.createElement('small');label.htmlFor=key;label.id=key+'Label';label.textContent=t(title);input.id=key;input.type=key==='deposit_time'?'time':'number';if(input.type==='number')input.inputMode=['buy_amount','withdraw_threshold','expected_monthly_deposit'].includes(key)?'decimal':'numeric';input.required=key!=='expected_monthly_deposit';input.dataset.setting='';input.min=min;input.step=step;if(max)input.max=max;hint.id=key+'Hint';hint.className='hint field-description';hint.textContent=t(description);input.setAttribute('aria-describedby',hint.id);field.append(label,input,hint);$('purchaseFields').append(field)}
 const timezoneGroups=[
  ['Universal',[['UTC','UTC']]],
  ['Europe',[['Europe/Berlin','Berlin'],['Europe/London','London'],['Europe/Paris','Paris'],['Europe/Zurich','Zurich'],['Europe/Helsinki','Helsinki'],['Europe/Istanbul','Istanbul'],['Europe/Moscow','Moscow']]],
@@ -102,8 +103,8 @@ function renderReview(){
  }
  const target=settings=>settings.exchange==='KRAKEN'?'Kraken · '+(settings.kraken_withdraw_key||t('Not configured')):'Bitvavo · '+(settings.withdraw_address||t('Not configured'))+' · '+(settings.withdraw_network||'BTC');
  add('Withdrawal target',target(before),target(after));
- for(const [key,label] of [['buy_amount','BTC per purchase'],['deposit_day','Deposit day'],['deposit_time','Deposit time'],['startup_delay_seconds','Startup delay'],['check_interval_seconds','Account check interval'],['order_status_check_seconds','Open order check interval'],['withdraw_threshold','Automatic withdrawal threshold']]){
-  const format=(settings)=>key==='buy_amount'?(Number(settings[key])===0?'Exchange minimum':number(settings[key])+' BTC'):key==='withdraw_threshold'?number(settings[key])+' '+settings.quote:number(settings[key])+(key.endsWith('_seconds')?t(' seconds'):'');
+ for(const [key,label] of [['buy_amount','BTC per purchase'],['deposit_day','Deposit day'],['deposit_time','Deposit time'],['expected_monthly_deposit','Expected monthly deposit'],['startup_delay_seconds','Startup delay'],['check_interval_seconds','Account check interval'],['order_status_check_seconds','Open order check interval'],['withdraw_threshold','Automatic withdrawal threshold']]){
+  const format=(settings)=>key==='buy_amount'?(Number(settings[key])===0?'Exchange minimum':number(settings[key])+' BTC'):['withdraw_threshold','expected_monthly_deposit'].includes(key)?(settings[key]===''?t('Not configured'):number(settings[key])+' '+settings.quote):number(settings[key])+(key.endsWith('_seconds')?t(' seconds'):'');
   add(label,format(before),format(after));
  }
  add('Live trading',before.live?'Live':'Simulation',after.live?'Live':'Simulation');
@@ -175,3 +176,21 @@ if(typeof window!=='undefined'&&window.addEventListener){
 }
 
 if(initial.embedded)window.parent.postMessage({type:'dca-settings-ready'},location.origin);
+
+// Account actions use the saved dashboard configuration, never the Settings draft.
+if(initial.complete&&initial.embedded){
+ $('settingsQuickActions').hidden=false;$('settingsActionsHint').hidden=false;
+ $('settingsWithdraw').hidden=!initial.settings.manual_withdrawal_enabled;
+ $('settingsExport').hidden=!initial.settings.parqet_enabled;
+ for(const [id,action] of [['settingsWithdraw','withdraw'],['settingsExport','export']])$(id).addEventListener('click',()=>{
+  $('settingsWithdraw').disabled=true;$('settingsExport').disabled=true;
+  window.parent.postMessage({type:'dca-settings-action',action},location.origin);
+ });
+ window.addEventListener('message',event=>{
+  if(event.origin!==location.origin||event.source!==window.parent||event.data?.type!=='dca-dashboard-action-feedback')return;
+  const {message:text,error,busy}=event.data;
+  if(text!==null){$('settingsActionMessage').textContent=t(text);$('settingsActionMessage').classList.toggle('error',Boolean(error));$('settingsActionFeedback').hidden=!text}
+  if(busy!==null){$('settingsWithdraw').disabled=busy;$('settingsExport').disabled=busy}
+ });
+ $('dismissSettingsAction').addEventListener('click',()=>{$('settingsActionFeedback').hidden=true;$('settingsActionMessage').textContent=''});
+}

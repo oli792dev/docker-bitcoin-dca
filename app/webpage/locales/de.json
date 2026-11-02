@@ -324,7 +324,7 @@
   "Configuration cards": "Konfigurationsfelder",
   "Close withdrawal message": "Auszahlungsnachricht schließen",
   "Close export message": "Exportnachricht schließen",
-  "Close message": "Nachricht schließen",
+  "Close message": "Meldung schließen",
   "English": "English",
   "Updating schedule…": "Zeitplan wird aktualisiert …",
   "Schedule unavailable": "Zeitplan nicht verfügbar",
@@ -443,5 +443,14 @@
   "Month": "Monat",
   "Year": "Jahr",
   "Custom range": "Eigener Zeitraum",
-  "Report period": "Berichtszeitraum"
+  "Report period": "Berichtszeitraum",
+  "Expected monthly deposit": "Erwartete monatliche Einzahlung",
+  "Expected monthly deposit (purchase currency)": "Erwartete monatliche Einzahlung (Kaufwährung)",
+  "Forecast only. Assumes deposits on the configured day and time; does not transfer money or change actual purchases.": "Nur für die Prognose. Nimmt Einzahlungen am eingestellten Tag und zur eingestellten Uhrzeit an; überweist kein Geld und verändert keine tatsächlichen Käufe.",
+  "Forecast assumes {amount} monthly": "Prognose mit {amount} monatlicher Einzahlung",
+  "Set an expected monthly deposit in Settings for the forecast.": "Erwartete monatliche Einzahlung für die Prognose in den Einstellungen festlegen.",
+  "Expected monthly deposit ({currency})": "Erwartete monatliche Einzahlung ({currency})",
+  "Actions use saved settings. CSV export uses the selected analysis period.": "Aktionen verwenden die gespeicherten Einstellungen. Der CSV-Export nutzt den ausgewählten Analysezeitraum.",
+  "CSV export prepared.": "CSV-Export vorbereitet.",
+  "As of {date}": "Stand {date}"
 }

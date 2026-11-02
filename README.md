@@ -50,11 +50,13 @@ In Settings → Bot Configuration, choose the purchase currency, BTC amount, dep
 - Automatic withdrawals compare the value of all available exchange BTC against your threshold. Manual withdrawals require confirmation and use the same saved target. Both require live trading and send the available BTC less withdrawal fees.
 - Pending or unverifiable exchange transactions block further submissions until reconciled, including after restarts. Run one bot per exchange account.
 
-Expected monthly deposit affects only the withdrawal forecast; it does not transfer money or change actual purchases. Forecasts assume unchanged prices, fees and future deposits.
+Expected monthly deposit in Settings → Bot Configuration affects only the withdrawal forecast; it does not transfer money or change actual purchases. Forecasts assume unchanged prices, fees and future deposits.
 
 ## Reports and Parqet
 
 The dashboard shows balances and upcoming purchases/withdrawals. Analysis compares cumulative purchase costs with their value at the latest checked BTC price, not historical market performance. Activities include purchases, confirmed fiat deposits, withdrawals and fees. From initially uses the volume-saved first container start; subsequent changes are also volume-saved. To resets to now. Existing volumes establish this timestamp on their first start with this feature.
+
+Manual withdrawal and Parqet export are available on the left of the Settings footer. Actions use saved settings; export uses the selected analysis period.
 
 The Parqet CSV exports one consolidated Buy row for the complete cycle after the previous confirmed withdrawal through the last confirmed withdrawal in the selected range. It uses actual purchase costs and trading fees in EUR and net withdrawn BTC after network fees. Deposits, later purchases and Simulation activity are excluded. A real purchase and confirmed withdrawal are required. Re-importing an export can create duplicates.
 

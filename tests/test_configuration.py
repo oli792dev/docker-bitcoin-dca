@@ -504,6 +504,10 @@ class ConfigurationTests(unittest.TestCase):
         self.assertFalse(self.app.worker.reconfigure.is_set())
         self.app.save_forecast_deposit({'monthlyDeposit':''})
         self.assertEqual(config.ConfigStore(self.store.path).snapshot()['settings']['expected_monthly_deposit'],'')
+        self.app.save({'settings':{'expected_monthly_deposit':'275.75'}})
+        self.assertEqual(config.ConfigStore(self.store.path).snapshot()['settings']['expected_monthly_deposit'],'275.75')
+        self.api_factory.assert_not_called()
+        self.assertFalse(self.app.worker.reconfigure.is_set())
 
     def test_forecast_deposit_rejects_invalid_values_without_modifying_config(self):
         self.ready();before=self.store.path.read_bytes()

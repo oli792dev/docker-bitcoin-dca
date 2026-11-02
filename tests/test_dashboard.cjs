@@ -7,11 +7,14 @@ const script=html.split('<script>')[1].split('</script>')[0];
 class Element{
  constructor(){this.value='';this.children=[];this.handlers={};this.textContent='';this.disabled=false;this.classList={toggle(){},add(){},remove(){}}}
  setAttribute(name,value){this[name]=value}
+ getBoundingClientRect(){return {left:0,width:1000}}
  appendChild(e){this.children.push(e)} append(...e){this.children.push(...e)} replaceChildren(...e){this.children=e}
  showModal(){this.open=true} close(value=''){this.returnValue=value;this.open=false;this.handlers.close?.()}
  set innerHTML(v){this.children=[]} addEventListener(event,handler){this.handlers[event]=handler}
 }
+const actionFeedbacks=[];
 const elements={},get=id=>{assert(!["balance","balanceValue"].includes(id),"Removed portfolio element must not be accessed");return elements[id]??=new Element()};get('pageSize').value=html.match(/<option selected>(\d+)<\/option>/)[1];
+get('settingsFrame').contentWindow={postMessage:message=>actionFeedbacks.push(message)};
 get('reportFrom').value='2020-10-01T12:34:56Z';
 const records=Array.from({length:45},(_,i)=>({activityId:String(i),datetime:'2026-10-22T12:00:00Z',type:'Buy',identifier:'BTC',shares:'.001',currency:i<22?'EUR':'USD',price:i<22?'80000':'100000',amount:i<22?'80':'100',fee:i<22?'.2':'.25'}));
 const stored=new Map([['bitcoinDcaMonthlyDeposit','999']]);let expiryCallback;let configuredMonthlyDeposit='',forecastSaveFails=false;const forecastSaves=[];
@@ -45,7 +48,7 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  const start=Date.parse(get('start').value),end=Date.parse(get('end').value);
  context.chartPoints=[{timestamp:start+1000,btc:'.001',costs:{EUR:'80.2'}},{timestamp:end,btc:'.001',costs:{USD:'100.25'}}];
  vm.runInContext('renderPurchaseChart(chartPoints,{EUR:1,USD:.9},84000,"EUR",true)',context);
- assert.equal(get('purchaseChart').hidden,false);assert(get('purchaseChart').children.some(node=>String(node.d).includes('H990')));
+ assert.equal(get('purchaseChart').hidden,false);assert(get('purchaseChart').children.some(node=>String(node.d).includes('H990')));get('purchaseChart').onpointermove({clientX:1000});assert.equal(get('chartTooltip').hidden,false);assert(get('chartTooltip').textContent.includes('€168.00'));get('purchaseChart').onkeydown({key:'Escape',preventDefault(){}});assert.equal(get('chartTooltip').hidden,true);
  vm.runInContext('renderPurchaseChart(chartPoints,{EUR:1},84000,"EUR",true)',context);assert.equal(get('purchaseChart').hidden,true);
  const previousForecast=get('estimatedWithdrawalAt').textContent;forecastAt='2027-02-15T09:00:00Z';await vm.runInContext('refreshPurchaseSchedule()',context);assert.notEqual(get('estimatedWithdrawalAt').textContent,previousForecast);assert.equal(vm.runInContext('estimatedWithdrawalTimestamp',context),Date.parse(forecastAt));assert.equal(get('thresholdNote').textContent,'Automatic withdrawals disabled');
  assert.equal(get('depositVolume').textContent,'€200.00');assert(!html.includes('id="depositCount"'));assert(!html.includes('id="withdrawCount"'));
@@ -53,10 +56,9 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  assert(!html.includes('id="nextPurchaseStatus"'));waitingDeposit=true;await vm.runInContext('refreshPurchaseSchedule()',context);
  assert.equal(get('nextPurchaseAt').textContent,'Waiting for deposit');assert.equal(get('nextPurchaseCountdown').textContent,'Waiting for deposit');
  vm.runInContext('renderPurchaseCountdown()',context);assert.equal(get('nextPurchaseCountdown').textContent,'Waiting for deposit');waitingDeposit=false;await vm.runInContext('refreshPurchaseSchedule()',context);
- assert.equal(get('monthlyDeposit').value,'','No value is imported from browser storage');
- get('monthlyDeposit').value='250';get('monthlyDeposit').handlers.input();await get('monthlyDeposit').handlers.change();assert.equal(configuredMonthlyDeposit,'250');assert.equal(forecastSaves.at(-1).monthlyDeposit,'250');assert.equal(stored.get('bitcoinDcaMonthlyDeposit'),'999','Browser storage is not read or rewritten');
- configuredMonthlyDeposit='350';await vm.runInContext('refreshPurchaseSchedule()',context);assert.equal(get('monthlyDeposit').value,'350','Other browsers receive the persisted server value');
- forecastSaveFails=true;get('monthlyDeposit').value='400';get('monthlyDeposit').handlers.input();await get('monthlyDeposit').handlers.change();assert.equal(configuredMonthlyDeposit,'350');assert.equal(get('monthlyDeposit').value,'400');assert.equal(get('monthlyDeposit').disabled,false);assert.match(get('scheduleFeedback').textContent,/Forecast save failed/);forecastSaveFails=false;await get('monthlyDeposit').handlers.change();
+ assert(!html.includes('id="monthlyDeposit"'),'Forecast amount is edited in Settings only');
+ assert.match(get('forecastDepositSummary').textContent,/Settings/);
+ configuredMonthlyDeposit='350';await vm.runInContext('refreshPurchaseSchedule()',context);assert.match(get('forecastDepositSummary').textContent,/350/);
  assert(get('start').value&&get('end').value,'Both dates must initialize for the selected interval');
  assert.equal(get('end').value,vm.runInContext('localInput(Date.now())',context),'Each page load uses the current end time');
  assert.equal(get('interval').value,'','A range ending now must not claim to be a closed withdrawal interval');
@@ -102,12 +104,12 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  assert(!html.includes('<sup'),'Superscript references are no longer displayed');
  withdrawalUnavailable=true;
  const submissions=requests.filter(u=>u==='/api/withdrawal/preview'||u==='/api/withdrawal/confirm').length;
- await get('manualWithdraw').handlers.click();
- assert(get('withdrawalFeedback').textContent.includes('KRAKEN_WITHDRAW_KEY'),'Missing configuration is displayed inline');
- assert(html.includes('id="withdrawalFeedback" class="export-feedback withdraw-feedback hidden"'),'Uses the export feedback style');
+ await context.window.DCA_DASHBOARD_ACTIONS.withdraw();
+ assert(actionFeedbacks.some(item=>item.action==='withdraw'&&item.error&&item.message.includes('KRAKEN_WITHDRAW_KEY')),'Missing configuration reaches Settings');
+ assert(!html.includes('id="manualWithdraw"'),'Manual action is available in Settings only');
  assert(html.includes('<dialog'),'Financial confirmation uses a styled dialog');
  assert(!/\b(confirm|alert|prompt)\(/.test(script),'No browser dialogs remain');
- assert.equal(get('manualWithdraw').disabled,false,'Button is available after displaying feedback');
+ assert.equal(actionFeedbacks.at(-1).busy,false,'Settings action is reenabled after feedback');
  assert.equal(requests.filter(u=>u==='/api/withdrawal/preview'||u==='/api/withdrawal/confirm').length,submissions,'Missing configuration cannot submit financial actions');
 
  const lastBalance=get('quoteBalance').textContent;
@@ -168,12 +170,11 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  assert.equal(get('activities').children,latestRows,'A late response cannot overwrite the newer report');
  context.fetch=originalFetch;
  withdrawalUnavailable=false;
- const cancelAction=get('manualWithdraw').handlers.click();await settle();
+ const cancelAction=context.window.DCA_DASHBOARD_ACTIONS.withdraw();await settle();
  assert(get('confirmationDialog').open,'Enabled manual withdrawal opens its confirmation dialog');
  get('confirmationDialog').close('cancel');await cancelAction;
  assert(!get('withdrawMessage').textContent.includes('Withdrawal not submitted'));
- assert.equal(get('withdrawalFeedback').textContent,'');
- assert.equal(get('manualWithdraw').disabled,false);
+ assert(actionFeedbacks.some(item=>item.action==='withdraw'&&item.message===''));assert.equal(actionFeedbacks.at(-1).busy,false);
  assert.equal(requests.filter(u=>u==='/api/withdrawal/confirm').length,0,'Cancel never submits a withdrawal');
  // Main panel state is restored and saved independently from report data.
  const panel={open:true,getAttribute:()=>"configurationHeading",addEventListener(event,fn){this.toggle=fn}};

@@ -73,3 +73,13 @@ __DESIGN_CSS__
 /* Consistent field hierarchy on setup and Settings, in both appearances. */
 .settings-page label,.settings-page .option-card strong{color:var(--text);font-size:.88rem;font-weight:600;line-height:1.5}
 .settings-page .option-card small,.settings-page .field-description,.settings-page .hint{color:var(--muted);font-weight:400}
+
+.settings-footer-actions{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.settings-quick-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.settings-footer-actions>#save{margin-left:auto}
+.settings-action-feedback{display:flex;align-items:flex-start;gap:12px;margin-top:8px}
+.settings-action-feedback p{flex:1;min-width:0;max-height:96px;overflow:auto;margin:0;font-size:.82rem;overflow-wrap:anywhere}
+.settings-action-feedback button{flex:0 0 44px;width:44px;min-height:44px;padding:0;font-size:1.18rem}
+.settings-quick-actions button{font-size:.82rem}
+.settings-footer [hidden]{display:none!important}
+@media(max-width:600px){.settings-quick-actions{flex:1 0 100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.settings-quick-actions button{min-width:0;padding:10px;font-size:.76rem}.settings-footer-actions>#save{width:100%;margin:0}}

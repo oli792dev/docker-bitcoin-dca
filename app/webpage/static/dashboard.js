@@ -6,7 +6,7 @@ function localInput(ms){const d=new Date(ms);d.setMinutes(d.getMinutes()-d.getTi
 function parseInput(el){return new Date(el.value).getTime()}
 function money(v,c){try{return new Intl.NumberFormat(locale,{style:"currency",currency:c,maximumFractionDigits:2}).format(Number(v||0))}catch(e){return Number(v||0).toFixed(2)+" "+c}}
 function btc(v){return Number(v||0).toLocaleString(locale,{minimumFractionDigits:0,maximumFractionDigits:8})+" BTC"}
-function dateLabel(ms){return new Date(ms).toLocaleString(locale)}
+function dateLabel(ms,timeZone){return new Date(ms).toLocaleString(locale,{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',...(timeZone?{timeZone}:{})})}
 let exchangeBtcBalance=null, balanceDisplayPrice=null, balanceDisplayCurrency=null;
 function renderExchangeBtcValue(){
  $("exchangeBtcValue").textContent=t(exchangeBtcBalance!==null&&balanceDisplayPrice>0&&balanceDisplayCurrency===displayCurrency?money(exchangeBtcBalance*balanceDisplayPrice,displayCurrency):"—");
@@ -35,7 +35,7 @@ function renderWithdrawalProgress(balance,price,threshold,enabled){
  $('withdrawalProgressLabel').textContent=known?t('{value} of {threshold}').replace('{value}',money(balance*price,quote)).replace('{threshold}',money(threshold,quote)):t(enabled?'Waiting for account check':'Automatic withdrawals disabled');
 }
 function renderPurchaseChart(series,rates,price,currency,available,range=selectedPeriod()){
- const chart=$('purchaseChart');chart.replaceChildren();chart.hidden=true;
+ const chart=$('purchaseChart');chart.replaceChildren();chart.hidden=true;const tooltip=$('chartTooltip');tooltip.hidden=true;chart.onpointermove=null;chart.onkeydown=null;
  $('chartStart').textContent='';$('chartEnd').textContent='';
  if(!series?.length){$('chartMessage').textContent=t('No real purchases in this period.');return}
  if(!available||!(price>0)||series.some(point=>Object.keys(point.costs).some(c=>!(rates[c]>0)))){$('chartMessage').textContent=t('Conversion unavailable');return}
@@ -51,6 +51,22 @@ function renderPurchaseChart(series,rates,price,currency,available,range=selecte
   let path='M60 220';for(const point of points)path+=' H'+x(point.time)+' V'+y(point[key]);path+=' H990';
   svg('path',{d:path,stroke:color,'stroke-width':key==='value'?3:2,fill:'none','vector-effect':'non-scaling-stroke'});
  }
+ for(const point of points)svg('circle',{cx:x(point.time),cy:y(point.value),r:3,fill:'var(--accent)'});
+ const guide=svg('path',{d:'',stroke:'var(--muted)','stroke-dasharray':'4 4',fill:'none'});
+ const marker=svg('circle',{cx:0,cy:0,r:5,fill:'var(--accent)',stroke:'var(--panel)','stroke-width':2,visibility:'hidden'});
+ let active=0;
+ function showPoint(index){
+  active=Math.max(0,Math.min(points.length-1,index));const point=points[active];
+  guide.setAttribute('d','M'+x(point.time)+' 20 V220');marker.setAttribute('cx',x(point.time));marker.setAttribute('cy',y(point.value));marker.setAttribute('visibility','visible');
+  tooltip.textContent=t('As of {date}').replace('{date}',dateLabel(point.time))+' · '+t('Invested including trading fees')+': '+money(point.cost,currency)+' · '+t('Value at the current BTC price')+': '+money(point.value,currency);
+  tooltip.hidden=false;
+ }
+ function hidePoint(){tooltip.hidden=true;guide.setAttribute('d','');marker.setAttribute('visibility','hidden')}
+ chart.onpointermove=event=>{const rect=chart.getBoundingClientRect(),position=(event.clientX-rect.left)/rect.width*1000;let nearest=0;for(let i=1;i<points.length;i++)if(Math.abs(x(points[i].time)-position)<Math.abs(x(points[nearest].time)-position))nearest=i;showPoint(nearest)};
+ chart.onpointerleave=hidePoint;
+ chart.onpointerdown=chart.onpointermove;
+ chart.onblur=hidePoint;
+ chart.onkeydown=event=>{if(['ArrowLeft','ArrowRight','Home','End','Escape'].includes(event.key)){event.preventDefault();if(event.key==='Escape'){hidePoint();return}showPoint(event.key==='Home'?0:event.key==='End'?points.length-1:active+(event.key==='ArrowRight'?1:-1))}};
  svg('title',{},t('Cumulative purchases and their value at the current BTC price'));
  chart.hidden=false;$('chartMessage').textContent='';
  $('chartStart').textContent=new Date(start).toLocaleDateString(locale);$('chartEnd').textContent=new Date(end).toLocaleDateString(locale);
@@ -72,17 +88,18 @@ async function refreshPurchaseSchedule(){
    const market=schedule.accountMarketPrice;
    balanceDisplayPrice=Number(market.price);balanceDisplayCurrency=market.currency;
    $('spot').textContent=money(market.price,market.currency)+'/BTC';
-   $('spotUpdated').textContent=t('Last checked '+new Date(Number(market.updatedAt)*1000).toLocaleString(locale));
+   $('spotUpdated').textContent=t('Last checked '+dateLabel(Number(market.updatedAt)*1000));
    renderExchangeBtcValue();
   }
   const detail=schedule.forecastDetails;
   $('forecastProgress').textContent=detail?t('About {btc} BTC · {buys} purchases remaining'.replace('{btc}',Number(detail.remainingBtc).toLocaleString(locale,{maximumFractionDigits:8})).replace('{buys}',detail.remainingPurchases)):'';
   $('forecastAssumptions').hidden=!detail;
   if(detail)$('forecastAssumptionsText').textContent=t('BTC price: {price}. BTC per purchase: {quantity}. Threshold: {threshold}. Assumes unchanged price and fees. Monthly deposit: {amount}. Deposit: day {day}, {time} ({zone}).'.replace('{price}',money(detail.price,detail.quote)).replace('{quantity}',btc(detail.quantity)).replace('{threshold}',money(detail.threshold,detail.quote)).replace('{amount}',detail.monthlyDeposit?money(detail.monthlyDeposit,detail.quote):t('Not configured')).replace('{day}',detail.depositDay).replace('{time}',detail.depositTime).replace('{zone}',detail.timezone));
-  $("monthlyDepositCurrency").textContent=t(schedule.quote);
+  $('forecastDepositSummary').textContent=schedule.expectedMonthlyDeposit!==''&&schedule.expectedMonthlyDeposit!=null
+   ?t('Forecast assumes {amount} monthly').replace('{amount}',money(schedule.expectedMonthlyDeposit,schedule.quote))
+   :t('Set an expected monthly deposit in Settings for the forecast.');
   const depositDate=Date.parse(schedule.nextDepositAt);
-  $('nextDepositAt').textContent=Number.isFinite(depositDate)?t('Next deposit: {date}').replace('{date}',new Date(depositDate).toLocaleString(locale,{timeZone:schedule.timezone||'UTC',dateStyle:'medium',timeStyle:'short'})):'';
-  if(!monthlyDepositDirty&&!monthlyDepositSaving)$("monthlyDeposit").value=schedule.expectedMonthlyDeposit??"";
+  $('nextDepositAt').textContent=Number.isFinite(depositDate)?t('Next deposit: {date}').replace('{date}',dateLabel(depositDate,schedule.timezone||'UTC')):'';
   if(schedule.configuredBuyAmount!==undefined){
    const minimumMode=Number(schedule.configuredBuyAmount)===0;
    const effective=Number(schedule.effectiveBuyAmount);
@@ -94,7 +111,7 @@ async function refreshPurchaseSchedule(){
   $("quoteBalance").textContent=t(balanceKnown?money(schedule.quoteBalance,schedule.quote):"—");
   const checkedAt=Date.parse(schedule.balanceUpdatedAt);
   $("quoteBalanceUpdated").textContent=t(balanceKnown
-   ?(Number.isFinite(checkedAt)?"Last checked "+new Date(checkedAt).toLocaleString(locale,{timeZone:schedule.timezone||"UTC"}):"Last account check")
+   ?(Number.isFinite(checkedAt)?"Last checked "+dateLabel(checkedAt,schedule.timezone||"UTC"):"Last account check")
    :"Waiting for account check");
   nextPurchaseTimestamp=Number.isFinite(target)?target:null;
 
@@ -102,7 +119,7 @@ async function refreshPurchaseSchedule(){
   $("nextPurchaseAt").textContent=t(nextPurchaseTimestamp===null?nextPurchaseMessage:new Date(nextPurchaseTimestamp).toLocaleString(locale,{timeZone:schedule.timezone||"UTC",timeZoneName:"short"}));
   exchangeBtcBalance=schedule.btcBalance!=null&&Number.isFinite(Number(schedule.btcBalance))?Number(schedule.btcBalance):null;
   $("exchangeBtcBalance").textContent=t(exchangeBtcBalance===null?"—":btc(exchangeBtcBalance));
-  $("exchangeBtcUpdated").textContent=t(exchangeBtcBalance===null?"Waiting for account check":(Number.isFinite(checkedAt)?"Last checked "+new Date(checkedAt).toLocaleString(locale,{timeZone:schedule.timezone||"UTC"}):"Last account check"));
+  $("exchangeBtcUpdated").textContent=t(exchangeBtcBalance===null?"Waiting for account check":(Number.isFinite(checkedAt)?"Last checked "+dateLabel(checkedAt,schedule.timezone||"UTC"):"Last account check"));
   renderExchangeBtcValue();
   const withdrawalTarget=Date.parse(schedule.estimatedWithdrawalAt);
   estimatedWithdrawalTimestamp=Number.isFinite(withdrawalTarget)?withdrawalTarget:null;
@@ -116,22 +133,6 @@ async function refreshPurchaseSchedule(){
   sectionFeedback("scheduleFeedback","");
  }catch(e){if(request===scheduleRequest){$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");updateStatusLight("error");sectionFeedback("scheduleFeedback","")}}
 }
-let monthlyDepositDirty=false,monthlyDepositSaving=false;
-$("monthlyDeposit").addEventListener("input",()=>{monthlyDepositDirty=true});
-$("monthlyDeposit").addEventListener("change",async()=>{
- const input=$("monthlyDeposit"),amount=input.value.trim();
- if(amount!==""&&(!Number.isFinite(Number(amount))||Number(amount)<0)){input.reportValidity();return}
- monthlyDepositDirty=true;monthlyDepositSaving=true;input.disabled=true;
- sectionFeedback("scheduleFeedback","Saving forecast amount…");
- try{
-  const response=await fetch("/api/settings/forecast",{method:"POST",headers:{"Content-Type":"application/json","X-DCA-Action":"settings"},body:JSON.stringify({monthlyDeposit:amount})});
-  if(response.status===401){window.location.reload();return}
-  const data=await response.json();if(!response.ok)throw new Error(data.error||"Forecast amount could not be saved.");
-  input.value=data.monthlyDeposit;monthlyDepositDirty=false;
-  await refreshPurchaseSchedule();
- }catch(error){sectionFeedback("scheduleFeedback",error.message||"Forecast amount could not be saved.",true)}
- finally{monthlyDepositSaving=false;input.disabled=false}
-});
 setInterval(renderPurchaseCountdown,1000);
 setInterval(refreshPurchaseSchedule,30000);
 
@@ -262,14 +263,14 @@ async function loadAnalytics(){
   fxRate=Number(market.conversionRate);livePrice=Number(market.price);currencyRates=Object.fromEntries(Object.entries(market.conversionRates||{[quote]:fxRate})
    .map(([currency,rate])=>[currency,Number(rate)]).filter(([,rate])=>Number.isFinite(rate)&&rate>0));
   currencyRates[displayCurrency]=1;
-  $("spotUpdated").textContent=t("Last checked "+new Date(Number(market.updatedAt)*1000).toLocaleString(locale));
+  $("spotUpdated").textContent=t("Last checked "+dateLabel(Number(market.updatedAt)*1000));
  }catch(priceError){
   if(request!==reportRequest)return;
   displayCurrency=quote;fxRate=1;
   if(!(livePrice>0)&&balanceDisplayCurrency===quote&&balanceDisplayPrice>0)livePrice=balanceDisplayPrice;
   const checked=Date.parse((d.snapshot||{}).updatedAt);
   if(Number((d.snapshot||{}).price)>0&&Number.isFinite(checked))
-   $("spotUpdated").textContent=t("Last checked "+new Date(checked).toLocaleString(locale));
+   $("spotUpdated").textContent=t("Last checked "+dateLabel(checked));
  }
  balanceDisplayPrice=livePrice;balanceDisplayCurrency=displayCurrency;renderExchangeBtcValue();
  $("spot").textContent=t(livePrice>0?money(livePrice,displayCurrency)+"/BTC":"—");
@@ -316,20 +317,19 @@ async function loadAnalytics(){
  finally{if(request===reportRequest){$("refresh").ariaBusy="false";$("periodReport").ariaBusy="false";sectionFeedback("reportFeedback","")}}
 }
 $("refresh").addEventListener("click",()=>{currentPage=1;loadAnalytics()});
-$("download").addEventListener("click",async()=>{
+async function downloadParqetCsv(){
  logUiEvent("export_clicked");
- const button=$("download"),message=$("exportMessage");
- message.textContent=t("");message.classList.add("hidden");
- button.disabled=true;button.textContent=t("Generating CSV…");
+ actionFeedback("export",t("Generating CSV…"),false,true);
  try{
   const p=selectedPeriod(),response=await fetch("/api/export.csv?start="+p.start+"&end="+p.end);
   if(!response.ok){const d=await response.json();throw new Error(d.error||"Could not generate the CSV export.")}
   const blob=await response.blob(),url=URL.createObjectURL(blob),a=document.createElement("a");
   a.href=url;a.download="parqet_btc_"+new Date(p.start).toISOString().slice(0,10)+"_"+new Date(p.end).toISOString().slice(0,10)+".csv";
   a.click();URL.revokeObjectURL(url);
- }catch(e){message.textContent=t(e.message);message.classList.remove("hidden")}
- finally{button.disabled=false;button.textContent=t("Download Parqet CSV")}
-});
+ actionFeedback("export",t("CSV export prepared."),false);
+ }catch(e){actionFeedback("export",t(e.message),true)}
+ finally{actionFeedback("export",null,false,false)}
+}
 
 async function withdrawalPost(path, body){
  const response=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json","X-DCA-Action":"withdrawal"},body:JSON.stringify(body)});
@@ -360,16 +360,17 @@ async function loadWithdrawalConfiguration(){
  $("withdrawMessage").textContent=t(d.reason||"Manual withdrawals are available. Automatic withdrawals may remain disabled.");
  return d;
 }
+function actionFeedback(action,message,error=false,busy=null){
+ const frame=$("settingsFrame");
+ frame?.contentWindow?.postMessage({type:'dca-dashboard-action-feedback',action,message,error,busy},window.location.origin);
+}
 function showWithdrawalMessage(message,error=true){
  $("withdrawMessage").textContent=t(message);
- const feedback=$("withdrawalFeedback");
- feedback.textContent=t(message);feedback.classList.remove("hidden");
- feedback.classList.toggle("success",!error);
+ actionFeedback('withdraw',t(message),error);
 }
-$("manualWithdraw").addEventListener("click",async()=>{
+async function requestManualWithdrawal(){
  logUiEvent("withdrawal_clicked");
- const button=$("manualWithdraw");button.disabled=true;
- $("withdrawalFeedback").textContent=t("");$("withdrawalFeedback").classList.add("hidden");
+ actionFeedback("withdraw","",false,true);
  try{
  showWithdrawalMessage("Preparing withdrawal preview…",false);
  const configuration=await loadWithdrawalConfiguration();
@@ -377,15 +378,16 @@ $("manualWithdraw").addEventListener("click",async()=>{
  const p=await withdrawalPost("/api/withdrawal/preview",{});
  if(!await confirmWithdrawal(p)){
   $("withdrawMessage").textContent=t(configuration.reason||"");
-  $("withdrawalFeedback").textContent=t("");$("withdrawalFeedback").classList.add("hidden");
+  actionFeedback("withdraw","",false);
   return;
  }
  showWithdrawalMessage("Submitting withdrawal…",false);
  const result=await withdrawalPost("/api/withdrawal/confirm",{token:p.token});showWithdrawalMessage(result.message,false);
  $("interval").value="";$("end").value=localInput(Date.now()+60000);currentPage=1;await loadAnalytics();
  }catch(e){showWithdrawalMessage(e.message)}
- finally{button.disabled=false}
-});
+ finally{actionFeedback("withdraw",null,false,false)}
+}
+window.DCA_DASHBOARD_ACTIONS={withdraw:requestManualWithdrawal,export:downloadParqetCsv};
 loadWithdrawalConfiguration().catch(e=>{showWithdrawalMessage(e.message)});
 refreshPurchaseSchedule();
 
