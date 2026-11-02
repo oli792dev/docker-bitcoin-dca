@@ -124,7 +124,7 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  assert.equal(get('activities').children,lastRows,'Failed refresh preserves existing rows');
  assert.equal(get('error').textContent,'Report offline');reportFails=false;
  vm.runInContext('activityRows=[];activityTotal=0;activityPages=1;currentPage=1;renderActivities()',context);
- assert.equal(get('activities').children.length,Number(get('pageSize').value),'Empty periods retain the selected row count');
+ assert.equal(get('activities').children.length,Number(get('pageSize').value),'Empty periods retain the selected row count');assert.equal(get('activities').children[0].children[0].textContent,'No activity in this period.');assert.equal(get('activities').children[0].children[0].colSpan,7);
  assert.equal(get('activities').children.filter(row=>row.className==='activity-placeholder').length,Number(get('pageSize').value)-1);
  assert(get('previousPage').disabled&&get('nextPage').disabled);
  assert.equal(vm.runInContext('activityMoney(null,1,"EUR")',context),'—');

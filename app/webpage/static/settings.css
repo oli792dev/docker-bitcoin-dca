@@ -199,7 +199,7 @@ __DESIGN_CSS__
 /* Same compact segmented appearance as the analysis period selector. */
 .settings-page .settings-tabs{gap:2px;padding:3px;border:0;background:var(--surface);border-radius:var(--corner-radius);}
 .settings-page .settings-tabs button{min-height:32px;padding:5px 12px;border:0;background:transparent;color:var(--muted);font-size:.76rem;font-weight:500;border-radius:var(--corner-radius);}
-.settings-page .settings-tabs button[aria-selected=true]{background:var(--panel);color:var(--text);border:0;font-weight:600;}
+.settings-page .settings-tabs button[aria-selected=true],.settings-page .settings-tabs button[aria-selected=true]:hover{background:var(--selection);color:var(--text);border:0;font-weight:600;}
 .settings-page .settings-tabs button:not(:disabled):hover{background:var(--hover);color:var(--text);}
 @media (pointer:coarse){
 .settings-page .settings-tabs button{min-height:44px;}
@@ -232,8 +232,8 @@ __DESIGN_CSS__
 .settings-page .setting-switch>input{margin:0;align-self:center;}
 .settings-page .settings-help{margin-top:var(--space-sm);color:var(--muted);font-size:.76rem;}
 .settings-page .settings-help>summary{display:flex;align-items:center;gap:var(--space-sm);min-height:44px;cursor:pointer;list-style:none;}
-.settings-page .settings-help>summary::before{content:"";display:block;flex:0 0 8px;width:8px;height:8px;margin-inline:4px;border-top:1.5px solid currentColor;border-right:1.5px solid currentColor;transform:rotate(45deg);transform-origin:center;transition:transform 150ms ease;}
-.settings-page .settings-help[open]>summary::before{transform:rotate(135deg);}
+.settings-page .settings-help>summary::before{content:"";display:block;flex:0 0 var(--icon-size);width:var(--icon-size);height:var(--icon-size);background:currentColor;-webkit-mask:var(--icon-chevron) center/contain no-repeat;mask:var(--icon-chevron) center/contain no-repeat;transform:rotate(0);transition:transform 150ms ease;}
+.settings-page .settings-help[open]>summary::before{transform:rotate(90deg);}
 .settings-page .settings-help>summary::-webkit-details-marker{display:none;}
 .settings-page .settings-help p{margin:0 0 var(--space-sm);}
 .settings-page .connection-check{margin-top:var(--space-sm);}
@@ -273,3 +273,6 @@ __DESIGN_CSS__
 }
 .settings-page .settings-tabs{scroll-padding-inline:3px;}
 .settings-page .settings-tabs.has-overflow{padding-bottom:8px;}
+
+.settings-error-summary{display:flex;align-items:baseline;gap:8px 12px;flex-wrap:wrap}
+.settings-error-summary[hidden]{display:none}

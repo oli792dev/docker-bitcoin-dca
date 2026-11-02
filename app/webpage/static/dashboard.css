@@ -315,7 +315,9 @@ __DESIGN_CSS__
 }
 @media (max-width:600px){
 .redesigned main{padding-top:max(var(--space-lg),env(safe-area-inset-top));}
-.redesigned .top{flex-wrap:wrap;gap:var(--space-md);padding-bottom:var(--space-lg);}
+.redesigned .top{flex-wrap:wrap;gap:var(--space-md);padding-bottom:var(--space-lg);align-items:stretch;}
+.redesigned .top>div:first-child{align-self:stretch;min-width:0;width:100%;text-align:start;}
+.redesigned .dashboard-brand{justify-content:flex-start;width:100%;text-align:start;}
 .redesigned .dashboard-brand h1{font-size:1rem;}
 .redesigned .dashboard-logo{width:36px;height:36px;flex-basis:36px;}
 .redesigned .top-actions{flex:1 0 100%;justify-content:space-between;}
@@ -331,7 +333,7 @@ __DESIGN_CSS__
 }
 .redesigned .period-shortcuts{display:flex;gap:2px;border:0;background:var(--surface);border-radius:var(--corner-radius);padding:3px;margin-left:auto;}
 .redesigned .period-shortcuts button{font-size:.76rem;min-height:32px;padding:5px 12px;background:transparent;color:var(--muted);border:0;border-radius:var(--corner-radius);}
-.redesigned .period-shortcuts button[aria-pressed=true]{background:var(--panel);color:var(--text);border:0;font-weight:600;}
+.redesigned .period-shortcuts button[aria-pressed=true],.redesigned .period-shortcuts button[aria-pressed=true]:hover{background:var(--selection);color:var(--text);border:0;font-weight:600;}
 .redesigned .period-shortcuts button:hover{background:var(--hover);color:var(--text);}
 @media (max-width:600px){
 .redesigned .period-shortcuts{order:3;flex-basis:100%;margin:0;}
@@ -390,7 +392,7 @@ __DESIGN_CSS__
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes){margin-top:var(--space-sm);padding:0;border:0;}
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary{display:flex;align-items:center;gap:var(--space-sm);list-style:none;min-height:44px;margin:0;padding:var(--space-sm) 0;font-size:.9rem;font-weight:600;line-height:1.4;color:var(--text);cursor:pointer;}
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary::-webkit-details-marker{display:none;}
-.redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary::before{content:"›";flex:0 0 12px;font-size:1.1rem;font-weight:500;line-height:1;transition:transform 150ms ease;}
+.redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary::before{content:"";flex:0 0 var(--icon-size);width:var(--icon-size);height:var(--icon-size);background:currentColor;-webkit-mask:var(--icon-chevron) center/contain no-repeat;mask:var(--icon-chevron) center/contain no-repeat;transition:transform 150ms ease;}
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)[open]>summary::before{transform:rotate(90deg);}
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary:hover{color:var(--accent);}
 .redesigned .report-extra{padding-top:var(--space-sm);}
@@ -431,8 +433,7 @@ __DESIGN_CSS__
 /* A compact, distinct editing affordance beside the saved custom range. */
 .redesigned .period-shortcuts #editCustomRange{flex:0 0 32px;width:32px;padding:0;display:grid;place-items:center;position:relative;margin-inline-start:3px;}
 .redesigned #editCustomRange::before{content:"";position:absolute;inset:7px auto 7px -3px;width:1px;background:var(--line);}
-.range-edit-icon{display:block;width:14px;height:14px;border:1.5px solid currentColor;border-radius:3px;position:relative;}
-.range-edit-icon::after{content:"";position:absolute;width:11px;height:3px;background:currentColor;border:2px solid var(--surface);box-sizing:content-box;transform:rotate(-45deg);right:-4px;top:0;}
+.range-edit-icon{display:block;width:var(--icon-size);height:var(--icon-size);background:currentColor;-webkit-mask:var(--icon-edit) center/contain no-repeat;mask:var(--icon-edit) center/contain no-repeat;}
 @media (pointer:coarse){
 .redesigned .period-shortcuts #editCustomRange{flex-basis:44px;width:44px;min-height:44px;}
 }
@@ -534,3 +535,12 @@ __DESIGN_CSS__
 }
 
 @media(max-width:600px){.redesigned .balance-overview,.redesigned .period-activities .activity-panel,.redesigned .plan-card,.redesigned .report-extra,.redesigned .report-primary{padding:16px}}
+
+/* Labels share their row height so amounts align even when translated labels wrap. */
+@supports(grid-template-rows:subgrid){
+ .redesigned :is(.balance-overview,.report-primary,.report-extra)>.metric{display:grid;grid-template-rows:subgrid;grid-row:span 3;row-gap:0;align-self:stretch;align-content:start}
+ .redesigned :is(.balance-overview,.report-primary,.report-extra) .metric-label{grid-row:1}
+ .redesigned :is(.balance-overview,.report-primary,.report-extra) .metric>.value{grid-row:2;align-self:start}
+ .redesigned :is(.balance-overview,.report-primary,.report-extra) .metric>.small{grid-row:3;align-self:start}
+}
+@supports not (grid-template-rows:subgrid){.redesigned :is(.balance-overview,.report-primary,.report-extra) .metric-label{min-height:2.9em}}

@@ -8,7 +8,17 @@ function clearFieldError(input){
  input.removeAttribute?.('aria-invalid');input.setAttribute('aria-invalid','false');
  const described=(input.getAttribute?.('aria-describedby')||input['aria-describedby']||'').split(' ').filter(id=>id&&id!==error.id);
  input.setAttribute('aria-describedby',described.join(' '));error.hidden=true;error.textContent='';fieldErrors.delete(input.id);
- if(!fieldErrors.size){$('settingsErrors').hidden=true;$('status').textContent=''}
+ updateFieldSummary();
+}
+function updateFieldSummary(){
+ const summary=$('settingsErrors');summary.replaceChildren();summary.hidden=fieldErrors.size<2;
+ if(summary.hidden)return;
+ const caption=document.createElement('span');caption.textContent=t('Please check the highlighted fields.');summary.append(caption);
+ for(const [field] of fieldErrors){
+  const input=$(field),owner=settingsTabs.find(tab=>tab.panel.contains(input)),link=document.createElement('a');
+  link.href='#'+field;link.textContent=input.labels?.[0]?.textContent||$(field+'Label')?.textContent||field.replaceAll('_',' ');
+  link.addEventListener('click',event=>{event.preventDefault();activateSettingsTab(owner?.id||(['username','current_password','password','passwordConfirm'].includes(field)?'dashboardOptions':'botConfiguration'));input.focus();input.scrollIntoView?.({block:'center'})});summary.append(link);
+ }
 }
 function message(text,error=false,field=null){
  $('status').textContent=t(text);$('status').classList.toggle('error',error);
@@ -21,8 +31,7 @@ function message(text,error=false,field=null){
  const owner=settingsTabs.find(tab=>tab.panel.contains(input));
  // Login credentials are nested under Dashboard; the remaining owner is found in the DOM.
  activateSettingsTab(owner?.id||(['username','current_password','password','passwordConfirm'].includes(field)?'dashboardOptions':'botConfiguration'));
- const summary=$('settingsErrors');summary.hidden=false;summary.replaceChildren();
- const link=document.createElement('a');link.href='#'+field;link.textContent=t(text);link.addEventListener('click',event=>{event.preventDefault();activateSettingsTab(owner?.id||(['username','current_password','password','passwordConfirm'].includes(field)?'dashboardOptions':'botConfiguration'));input.focus();input.scrollIntoView?.({block:'center'})});summary.append(link);
+ $('status').textContent='';$('status').classList.toggle('error',false);updateFieldSummary();
  input.focus();input.scrollIntoView?.({block:'center'});
 }
 
