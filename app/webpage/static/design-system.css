@@ -1,27 +1,27 @@
-:root{--corner-radius:12px}
+:root{--corner-radius:12px;--space-xs:4px;--space-sm:8px;--space-md:12px;--space-lg:16px;--space-xl:24px}
 
-/* Semantic surfaces, system typography and an 8-point spacing rhythm. */
-:root{color-scheme:light dark;--panel-padding:24px;--section-space:24px;--subsection-space:20px;--tile-gap:16px;--section-gap:24px;--field-gap:16px;--card-padding:20px;--control-gap:8px;font-size:106.25%;accent-color:var(--primary)}
+/* Semantic surfaces, system typography and a shared 4-point spacing scale. */
+:root{color-scheme:light dark;--panel-padding:20px;--section-space:24px;--subsection-space:16px;--tile-gap:16px;--section-gap:24px;--field-gap:16px;--card-padding:16px;--control-gap:8px;font-size:106.25%;accent-color:var(--primary)}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%;scroll-padding-top:88px}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;font-size:1rem;line-height:1.5;letter-spacing:normal}
 h1{font-family:inherit;font-size:clamp(1.5rem,3vw,2rem);font-weight:700;line-height:1.2;letter-spacing:-.025em}
 h2{font-size:1.18rem;font-weight:600;line-height:1.35;letter-spacing:-.015em}
 h3,.summary-subheading{font-size:1rem;font-weight:600;line-height:1.4;letter-spacing:normal}
 p{line-height:1.55}a{color:var(--accent);text-underline-offset:3px}
-.dashboard-page main{padding:32px max(20px,env(safe-area-inset-right)) max(48px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left))}
-.top{align-items:center;gap:24px;margin-bottom:20px}.top-actions{gap:12px}
+.dashboard-page main{padding:32px max(20px,env(safe-area-inset-right)) max(32px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left))}
+.top{align-items:center;gap:var(--space-xl);margin-bottom:20px}.top-actions{gap:var(--space-md)}
 .panel{padding:var(--panel-padding);margin:20px 0;background:var(--panel);border:1px solid var(--line);border-radius:var(--corner-radius);box-shadow:none}
 .panel.activity-panel{background:var(--surface);box-shadow:none}
 .card,.option-card,.settings-card-grid>div:not(.option-card),.credential-editor{background:var(--surface);border:1px solid var(--line);border-radius:var(--corner-radius);padding:20px;box-shadow:none}
 .card label,.field label,label{color:var(--muted);font-size:.82rem;font-weight:500;line-height:1.45}
-.card label{margin-bottom:8px}.value{font-size:1.5rem;line-height:1.3;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.card label{margin-bottom:var(--space-sm)}.value{font-size:1.5rem;line-height:1.3;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .small,.hint,.field-description,.notice,.inline-status,.section-feedback{color:var(--muted);font-size:.76rem;line-height:1.55}
-.small{margin-top:8px}.sub{color:var(--muted)}
+.small{margin-top:var(--space-sm)}.sub{color:var(--muted)}
 /* One primary action; secondary actions stay visually quiet. */
 button,.button,input,select{font-family:inherit;font-size:.94rem;line-height:1.35;min-height:44px;border-radius:var(--corner-radius)}
-input,select{background:var(--control);color:var(--text);border:1px solid var(--control-line);padding:10px 12px;max-width:100%;min-width:0}
+input,select{background:var(--control);color:var(--text);border:1px solid var(--control-line);padding:10px var(--space-md);max-width:100%;min-width:0}
 input::placeholder{color:var(--muted);opacity:1}
-button,.button{background:var(--primary);color:var(--on-primary);border:1px solid transparent;font-weight:600;padding:10px 16px;transition:background-color .15s ease,border-color .15s ease;box-shadow:none}
+button,.button{background:var(--primary);color:var(--on-primary);border:1px solid transparent;font-weight:600;padding:10px var(--space-lg);transition:background-color .15s ease,border-color .15s ease;box-shadow:none}
 button.secondary,.button.secondary{background:var(--surface);color:var(--accent);border-color:var(--control-line)}
 button:disabled,input:disabled,select:disabled{opacity:.55;cursor:not-allowed}
 button:not(:disabled):hover,.button:hover{filter:none!important;transform:none!important;box-shadow:none!important}
@@ -30,12 +30,12 @@ button:not(:disabled):hover,.button:hover{filter:none!important;transform:none!i
  button.secondary:not(:disabled):not(#previousPage):not(#nextPage):not(#goToPage):hover,.button.secondary:hover{background:var(--hover)}
 }
 button:not(:disabled):active,.button:active{filter:none!important;transform:none!important;box-shadow:none!important}
-.top-actions button,.top-actions .logout-button{font:600 .94rem/1.35 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;min-height:44px;padding:10px 16px;border-radius:var(--corner-radius)}
+.top-actions button,.top-actions .logout-button{font:600 .94rem/1.35 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;min-height:44px;padding:10px var(--space-lg);border-radius:var(--corner-radius)}
 .btc-balance-card #manualWithdraw{font-size:.82rem;padding:10px 14px;min-height:44px;border-radius:var(--corner-radius)}
 /* Disclosure headers are grouped surfaces rather than decorative banners. */
 details.panel{border-radius:var(--corner-radius);overflow:hidden;isolation:isolate;background-clip:padding-box;border-color:var(--line)}
 details.panel>.panel-heading,details.panel>.report-heading,details.panel:not([open])>summary{border-radius:0;box-shadow:none}
-.panel>.panel-heading,.panel>.report-heading{margin:calc(-1 * var(--panel-padding)) calc(-1 * var(--panel-padding)) var(--panel-padding);padding:16px var(--panel-padding);background:var(--panel);border-bottom:1px solid var(--line);border-radius:var(--corner-radius) var(--corner-radius) 0 0}
+.panel>.panel-heading,.panel>.report-heading{margin:calc(-1 * var(--panel-padding)) calc(-1 * var(--panel-padding)) var(--panel-padding);padding:var(--space-lg) var(--panel-padding);background:var(--panel);border-bottom:1px solid var(--line);border-radius:var(--corner-radius) var(--corner-radius) 0 0}
 .panel>.panel-heading h2,.panel>.report-heading h2{font-size:1.18rem;font-weight:600;line-height:1.35}
 summary{min-height:44px}details.panel>summary{min-height:56px}
 details.panel>summary h2::after{content:'›';color:var(--muted);font-size:1.5rem;line-height:1;transform:none}
@@ -44,10 +44,10 @@ details.panel:not([open])>summary{margin-bottom:calc(-1 * var(--panel-padding));
 .report-controls>.sub{font-size:.88rem}.summary-subheading{margin-bottom:var(--subsection-space)}
 /* Tables retain numeric alignment; status always has a text label. */
 th{color:var(--muted);text-transform:none;letter-spacing:normal;font-size:.76rem;font-weight:600}
-td{font-size:.88rem}th,td{border-color:var(--line)}#activities td{padding:8px 12px}#activities tr{height:40px}
+td{font-size:.88rem}th,td{border-color:var(--line)}#activities td{padding:var(--space-sm) var(--space-md)}#activities tr{height:40px}
 .activity-status,.page-size,.page-jump,.pagination .notice{font-size:.76rem}
 .pagination #previousPage,.pagination #nextPage,.pagination #goToPage{font:600 .82rem/1.35 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;min-height:44px;padding:10px 14px}
-.page-size select,.page-jump input{min-height:44px}.pagination{gap:12px;margin-top:16px}
+.page-size select,.page-jump input{min-height:44px}.pagination{gap:var(--space-md);margin-top:var(--space-lg)}
 .positive,.status-confirmed,.withdraw-feedback.success{color:var(--green)}
 .negative,.error,.status-failed,.section-feedback.is-error,.inline-status.is-error,#status.error,#passwordConfirmationError,.export-feedback{color:var(--red)}
 .status-pending{color:var(--warning)}.status-muted{color:var(--muted)}
@@ -55,24 +55,24 @@ td{font-size:.88rem}th,td{border-color:var(--line)}#activities td{padding:8px 12
 .feedback-close{flex:0 0 44px;margin-top:0}.withdraw-action .feedback-close{margin-top:0}
 /* Keyboard-accessible section tabs retain unsaved inputs in their panels. */
 .settings-page #settingsForm>.panel{margin:0}
-.settings-tabs{display:flex;gap:4px;align-items:center;flex-wrap:nowrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--corner-radius);padding:4px}
-.settings-tabs button{flex:1 0 auto;white-space:nowrap;font-size:.82rem;font-weight:500;background:transparent;color:var(--muted);border:1px solid transparent;min-height:44px;padding:10px 16px;border-radius:var(--corner-radius)}
+.settings-tabs{display:flex;gap:var(--space-xs);align-items:center;flex-wrap:nowrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--corner-radius);padding:var(--space-xs)}
+.settings-tabs button{flex:1 0 auto;white-space:nowrap;font-size:.82rem;font-weight:500;background:transparent;color:var(--muted);border:1px solid transparent;min-height:44px;padding:10px var(--space-lg);border-radius:var(--corner-radius)}
 .settings-tabs button[aria-selected="true"]{background:var(--panel);color:var(--text);border-color:var(--line);font-weight:600}
 .settings-tabs button:not(:disabled):hover{background:var(--hover);color:var(--text)}
 .settings-tabs button[aria-selected="true"]:hover{background:var(--panel)}
 /* Native dialogs provide keyboard containment, Escape and focus restoration. */
-dialog,.confirmation-dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:var(--corner-radius);box-shadow:0 24px 80px #0004;padding:24px;max-height:calc(100dvh - 32px)}
+dialog,.confirmation-dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:var(--corner-radius);box-shadow:0 24px 80px #0004;padding:var(--space-xl);max-height:calc(100dvh - 32px)}
 dialog::backdrop,.confirmation-dialog::backdrop{background:var(--scrim);backdrop-filter:none;-webkit-backdrop-filter:none}
 dialog h2,.confirmation-dialog h2{font-size:1.18rem;font-weight:600}
 .confirmation-values dt,dialog dt{font-size:.82rem;color:var(--muted)}
 .confirmation-values dd,dialog dd{font-size:.94rem;color:var(--text)}
-.confirmation-values,.confirmation-actions{gap:16px}.confirmation-actions{flex-wrap:wrap}
-.settings-dialog{padding:0;overflow:hidden}.settings-dialog-header{background:var(--panel);border-color:var(--line);padding:12px 20px}
+.confirmation-values,.confirmation-actions{gap:var(--space-md)}.confirmation-actions{flex-wrap:wrap}
+.settings-dialog{padding:0;overflow:hidden}.settings-dialog-header{background:var(--panel);border-color:var(--line);padding:var(--space-md) var(--space-lg)}
 .settings-dialog iframe,.embedded,.embedded .panel{background:var(--panel)}
 .review-list dt,.review-list dd{border-color:var(--line)}.review-list .review-changed{background:var(--surface);border-color:var(--accent)}
 .review-list dt{font-size:.82rem}.review-new,.review-badge{color:var(--accent)}.review-old,.review-caption,.review-unchanged{color:var(--muted)}.review-caption,.review-badge{font-size:.76rem}
 /* The complete option card is the switch's touch target. */
-.option-card{align-items:center;gap:16px;min-height:100px;cursor:pointer}
+.option-card{align-items:center;gap:var(--space-lg);min-height:100px;cursor:pointer}
 .option-card strong,.currency-card label{font-size:.88rem;font-weight:600;color:var(--text)}
 .option-card small{font-size:.76rem;line-height:1.5;color:var(--muted)}
 .option-card input[type=checkbox]{flex:0 0 51px;width:51px;height:31px;min-height:31px;border:1px solid var(--line);border-radius:999px;background:var(--line)}
@@ -80,9 +80,9 @@ dialog h2,.confirmation-dialog h2{font-size:1.18rem;font-weight:600}
 .option-card input[type=checkbox]:checked{background:#248a3d;border-color:#248a3d}
 .option-card input[type=checkbox]:checked::after{transform:translateX(20px);background:#fff}
 .currency-card{align-items:stretch;cursor:default}.credential-editor{background:var(--surface)}
-.dashboard-footnotes{color:var(--muted);font-size:.76rem;line-height:1.6;margin-top:32px;padding-top:24px}
+.dashboard-footnotes{color:var(--muted);font-size:.76rem;line-height:1.6;margin-top:32px;padding-top:var(--space-xl)}
 .dashboard-footnotes h2,.dashboard-footnotes li>strong,.dashboard-footnotes .note-subheading{font-size:.82rem;font-weight:600;letter-spacing:normal;color:var(--text)}
-.dashboard-footnotes p{margin:8px 0 0}.note-subsection{margin-top:24px}
+.dashboard-footnotes p{margin:var(--space-sm) 0 0}.note-subsection{margin-top:var(--space-lg)}
 .horizontal-scroll{scrollbar-color:var(--muted) var(--surface);scrollbar-width:thin}
 .horizontal-scroll::-webkit-scrollbar-track{background:var(--surface)}
 .horizontal-scroll::-webkit-scrollbar-thumb{background:var(--muted);border-color:var(--surface)}
@@ -92,23 +92,23 @@ dialog h2,.confirmation-dialog h2{font-size:1.18rem;font-weight:600}
 @supports(backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px)){
  .compact-brand-bar{background:var(--glass);backdrop-filter:blur(20px) saturate(1.2);-webkit-backdrop-filter:blur(20px) saturate(1.2)}
 }
-.login-page .card{background:var(--panel);border-radius:var(--corner-radius);box-shadow:0 8px 32px #0001;padding:32px}
-.login-brand{margin:0 0 24px;gap:16px}.login-brand h1{font-size:1.6rem}.login-page label{font-size:.82rem;margin-top:20px}
-.login-page input{font-size:1rem;min-height:48px}.login-page button{margin-top:24px;min-height:48px}
+.login-page .card{background:var(--panel);border-radius:var(--corner-radius);box-shadow:0 8px 32px #0001;padding:var(--space-xl)}
+.login-brand{margin:0 0 var(--space-lg);gap:var(--space-lg)}.login-brand h1{font-size:1.6rem}.login-page label{font-size:.82rem;margin-top:var(--space-lg);margin-bottom:var(--space-xs)}
+.login-page input{font-size:1rem;min-height:48px}.login-page button{margin-top:var(--space-lg);min-height:48px}
 .login-support,.login-support code{font-size:.7rem;line-height:1.6;color:var(--muted)}.login-support>span{color:var(--red)}
 .login-page .error:empty{display:none}
-.skip-link{position:fixed;top:12px;left:16px;z-index:1000;background:var(--panel);color:var(--accent);border:1px solid var(--line);border-radius:var(--corner-radius);padding:12px 16px;transform:translateY(-200%)}
+.skip-link{position:fixed;top:12px;left:16px;z-index:1000;background:var(--panel);color:var(--accent);border:1px solid var(--line);border-radius:var(--corner-radius);padding:var(--space-md) var(--space-lg);transform:translateY(-200%)}
 .skip-link:focus{transform:none}
 @media(max-width:600px){
  :root{--panel-padding:16px;--tile-gap:12px;--section-gap:20px;--card-padding:16px;--field-gap:16px}
- .dashboard-page main{padding-top:max(24px,env(safe-area-inset-top));padding-right:max(16px,env(safe-area-inset-right));padding-left:max(16px,env(safe-area-inset-left))}
- .panel{margin:16px 0}.panel>.panel-heading,.panel>.report-heading{padding:14px var(--panel-padding)}
- .card,.option-card,.settings-card-grid>div:not(.option-card),.credential-editor{padding:16px}
- .value{font-size:1.35rem}.top{gap:16px}.top-actions{gap:12px}.dashboard-brand h1{font-size:1.5rem}
- .settings-page main,.embedded main{padding:16px max(16px,env(safe-area-inset-right)) 32px max(16px,env(safe-area-inset-left))}
+ .dashboard-page main{padding-top:max(var(--space-xl),env(safe-area-inset-top));padding-right:max(var(--space-lg),env(safe-area-inset-right));padding-left:max(var(--space-lg),env(safe-area-inset-left))}
+ .panel{margin:var(--space-lg) 0}.panel>.panel-heading,.panel>.report-heading{padding:14px var(--panel-padding)}
+ .card,.option-card,.settings-card-grid>div:not(.option-card),.credential-editor{padding:var(--space-lg)}
+ .value{font-size:1.35rem}.top{gap:var(--space-lg)}.top-actions{gap:var(--space-md)}.dashboard-brand h1{font-size:1.5rem}
+ .settings-page main,.embedded main{padding:var(--space-lg) max(var(--space-lg),env(safe-area-inset-right)) 32px max(var(--space-lg),env(safe-area-inset-left))}
  .option-card{min-height:96px}input,select{font-size:1rem}
- .login-page{padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom));min-height:100svh}
- .login-page .card{padding:24px}.login-brand{gap:12px}.login-brand h1{font-size:1.35rem}
+ .login-page{padding:max(var(--space-lg),env(safe-area-inset-top)) var(--space-lg) max(var(--space-lg),env(safe-area-inset-bottom));min-height:100svh}
+ .login-page .card{padding:var(--space-xl)}.login-brand{gap:var(--space-md)}.login-brand h1{font-size:1.35rem}
  dialog,.confirmation-dialog{padding:20px;border-radius:var(--corner-radius)}.settings-dialog{padding:0}
 }
 @media(prefers-contrast:more){
@@ -139,10 +139,10 @@ input:not([type=checkbox]):not([type=hidden]),select{height:auto;min-height:44px
 .settings-dialog iframe{flex:1 1 auto;height:auto;min-height:0}
 @media(max-width:600px){
  .settings-dialog[open]{width:100%;max-width:100%;height:100dvh;max-height:100dvh;margin:0;border:0;border-radius:0}
- .settings-dialog-header{padding:max(12px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 12px max(16px,env(safe-area-inset-left))}
+ .settings-dialog-header{padding:max(var(--space-md),env(safe-area-inset-top)) max(var(--space-lg),env(safe-area-inset-right)) var(--space-md) max(var(--space-lg),env(safe-area-inset-left))}
 }
 /* Keep confirmation actions visible while reviewing long changes or a long target. */
-.confirmation-actions,.settings-page dialog>.actions{position:sticky;bottom:0;z-index:1;background:var(--panel);padding-top:16px;border-top:1px solid var(--line)}
+.confirmation-actions,.settings-page dialog>.actions{position:sticky;bottom:0;z-index:1;background:var(--panel);padding-top:var(--space-md);border-top:1px solid var(--line)}
 /* Busy controls keep their label and reserve a small, nonverbal progress affordance. */
 button[aria-busy=true]::after{content:'';display:inline-block;vertical-align:-.1em;width:.8em;height:.8em;margin-inline-start:8px;border:2px solid currentColor;border-inline-end-color:transparent;border-radius:50%;animation:control-busy .8s linear infinite}
 @keyframes control-busy{to{transform:rotate(360deg)}}
@@ -163,7 +163,7 @@ html{scroll-padding-top:calc(88px + env(safe-area-inset-top))}
  box-sizing:border-box;display:block;appearance:none;-webkit-appearance:none;
  width:100%;max-width:100%;min-width:0;min-inline-size:0;
  height:3rem;min-height:48px;max-height:3rem;
- margin:0;padding:10px 12px;border-width:1px;border-style:solid;border-radius:var(--corner-radius);
+ margin:0;padding:10px var(--space-md);border-width:1px;border-style:solid;border-radius:var(--corner-radius);
  font-family:inherit;font-size:1rem;line-height:1.25;
 }
 .report-controls .controls select.report-control{
@@ -172,7 +172,7 @@ html{scroll-padding-top:calc(88px + env(safe-area-inset-top))}
  background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;
  background-size:5px 5px;background-repeat:no-repeat;
 }
-.report-controls .controls button.report-control{display:flex;align-items:center;justify-content:center;gap:8px}
+.report-controls .controls button.report-control{display:flex;align-items:center;justify-content:center;gap:var(--space-sm)}
 @media(prefers-contrast:more){.report-controls .controls .report-control{border-width:2px}}
 
 /* Functional motion: disclosure, modal presentation and input feedback. */

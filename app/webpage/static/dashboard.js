@@ -34,6 +34,11 @@ function renderWithdrawalProgress(balance,price,threshold,enabled){
  $('withdrawalProgress').value=known?Math.min(100,Math.max(0,balance*price/threshold*100)):0;
  $('withdrawalProgressLabel').textContent=known?t('{value} of {threshold}').replace('{value}',money(balance*price,quote)).replace('{threshold}',money(threshold,quote)):t(enabled?'Waiting for account check':'Automatic withdrawals disabled');
 }
+$('botStatus').addEventListener('click',()=>{$('botStatus').classList.remove('tooltip-dismissed');$('botStatus').classList.toggle('tooltip-open')});
+$('botStatus').addEventListener('mouseenter',()=>$('botStatus').classList.remove('tooltip-dismissed'));
+$('botStatus').addEventListener('focus',()=>$('botStatus').classList.remove('tooltip-dismissed'));
+$('botStatus').addEventListener('blur',()=>$('botStatus').classList.remove('tooltip-open'));
+$('botStatus').addEventListener('keydown',event=>{if(event.key==='Escape'){$('botStatus').classList.remove('tooltip-open');$('botStatus').classList.add('tooltip-dismissed')}});
 function updateStatusLight(tone){
  $('botStatusLight').className='status-light status-'+(['active','waiting','error'].includes(tone)?tone:'waiting');
 }
@@ -71,7 +76,7 @@ async function refreshPurchaseSchedule(){
   $("quoteBalance").textContent=t(balanceKnown?money(schedule.quoteBalance,schedule.quote):"—");
   const checkedAt=Date.parse(schedule.balanceUpdatedAt);
   const exchangeChecked=t(Number.isFinite(checkedAt)?'Exchange last checked {date}':'Waiting for account check').replace('{date}',dateLabel(checkedAt,schedule.timezone||'UTC'));
-  $('botStatus').title=exchangeChecked;$('botStatus').setAttribute('aria-description',exchangeChecked);
+  $('exchangeCheckTooltip').textContent=exchangeChecked;
   nextPurchaseTimestamp=Number.isFinite(target)?target:null;
 
   nextPurchaseMessage=schedule.nextPurchaseStatus||"Not scheduled";
@@ -88,7 +93,7 @@ async function refreshPurchaseSchedule(){
   renderWithdrawalProgress(exchangeBtcBalance,Number(schedule.purchaseCurrencyPrice),Number(schedule.withdrawalThreshold),schedule.withdrawalsEnabled);
   renderPurchaseCountdown();
   $('automaticWithdrawalCard').classList.toggle('withdrawal-disabled',!schedule.withdrawalsEnabled);
-  if(!schedule.withdrawalsEnabled)$('estimatedWithdrawalAt').textContent=t('Automatic withdrawals disabled');
+  $('withdrawalHeading').textContent=t(schedule.withdrawalsEnabled?'Automatic withdrawal':'Automatic withdrawal disabled');
   sectionFeedback("scheduleFeedback","");
  }catch(e){if(request===scheduleRequest){$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");updateStatusLight("error");sectionFeedback("scheduleFeedback","")}}
 }

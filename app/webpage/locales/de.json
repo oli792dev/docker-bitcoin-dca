@@ -449,5 +449,6 @@
   "CSV export prepared.": "CSV-Export vorbereitet.",
   "Exchange last checked {date}": "Börse zuletzt geprüft: {date}",
   "Choose dates or an interval between confirmed withdrawals.": "Wähle eigene Datumsangaben oder einen Zeitraum zwischen bestätigten Auszahlungen.",
-  "Apply period": "Zeitraum übernehmen"
+  "Apply period": "Zeitraum übernehmen",
+  "Automatic withdrawal disabled": "Automatische Auszahlung deaktiviert"
 }
