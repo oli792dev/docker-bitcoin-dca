@@ -333,7 +333,7 @@ __DESIGN_CSS__
 .redesigned .period-shortcuts{display:flex;gap:2px;border:0;background:var(--surface);border-radius:var(--corner-radius);padding:3px;margin-left:auto;}
 .redesigned .period-shortcuts button{font-size:.76rem;min-height:var(--button-height);padding:8px 12px;background:transparent;color:var(--muted);border:0;border-radius:var(--corner-radius);}
 .redesigned .period-shortcuts button[aria-pressed=true],.redesigned .period-shortcuts button[aria-pressed=true]:hover{background:var(--selection);color:var(--text);border:0;font-weight:600;}
-.redesigned .period-shortcuts button:hover{background:var(--hover);color:var(--text);}
+.redesigned .period-shortcuts button:not([aria-pressed=true]):is(:hover,:active){background:var(--tab-hover);color:var(--text);}
 @media (max-width:600px){
 .redesigned .period-shortcuts{order:3;flex-basis:100%;margin:0;}
 .redesigned .period-shortcuts button{padding:8px 8px;}

@@ -36,6 +36,15 @@ test('dashboard controls, analysis spacing and modal scroll restoration', async 
   for (const id of ['monthRange', 'customRange', 'openSettings']) {
     expect((await rect(page.locator(`#${id}`))).height).toBeGreaterThanOrEqual(44);
   }
+  await page.emulateMedia({colorScheme: 'dark'});
+  const selectedRange = page.locator('#customRange');
+  const hoverRange = page.locator('#monthRange');
+  await expect(selectedRange).toHaveCSS('background-color', 'rgb(58, 58, 60)');
+  const selectedBackground = await selectedRange.evaluate(el => getComputedStyle(el).backgroundColor);
+  await hoverRange.hover();
+  await expect(hoverRange).toHaveCSS('background-color', 'rgb(48, 48, 50)');
+  expect(await hoverRange.evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe(selectedBackground);
+  expect(await selectedRange.evaluate(el => getComputedStyle(el).backgroundColor)).toBe(selectedBackground);
   const heading = await rect(page.locator('.analysis-header'));
   const report = await rect(page.locator('#periodReport'));
   expect(report.y).toBeGreaterThanOrEqual(heading.y + heading.height);
@@ -82,6 +91,15 @@ test('settings tabs stay single line and fields scroll within the content', asyn
     expect(await tab.evaluate(el => getComputedStyle(el).whiteSpace)).toBe('nowrap');
     expect((await rect(tab)).height).toBeGreaterThanOrEqual(44);
   }
+  await page.emulateMedia({colorScheme: 'dark'});
+  const selectedTab = page.locator('#botConfigurationTab');
+  const hoverTab = page.locator('#exchangeConnectionTab');
+  await expect(selectedTab).toHaveCSS('background-color', 'rgb(58, 58, 60)');
+  const selectedBackground = await selectedTab.evaluate(el => getComputedStyle(el).backgroundColor);
+  await hoverTab.hover();
+  await expect(hoverTab).toHaveCSS('background-color', 'rgb(48, 48, 50)');
+  expect(await hoverTab.evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe(selectedBackground);
+  expect(await selectedTab.evaluate(el => getComputedStyle(el).backgroundColor)).toBe(selectedBackground);
   const time = page.locator('#deposit_time');
   const pair = await rect(page.locator('#depositDateFields'));
   const timeBox = await rect(time);

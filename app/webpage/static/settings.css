@@ -200,7 +200,7 @@ __DESIGN_CSS__
 .settings-page .settings-tabs{gap:2px;padding:3px;border:0;background:var(--surface);border-radius:var(--corner-radius);}
 .settings-page .settings-tabs button{min-height:var(--button-height);padding:8px 12px;border:0;background:transparent;color:var(--muted);font-size:.76rem;font-weight:500;border-radius:var(--corner-radius);}
 .settings-page .settings-tabs button[aria-selected=true],.settings-page .settings-tabs button[aria-selected=true]:hover{background:var(--selection);color:var(--text);border:0;font-weight:600;}
-.settings-page .settings-tabs button:not(:disabled):hover{background:var(--hover);color:var(--text);}
+.settings-page .settings-tabs button:not(:disabled):not([aria-selected=true]):is(:hover,:active){background:var(--tab-hover);color:var(--text);}
 @media (pointer:coarse){
 .settings-page .settings-tabs button{min-height:var(--button-height);}
 }
