@@ -158,3 +158,5 @@ __DESIGN_CSS__
 
 /* Login is a full-width group within Dashboard settings. */
 .settings-page #dashboardCredentials{grid-column:1/-1}
+
+.settings-page #testConnection{border-color:transparent}
