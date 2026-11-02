@@ -273,7 +273,7 @@ __DESIGN_CSS__
 
 @media(max-width:600px){.redesigned .report-extra{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
-.redesigned .plan-card.withdrawal-disabled{background:var(--surface);border-color:var(--line)}
+.redesigned .plan-card.withdrawal-disabled{background:var(--panel);border-color:transparent}
 .redesigned .withdrawal-disabled .plan-title h2,.redesigned .withdrawal-disabled>#estimatedWithdrawalAt{color:var(--muted)}
 .redesigned .withdrawal-disabled>#estimatedWithdrawalAt{font-size:1.1rem;font-weight:500}
 .redesigned .withdrawal-disabled>:not(.plan-title):not(#estimatedWithdrawalAt),.redesigned .withdrawal-disabled #withdrawalBadge{display:none!important}
@@ -409,3 +409,6 @@ __DESIGN_CSS__
  .redesigned .pagination>.page-size{order:0;flex:1 1 auto}
  .redesigned .pagination>.notice{order:3;flex-basis:100%}
 }
+
+@media(prefers-contrast:more){.redesigned .plan-card.withdrawal-disabled{border-color:var(--line)}}
+@media(forced-colors:active){.redesigned .plan-card.withdrawal-disabled{border-color:CanvasText}}
