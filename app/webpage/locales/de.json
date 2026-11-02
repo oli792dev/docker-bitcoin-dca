@@ -453,5 +453,8 @@
   "Automatic withdrawal disabled": "Automatische Auszahlung deaktiviert",
   "Available fiat balance": "Verfügbares Fiatguthaben",
   "Available {currency} balance": "Verfügbares {currency}-Guthaben",
-  "Amount of BTC purchases": "Anzahl der BTC-Käufe"
+  "Amount of BTC purchases": "Anzahl der BTC-Käufe",
+  "Profit / loss": "Gewinn / Verlust",
+  "Current value": "Aktueller Wert",
+  "Automatic withdrawal forecast assumptions": "Annahmen zur Prognose der automatischen Auszahlung"
 }
