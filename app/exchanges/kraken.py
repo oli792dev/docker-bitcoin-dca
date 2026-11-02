@@ -1,16 +1,18 @@
 """Kraken Bitcoin spot trading and withdrawal adapter."""
+
 import base64
 import hashlib
 import hmac
 import logging
 import threading
 import time
-from datetime import datetime, timezone
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from decimal import Decimal
 from urllib.parse import urlencode
 
 import requests
+
 from app.exchanges.exchange_errors import DefinitiveRejection
 from app.exchanges.read_cache import ReadCache
 
@@ -20,10 +22,20 @@ _NONCE_LOCK = threading.Lock()
 _LAST_NONCE = 0
 _HTTP_IDLE_RESET_SECONDS = 60
 _BALANCE_SNAPSHOT_MAX_AGE_SECONDS = 5
-_READ_ONLY_PRIVATE_METHODS = frozenset({
-    "Balance", "BalanceEx", "TradeVolume", "Ledgers", "TradesHistory",
-    "WithdrawStatus", "WithdrawInfo", "OpenOrders", "ClosedOrders", "QueryOrders",
-})
+_READ_ONLY_PRIVATE_METHODS = frozenset(
+    {
+        "Balance",
+        "BalanceEx",
+        "TradeVolume",
+        "Ledgers",
+        "TradesHistory",
+        "WithdrawStatus",
+        "WithdrawInfo",
+        "OpenOrders",
+        "ClosedOrders",
+        "QueryOrders",
+    }
+)
 
 
 class KrakenAPIError(requests.RequestException):
@@ -78,12 +90,23 @@ class Kraken:
         errors = payload.get("error", [])
         if errors:
             message = "; ".join(errors)
-            definitive = ("EOrder:Insufficient funds", "EOrder:Order minimum", "EOrder:Cost minimum",
-                          "EOrder:Invalid", "EOrder:Tick size", "EAPI:Invalid key", "EAPI:Invalid signature",
-                          "EGeneral:Permission denied", "EGeneral:Invalid arguments", "EFunding:Insufficient funds",
-                          "EOrder:Orders limit exceeded", "EOrder:Rate limit exceeded",
-                          "EOrder:Domain rate limit exceeded", "EAPI:Rate limit exceeded",
-                          "EFunding:Max fee exceeded")
+            definitive = (
+                "EOrder:Insufficient funds",
+                "EOrder:Order minimum",
+                "EOrder:Cost minimum",
+                "EOrder:Invalid",
+                "EOrder:Tick size",
+                "EAPI:Invalid key",
+                "EAPI:Invalid signature",
+                "EGeneral:Permission denied",
+                "EGeneral:Invalid arguments",
+                "EFunding:Insufficient funds",
+                "EOrder:Orders limit exceeded",
+                "EOrder:Rate limit exceeded",
+                "EOrder:Domain rate limit exceeded",
+                "EAPI:Rate limit exceeded",
+                "EFunding:Max fee exceeded",
+            )
             if not payload.get("result") and all(str(e).startswith(definitive) for e in errors):
                 self.invalidate_market()
                 raise DefinitiveRejection(message)
@@ -118,10 +141,18 @@ class Kraken:
                     LOG.info(
                         "Kraken %s recovered on read attempt %s/%s after %.1fs; "
                         "the retry used a fresh HTTP connection.",
-                        endpoint, attempt, attempts, time.monotonic() - started,
+                        endpoint,
+                        attempt,
+                        attempts,
+                        time.monotonic() - started,
                     )
-                LOG.debug("Kraken %s completed in %.3fs (attempt %s/%s).",
-                          endpoint, time.monotonic() - attempt_started, attempt, attempts)
+                LOG.debug(
+                    "Kraken %s completed in %.3fs (attempt %s/%s).",
+                    endpoint,
+                    time.monotonic() - attempt_started,
+                    attempt,
+                    attempts,
+                )
                 return result
             except (requests.Timeout, requests.ConnectionError) as exc:
                 elapsed = time.monotonic() - attempt_started
@@ -133,9 +164,13 @@ class Kraken:
                     ) from exc
                 delay = attempt
                 LOG.warning(
-                    "Kraken %s: %s after %.1fs on read attempt %s/%s; "
-                    "retrying in %ss with a fresh HTTP connection.",
-                    endpoint, type(exc).__name__, elapsed, attempt, attempts, delay,
+                    "Kraken %s: %s after %.1fs on read attempt %s/%s; retrying in %ss with a fresh HTTP connection.",
+                    endpoint,
+                    type(exc).__name__,
+                    elapsed,
+                    attempt,
+                    attempts,
+                    delay,
                 )
                 time.sleep(delay)
             finally:
@@ -160,9 +195,7 @@ class Kraken:
     def public(self, method, params=None):
         return self._request_result(
             f"public/{method}",
-            lambda: self.session.get(
-                f"{BASE_URL}/public/{method}", params=params or {}, timeout=(10, 30)
-            ),
+            lambda: self.session.get(f"{BASE_URL}/public/{method}", params=params or {}, timeout=(10, 30)),
             retry_safe=True,
         )
 
@@ -191,7 +224,8 @@ class Kraken:
             )
 
         return self._request_result(
-            f"private/{method}", send_request,
+            f"private/{method}",
+            send_request,
             retry_safe=method in _READ_ONLY_PRIVATE_METHODS,
         )
 
@@ -205,20 +239,24 @@ class Kraken:
         bitcoin, quote = symbol.upper().replace("/", "-").split("-", 1)
         if bitcoin != "BTC":
             raise ValueError("Only Bitcoin markets are supported")
-        cached=self._pairs or {}
-        timestamps=getattr(self,'_pair_timestamps',{})
-        matching=any(_canonical_asset(info.get('base'))=='BTC' and
-                     _canonical_asset(info.get('quote'))==_canonical_asset(quote)
-                     for info in cached.values())
-        available=cached
-        if refresh or not matching or time.monotonic()-timestamps.get(quote,getattr(self,'_pairs_at',0))>=60:
-            available=self.public("AssetPairs", {"pair": "XBT" + quote, "assetVersion": 1})
-            self._pairs={**cached,**available}
-            self._pairs_at=time.monotonic()
-            timestamps[quote]=self._pairs_at
-            self._pair_timestamps=timestamps
+        cached = self._pairs or {}
+        timestamps = getattr(self, "_pair_timestamps", {})
+        matching = any(
+            _canonical_asset(info.get("base")) == "BTC"
+            and _canonical_asset(info.get("quote")) == _canonical_asset(quote)
+            for info in cached.values()
+        )
+        available = cached
+        if refresh or not matching or time.monotonic() - timestamps.get(quote, getattr(self, "_pairs_at", 0)) >= 60:
+            available = self.public("AssetPairs", {"pair": "XBT" + quote, "assetVersion": 1})
+            self._pairs = {**cached, **available}
+            self._pairs_at = time.monotonic()
+            timestamps[quote] = self._pairs_at
+            self._pair_timestamps = timestamps
         for key, info in available.items():
-            if _canonical_asset(info.get("base")) == "BTC" and _canonical_asset(info.get("quote")) == _canonical_asset(quote):
+            if _canonical_asset(info.get("base")) == "BTC" and _canonical_asset(info.get("quote")) == _canonical_asset(
+                quote
+            ):
                 normalized = dict(info)
                 normalized["_key"] = key
                 normalized["_quote"] = _canonical_asset(info.get("quote"))
@@ -241,7 +279,9 @@ class Kraken:
 
     def price(self, symbol):
         pair = self._pair_info(symbol)
-        result = self._reads.read(('price',symbol), lambda: self.public("Ticker", {"pair": pair.get("altname", pair["_key"])}))
+        result = self._reads.read(
+            ("price", symbol), lambda: self.public("Ticker", {"pair": pair.get("altname", pair["_key"])})
+        )
         ticker = next(iter(result.values()))
         return Decimal(ticker["c"][0])
 
@@ -252,17 +292,21 @@ class Kraken:
             result = self.private("TradeVolume", {"pair": pair["_key"]})
             table = result.get("fees", {})
             info = table.get(pair["_key"])
-            if info is None and len(table)==1: info=next(iter(table.values()))
-            if not isinstance(info,dict) or 'fee' not in info:
+            if info is None and len(table) == 1:
+                info = next(iter(table.values()))
+            if not isinstance(info, dict) or "fee" not in info:
                 raise ValueError(f"Kraken did not return a taker fee for {symbol}")
-            rate=Decimal(str(info['fee']))/100
-            self._fee_rates[symbol]=(time.monotonic(),rate)
-        return Decimal(str(quote_amount))*self._fee_rates[symbol][1]
+            rate = Decimal(str(info["fee"])) / 100
+            self._fee_rates[symbol] = (time.monotonic(), rate)
+        return Decimal(str(quote_amount)) * self._fee_rates[symbol][1]
 
     def balance(self, currency):
         if self._balance_scope_depth:
-            if (self._balance_cache is None or self._balance_cache_at is None
-                    or time.monotonic() - self._balance_cache_at >= _BALANCE_SNAPSHOT_MAX_AGE_SECONDS):
+            if (
+                self._balance_cache is None
+                or self._balance_cache_at is None
+                or time.monotonic() - self._balance_cache_at >= _BALANCE_SNAPSHOT_MAX_AGE_SECONDS
+            ):
                 self._balance_cache = self.private("BalanceEx")
                 self._balance_cache_at = time.monotonic()
             balances = self._balance_cache
@@ -283,35 +327,53 @@ class Kraken:
 
     def fiat_deposits(self, currency, start_ms=0, end_ms=None):
         """Booked fiat deposits, with stable ledger IDs and complete pagination."""
-        params = {'asset':currency, 'type':'deposit', 'start':str(int(start_ms)//1000),
-                  'end':str(int(end_ms)//1000 if end_ms is not None else int(time.time())), 'ofs':0}
-        result = {}; expected_count = None
+        params = {
+            "asset": currency,
+            "type": "deposit",
+            "start": str(int(start_ms) // 1000),
+            "end": str(int(end_ms) // 1000 if end_ms is not None else int(time.time())),
+            "ofs": 0,
+        }
+        result = {}
+        expected_count = None
         for _ in range(200):
-            page = self.private('Ledgers', dict(params))
-            if not isinstance(page,dict) or not isinstance(page.get('ledger'),dict):
-                raise KrakenAPIError('Kraken deposit ledger could not be verified')
-            count = page.get('count')
-            if not isinstance(count,int) or count < 0 or any(not isinstance(v,dict) for v in page['ledger'].values()):
-                raise KrakenAPIError('Invalid Kraken deposit ledger page')
+            page = self.private("Ledgers", dict(params))
+            if not isinstance(page, dict) or not isinstance(page.get("ledger"), dict):
+                raise KrakenAPIError("Kraken deposit ledger could not be verified")
+            count = page.get("count")
+            if not isinstance(count, int) or count < 0 or any(not isinstance(v, dict) for v in page["ledger"].values()):
+                raise KrakenAPIError("Invalid Kraken deposit ledger page")
             if expected_count is not None and count != expected_count:
-                raise KrakenAPIError('Kraken deposit ledger changed while paging; retrying next check')
+                raise KrakenAPIError("Kraken deposit ledger changed while paging; retrying next check")
             expected_count = count
-            rows = page['ledger']
+            rows = page["ledger"]
             if set(rows) & set(result):
-                raise KrakenAPIError('Kraken deposit ledger page did not advance')
+                raise KrakenAPIError("Kraken deposit ledger page did not advance")
             result.update(rows)
-            params['ofs'] += len(rows)
-            if params['ofs'] >= count: break
-            if not rows: raise KrakenAPIError('Kraken deposit ledger is incomplete')
-        else: raise KrakenAPIError('Kraken deposit ledger page limit reached')
+            params["ofs"] += len(rows)
+            if params["ofs"] >= count:
+                break
+            if not rows:
+                raise KrakenAPIError("Kraken deposit ledger is incomplete")
+        else:
+            raise KrakenAPIError("Kraken deposit ledger page limit reached")
         deposits = []
-        for ledger_id,item in result.items():
-            if item.get('type') != 'deposit' or _canonical_asset(item.get('asset','')) != currency: continue
+        for ledger_id, item in result.items():
+            if item.get("type") != "deposit" or _canonical_asset(item.get("asset", "")) != currency:
+                continue
             # Internal wallet transfers are not bank deposits.
-            if item.get('subtype'): continue
-            deposits.append({'id':ledger_id,'timestamp':int(Decimal(str(item['time']))*1000),
-                             'symbol':currency,'amount':str(item['amount']),
-                             'fee':str(item.get('fee','0')),'status':'completed'})
+            if item.get("subtype"):
+                continue
+            deposits.append(
+                {
+                    "id": ledger_id,
+                    "timestamp": int(Decimal(str(item["time"])) * 1000),
+                    "symbol": currency,
+                    "amount": str(item["amount"]),
+                    "fee": str(item.get("fee", "0")),
+                    "status": "completed",
+                }
+            )
         return deposits
 
     def btc_withdrawals(self, start_ms=0, end_ms=None):
@@ -326,67 +388,85 @@ class Kraken:
         cursors = set()
         for _ in range(100):
             page = self.private("WithdrawStatus", dict(params))
-            cursor = page.get('cursor') if isinstance(page, dict) else None
+            cursor = page.get("cursor") if isinstance(page, dict) else None
             rows = page
             if isinstance(page, dict):
-                rows = next((page[key] for key in ('withdrawals', 'items', 'data', 'results')
-                             if isinstance(page.get(key), list)), None)
-                if rows is None and page and all(isinstance(value, dict) and 'status' in value and 'time' in value for value in page.values()):
+                rows = next(
+                    (
+                        page[key]
+                        for key in ("withdrawals", "items", "data", "results")
+                        if isinstance(page.get(key), list)
+                    ),
+                    None,
+                )
+                if (
+                    rows is None
+                    and page
+                    and all(
+                        isinstance(value, dict) and "status" in value and "time" in value for value in page.values()
+                    )
+                ):
                     rows = list(page.values())
-                if not page: rows = []
+                if not page:
+                    rows = []
             if not isinstance(rows, list) or any(not isinstance(item, dict) for item in rows):
-                raise KrakenAPIError('Unexpected Kraken withdrawal-history response')
+                raise KrakenAPIError("Unexpected Kraken withdrawal-history response")
             result.extend(rows)
             if not cursor:
-                if len(rows) >= params['limit'] and not (isinstance(page, dict) and 'cursor' in page):
-                    raise KrakenAPIError('Complete Kraken withdrawal history could not be verified: missing cursor')
+                if len(rows) >= params["limit"] and not (isinstance(page, dict) and "cursor" in page):
+                    raise KrakenAPIError("Complete Kraken withdrawal history could not be verified: missing cursor")
                 break
             if not isinstance(cursor, str) or cursor in cursors:
-                raise KrakenAPIError('Kraken withdrawal-history cursor did not advance')
+                raise KrakenAPIError("Kraken withdrawal-history cursor did not advance")
             cursors.add(cursor)
-            params['cursor'] = cursor
+            params["cursor"] = cursor
         else:
-            raise KrakenAPIError('Kraken withdrawal-history page limit reached')
+            raise KrakenAPIError("Kraken withdrawal-history page limit reached")
         withdrawals = []
         for item in result:
             status = str(item.get("status", "")).lower()
             timestamp = int(float(item.get("time", 0)) * 1000)
-            withdrawals.append({
-                "timestamp": timestamp,
-                "symbol": "BTC",
-                "amount": str(item.get("amount", "0")),
-                "fee": str(item.get("fee", "0")),
-                "status": "completed" if status == "success" else ("failed" if status == "failure" else status),
-                "id": item.get("refid") or "",
-                "txId": item.get("txid") or "",
-            })
+            withdrawals.append(
+                {
+                    "timestamp": timestamp,
+                    "symbol": "BTC",
+                    "amount": str(item.get("amount", "0")),
+                    "fee": str(item.get("fee", "0")),
+                    "status": "completed" if status == "success" else ("failed" if status == "failure" else status),
+                    "id": item.get("refid") or "",
+                    "txId": item.get("txid") or "",
+                }
+            )
         return withdrawals
 
     def buy_btc(self, quote, amount, client_order_id):
         pair = self._pair_info(f"BTC-{quote.upper()}")
         userref = int(client_order_id.replace("-", "")[-8:], 16) % 2_147_483_647
-        result = self.private("AddOrder", {
-            "pair": pair.get("altname", pair["_key"]),
-            "type": "buy",
-            "ordertype": "market",
-            "volume": format(amount, "f"),
-            "userref": userref,
-        })
+        result = self.private(
+            "AddOrder",
+            {
+                "pair": pair.get("altname", pair["_key"]),
+                "type": "buy",
+                "ordertype": "market",
+                "volume": format(amount, "f"),
+                "userref": userref,
+            },
+        )
         ids = result.get("txid", [])
         return {"status": "submitted", "orderId": ids[0] if ids else None, "userref": userref}
 
     def open_orders(self):
-        result = self.private('OpenOrders', {})
-        if not isinstance(result, dict) or not isinstance(result.get('open'), dict):
-            raise ValueError('Kraken open orders could not be verified.')
-        return list(result['open'].values())
+        result = self.private("OpenOrders", {})
+        if not isinstance(result, dict) or not isinstance(result.get("open"), dict):
+            raise ValueError("Kraken open orders could not be verified.")
+        return list(result["open"].values())
 
     def _find_order(self, userref, exchange_order_id=None):
         matches = []
         for method, bucket in (("ClosedOrders", "closed"), ("OpenOrders", "open")):
             try:
                 result = self.private(method, {"userref": userref})
-            except (KrakenAPIError,DefinitiveRejection) as exc:
+            except (KrakenAPIError, DefinitiveRejection) as exc:
                 if "Permission denied" in str(exc):
                     continue
                 raise
@@ -424,6 +504,7 @@ class Kraken:
         if order is not None:
             return order
         raise KrakenAPIError("Kraken could not find the order with the saved user reference")
+
     def normalize_bot_buy(self, order, quote, event_id, fallback_timestamp_ms):
         filled = Decimal(str(order.get("vol_exec", "0")))
         quote_amount = Decimal(str(order.get("cost", "0")))
@@ -437,22 +518,26 @@ class Kraken:
         fee_quote = Decimal(str(order.get("fee", "0")))
         timestamp_seconds = order.get("closetm") or order.get("opentm")
         timestamp_ms = int(float(timestamp_seconds) * 1000) if timestamp_seconds else fallback_timestamp_ms
-        timestamp = datetime.fromtimestamp(timestamp_ms / 1000, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-        return [{
-            "id": f"buy:{event_id}",
-            "row": {
-                "datetime": timestamp,
-                "type": "Buy",
-                "identifier": "BTC",
-                "assetType": "Crypto",
-                "price": format(price, "f"),
-                "shares": format(filled, "f"),
-                "amount": format(quote_amount, "f"),
-                "currency": quote,
-                "fee": format(fee_quote, "f"),
-                "tax": "0",
-            },
-        }]
+        timestamp = (
+            datetime.fromtimestamp(timestamp_ms / 1000, UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+        )
+        return [
+            {
+                "id": f"buy:{event_id}",
+                "row": {
+                    "datetime": timestamp,
+                    "type": "Buy",
+                    "identifier": "BTC",
+                    "assetType": "Crypto",
+                    "price": format(price, "f"),
+                    "shares": format(filled, "f"),
+                    "amount": format(quote_amount, "f"),
+                    "currency": quote,
+                    "fee": format(fee_quote, "f"),
+                    "tax": "0",
+                },
+            }
+        ]
 
     def validate_withdrawal_settings(self, settings):
         if not self.withdraw_key:
@@ -461,11 +546,14 @@ class Kraken:
     def withdrawal_request(self, amount, idempotency_key, settings):
         if not self.withdraw_key:
             raise ValueError("KRAKEN_WITHDRAW_KEY is required when automatic withdrawals are enabled")
-        info = self.private("WithdrawInfo", {
-            "asset": "XBT",
-            "key": self.withdraw_key,
-            "amount": format(amount, "f"),
-        })
+        info = self.private(
+            "WithdrawInfo",
+            {
+                "asset": "XBT",
+                "key": self.withdraw_key,
+                "amount": format(amount, "f"),
+            },
+        )
         fee = Decimal(str(info.get("fee", "0")))
         net_amount = amount - fee
         if net_amount <= 0:
@@ -487,4 +575,3 @@ class Kraken:
         }
         result = self.private("Withdraw", payload)
         return {"id": result.get("refid"), "refid": result.get("refid")}
-

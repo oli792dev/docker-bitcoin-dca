@@ -150,6 +150,7 @@ class ScheduleBalanceTests(unittest.TestCase):
         with patch.object(web_ui,'read_dashboard_snapshot',return_value={}),patch.object(web_ui.time,'monotonic',return_value=100):
             handler.do_GET()
         self.assertEqual(handler._json.call_args.args[1]['nextPurchaseStatus'],'Waiting for startup delay')
+        self.assertTrue(handler._json.call_args.args[1]['startupDelayActive'])
         self.assertEqual(handler._json.call_args.args[1]['botStatusTone'],'waiting')
         self.assertEqual(handler._json.call_args.args[1]['estimatedWithdrawalStatus'],'Waiting for startup delay')
         with patch.object(web_ui,'read_dashboard_snapshot',return_value={}),patch.object(web_ui.time,'monotonic',return_value=200):
@@ -172,7 +173,41 @@ class ScheduleBalanceTests(unittest.TestCase):
         handler.settings={**DEFAULTS,'live':True};handler._require_authentication=lambda:True;handler._json=Mock()
         with patch.object(web_ui,'read_dashboard_snapshot',return_value={}):handler.do_GET()
         data=handler._json.call_args.args[1]
-        self.assertEqual((data['botStatusLabel'],data['botStatusTone']),('No account for exchange existing','error'))
+        self.assertEqual((data['botStatusLabel'],data['botStatusTone']),('Account data unavailable','error'))
+        self.assertTrue(data['botStatusWarning'])
+
+    def test_waiting_and_simulation_statuses_are_consistent(self):
+        from app.webpage.status import dashboard_status
+
+        cases = [
+            ('Verifying deposit', True, 'Verifying deposit', 'waiting', False),
+            ('Waiting until the balance covers an order', True, 'Waiting for deposit', 'waiting', False),
+            ('Scheduled', False, 'Simulation', 'waiting', False),
+            ('Scheduled', True, 'Bot active', 'active', False),
+        ]
+        for purchase_status, live, label, tone, warning in cases:
+            with self.subTest(purchase_status=purchase_status, live=live):
+                status = dashboard_status(
+                    balance_matches=True, purchase_status=purchase_status, live=live,
+                    exchange_check_pending=False, startup_delay=False,
+                    worker_healthy=True, worker_error=False,
+                )
+                self.assertEqual((status.label, status.tone, status.warning), (label, tone, warning))
+
+    def test_worker_health_takes_priority_over_startup_and_saved_state(self):
+        from app.webpage.status import dashboard_status
+
+        for healthy, error, label in (
+            (False, True, 'Worker unavailable'),
+            (True, True, 'Account check failed; retrying'),
+        ):
+            with self.subTest(healthy=healthy):
+                status = dashboard_status(
+                    balance_matches=False, purchase_status='Verifying deposit', live=True,
+                    exchange_check_pending=True, startup_delay=True,
+                    worker_healthy=healthy, worker_error=error,
+                )
+                self.assertEqual((status.label, status.tone, status.warning), (label, 'error', True))
 
     def test_account_status_reports_age_and_failure_without_exposing_error_details(self):
         from types import SimpleNamespace

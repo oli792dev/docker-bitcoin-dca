@@ -2,8 +2,31 @@ const {t,locale}=typeof DCA_I18N!=="undefined"?DCA_I18N:{t:value=>value,locale:"
 
 const initial=__INITIAL__, $=id=>document.getElementById(id);let pending=null;
 function connectionMessage(text,error=false){$('connectionStatus').textContent=t(text);$('connectionStatus').classList.toggle('is-error',error)}
-function message(text,error=false){$('status').textContent=t(text);$('status').classList.toggle('error',error)}
-async function request(path,body){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-DCA-Action':'settings'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw Error(d.error||'Request failed');return d}
+const fieldErrors=new Map();
+function clearFieldError(input){
+ const error=fieldErrors.get(input.id);if(!error)return;
+ input.removeAttribute?.('aria-invalid');input.setAttribute('aria-invalid','false');
+ const described=(input.getAttribute?.('aria-describedby')||input['aria-describedby']||'').split(' ').filter(id=>id&&id!==error.id);
+ input.setAttribute('aria-describedby',described.join(' '));error.hidden=true;error.textContent='';fieldErrors.delete(input.id);
+ if(!fieldErrors.size){$('settingsErrors').hidden=true;$('status').textContent=''}
+}
+function message(text,error=false,field=null){
+ $('status').textContent=t(text);$('status').classList.toggle('error',error);
+ if(!error||!field||!$(field))return;
+ const input=$(field);let output=$(field+'Error');
+ if(!output){output=document.createElement('small');output.id=field+'Error';output.className='field-error';output.setAttribute('role','alert');input.parentElement?.append(output)}
+ output.hidden=false;output.textContent=t(text);fieldErrors.set(field,output);input.setAttribute('aria-invalid','true');
+ const described=input.getAttribute?.('aria-describedby')||input['aria-describedby']||'';
+ input.setAttribute('aria-describedby',[...new Set([...described.split(' ').filter(Boolean),output.id])].join(' '));
+ const owner=settingsTabs.find(tab=>tab.panel.contains(input));
+ // Login credentials are nested under Dashboard; the remaining owner is found in the DOM.
+ activateSettingsTab(owner?.id||(['username','current_password','password','passwordConfirm'].includes(field)?'dashboardOptions':'botConfiguration'));
+ const summary=$('settingsErrors');summary.hidden=false;summary.replaceChildren();
+ const link=document.createElement('a');link.href='#'+field;link.textContent=t(text);link.addEventListener('click',event=>{event.preventDefault();activateSettingsTab(owner?.id||(['username','current_password','password','passwordConfirm'].includes(field)?'dashboardOptions':'botConfiguration'));input.focus();input.scrollIntoView?.({block:'center'})});summary.append(link);
+ input.focus();input.scrollIntoView?.({block:'center'});
+}
+
+async function request(path,body){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-DCA-Action':'settings'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok){const error=Error(d.error||'Request failed');error.field=path==='/api/setup/account'?({username:'newUsername',password:'newPassword'}[d.field]||d.field):d.field;throw error;}return d}
 function exchangeChanged(){return $('exchange').value!==(initial.settings.exchange||'KRAKEN')}
 function exchangeName(){return $('exchange').value==='KRAKEN'?'Kraken':'Bitvavo'}
 function updateExchangeGuidance(){
@@ -63,7 +86,7 @@ function activateSettingsTab(id,focus=false){
  if($('settingsContent'))$('settingsContent').scrollTop=0;
  if(initial.createAccount)return;
  if(initial.complete&&settingsTabs.some(item=>item.id===id)){try{localStorage.setItem('bitcoinDcaSettingsTab',id)}catch(e){}}
- for(const item of settingsTabs){const selected=item.id===id;item.panel.hidden=!selected;item.button.setAttribute('aria-selected',String(selected));item.button.tabIndex=selected?0:-1;if(selected&&focus)item.button.focus()}
+ for(const item of settingsTabs){const selected=item.id===id;item.panel.hidden=!selected;item.button.setAttribute('aria-selected',String(selected));item.button.tabIndex=selected?0:-1;if(selected){item.button.scrollIntoView?.({block:'nearest',inline:'nearest'});if(focus)item.button.focus()}}
 }
 $('settingsTabs').hidden=Boolean(initial.createAccount);
 if(!initial.createAccount){
@@ -83,7 +106,7 @@ if(!initial.createAccount){
 }
 $('quote').addEventListener('change',updatePurchaseCurrencyLabel);selectedExchange();$('exchange').addEventListener('change',()=>{for(const prefix of ['kraken','bitvavo'])for(const part of ['key','secret'])$(prefix+'_api_'+part).value='';connectionMessage('');selectedExchange()});
 function values(){const result={};for(const input of document.querySelectorAll('[data-setting]')){if(input.id==='withdraw_threshold'&&input.disabled){result[input.id]=initial.settings.withdraw_threshold;continue}result[input.id]=input.id==='check_interval_seconds'?Math.round(Number(input.value)*60):input.type==='checkbox'?input.checked:input.type==='number'&&['deposit_day','startup_delay_seconds','check_interval_seconds','order_status_check_seconds'].includes(input.id)?Number(input.value):input.value}return result}
-$('accountForm').addEventListener('submit',async e=>{e.preventDefault();if($('newPassword').value!==$('confirmPassword').value){message('Passwords do not match.',true);return}const b=e.submitter;b.disabled=true;try{await request('/api/setup/account',{username:$('newUsername').value,password:$('newPassword').value});location.href='/settings'}catch(err){message(err.message,true)}finally{b.disabled=false}});
+$('accountForm').addEventListener('submit',async e=>{e.preventDefault();if($('newPassword').value!==$('confirmPassword').value){message('Passwords do not match.',true,'confirmPassword');return}const b=e.submitter;b.disabled=true;try{await request('/api/setup/account',{username:$('newUsername').value,password:$('newPassword').value});location.href='/settings'}catch(err){message(err.message,true,err.field)}finally{b.disabled=false}});
 $('testConnection').addEventListener('click',async()=>{if(!exchangeCredentialsReady())return;const b=$('testConnection');b.disabled=true;b.ariaBusy='true';b.textContent=t('Testing…');connectionMessage('Testing connection…');try{connectionMessage((await request('/api/settings/test',values())).message)}catch(err){connectionMessage(err.message,true)}finally{b.disabled=false;b.ariaBusy='false';b.textContent=t('Test connection')}});
 function needsPassword(){
  if(!initial.complete||!pending)return false;
@@ -139,11 +162,11 @@ function renderReview(){
   $(row.changed?'reviewValues':'unchangedReviewValues').append(dt,dd);
  }
 }
-$('settingsForm').addEventListener('submit',e=>{e.preventDefault();if(!exchangeCredentialsReady())return;const editingCredentials=showCredentials;if(editingCredentials&&$('password').value!==$('passwordConfirm').value){message('New passwords do not match.',true);return}pending={settings:values()};if(editingCredentials)Object.assign(pending,{username:$('username').value.trim(),password:$('password').value,current_password:$('current_password').value});renderReview();$('review').showModal()});
+$('settingsForm').addEventListener('submit',e=>{e.preventDefault();if(!exchangeCredentialsReady())return;const editingCredentials=showCredentials;if(editingCredentials&&$('password').value!==$('passwordConfirm').value){message('New passwords do not match.',true,'passwordConfirm');return}pending={settings:values()};if(editingCredentials)Object.assign(pending,{username:$('username').value.trim(),password:$('password').value,current_password:$('current_password').value});renderReview();$('review').showModal()});
 
 function logSettingsCancellation(){fetch('/api/ui-events',{method:'POST',headers:{'Content-Type':'application/json','X-DCA-Action':'ui-event'},body:JSON.stringify({event:'settings_save_cancelled'}),keepalive:true}).catch(()=>{})}
 $('cancel').addEventListener('click',()=>{$('review').close();pending=null;$('sensitivePassword').value='';logSettingsCancellation()});$('review').addEventListener('cancel',()=>{pending=null;$('sensitivePassword').value='';logSettingsCancellation()});
-$('confirm').addEventListener('click',async()=>{if(!pending)return;if(needsPassword()&&!pending.current_password){if(!$('sensitivePassword').value){$('passwordConfirmationError').textContent=t('Enter your current login password to confirm these changes.');return}pending.current_password=$('sensitivePassword').value}const b=$('confirm');b.disabled=true;try{const d=await request('/api/settings',pending);pending=null;savedDraft=draftSignature();updateDirty();if(initial.embedded){window.parent.postMessage({type:'dca-settings-saved'},location.origin)}else{location.href='/'}}catch(err){if(pending)delete pending.current_password;$('review').close();message(err.message,true)}finally{$('sensitivePassword').value='';b.disabled=false}});
+$('confirm').addEventListener('click',async()=>{if(!pending)return;if(needsPassword()&&!pending.current_password){if(!$('sensitivePassword').value){$('passwordConfirmationError').textContent=t('Enter your current login password to confirm these changes.');return}pending.current_password=$('sensitivePassword').value}const b=$('confirm');b.disabled=true;try{const d=await request('/api/settings',pending);pending=null;savedDraft=draftSignature();updateDirty();if(initial.embedded){window.parent.postMessage({type:'dca-settings-saved'},location.origin)}else{location.href='/'}}catch(err){if(pending)delete pending.current_password;$('review').close();message(err.message,true,err.field)}finally{$('sensitivePassword').value='';b.disabled=false}});
 
 function updateDependencies(){
  const live=$('live').checked,automatic=$('withdrawals_enabled').checked;
@@ -183,6 +206,10 @@ if(typeof window!=='undefined'&&window.addEventListener){
 
 if(initial.embedded)window.parent.postMessage({type:'dca-settings-ready'},location.origin);
 
+for(const id of [...fields.map(field=>field[0]),'username','current_password','password','passwordConfirm','newUsername','newPassword','confirmPassword','exchange','quote','kraken_api_key','kraken_api_secret','bitvavo_api_key','bitvavo_api_secret','kraken_withdraw_key','withdraw_address','withdraw_network','timezone','language','appearance','display_currency']){
+ const input=$(id);if(input)input.addEventListener('input',()=>clearFieldError(input));
+}
+
 // Account actions use the saved dashboard configuration, never the Settings draft.
 if(initial.complete&&initial.embedded){
  $('settingsQuickActions').hidden=false;
@@ -200,3 +227,4 @@ if(initial.complete&&initial.embedded){
  });
  $('dismissSettingsAction').addEventListener('click',()=>{$('settingsActionFeedback').hidden=true;$('settingsActionMessage').textContent=''});
 }
+

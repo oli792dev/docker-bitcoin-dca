@@ -1,37 +1,54 @@
 """Bitcoin DCA bot for Bitvavo and Kraken. Starts in Simulation mode unless explicitly enabled."""
+
 import json
 import logging
 import os
+import threading
 import time
 import uuid
-from datetime import datetime, timezone, timedelta
-from decimal import Decimal, ROUND_DOWN
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from decimal import ROUND_DOWN, Decimal
+from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
-from app.core.deposit_calendar import deposit_at
-import threading
-from app.trading.account import ACCOUNT_LOCK as BOT_LOCK, serialized
-from app.core.planning import plan_order, purchase_interval, ceil_to_places
-from app.exchanges.exchange_errors import DefinitiveRejection, UncertainWithdrawalError
-from app.core.logging_utils import log_transition, clear_transition
-from app.trading.withdrawals import reconcile_withdrawals
-from app.trading.funding import observe_deposit
-from app.trading.deposits import sync_deposits
-from app.exchanges.market_prices import collect_prices
 
 import requests
-from app.data.activity import append_activity_records, read_dashboard_snapshot, write_dashboard_snapshot, ledger_balance, withdrawal_records, write_json_atomic, get_activity_record, latest_real_buy
+
+from app.core.contracts import AccountCycleData, ForecastPlan
+from app.core.deposit_calendar import deposit_at
+from app.core.logging_utils import clear_transition, log_transition
+from app.core.planning import OrderPlan, plan_order, purchase_interval
+from app.data.activity import (
+    append_activity_records,
+    get_activity_record,
+    latest_real_buy,
+    ledger_balance,
+    read_dashboard_snapshot,
+    withdrawal_records,
+    write_dashboard_snapshot,
+    write_json_atomic,
+)
 from app.data.storage import STATE_PATH, prepare_storage
+from app.exchanges.contracts import AccountReadExchange
+from app.exchanges.exchange_errors import DefinitiveRejection, UncertainWithdrawalError
+from app.exchanges.market_prices import collect_prices
+from app.trading.account import serialized
+from app.trading.deposits import sync_deposits
+from app.trading.funding import observe_deposit
+from app.trading.withdrawals import reconcile_withdrawals
 
 LOG = logging.getLogger("bitcoin-dca")
 
 
 def cycle_dates(now, deposit_day, deposit_time="00:00"):
     """Return this deposit cycle's key and next deposit instant in configured local time."""
+
     def deposit_date(year, month):
         return deposit_at(year, month, deposit_day, deposit_time, now.tzinfo)
 
     this_month = deposit_date(now.year, now.month)
-    reached = now.astimezone(timezone.utc) >= this_month.astimezone(timezone.utc) if now.tzinfo else now >= this_month
+    reached = now.astimezone(UTC) >= this_month.astimezone(UTC) if now.tzinfo else now >= this_month
     if reached:
         start = this_month
         if now.month == 12:
@@ -78,7 +95,8 @@ def read_state(path, cycle_key):
         if state.get("last_order_at"):
             fresh["last_order_at"] = state["last_order_at"]
         for key in ("deposit_tracking", "fiat_observation", "schedule", "last_order_quote"):
-            if key in state: fresh[key] = state[key]
+            if key in state:
+                fresh[key] = state[key]
         if "withdrawal_armed" in state:
             fresh["withdrawal_armed"] = state["withdrawal_armed"]
         return fresh
@@ -90,7 +108,7 @@ def save_state(path, state):
 
 
 def utc_iso_from_ms(timestamp_ms):
-    return datetime.fromtimestamp(timestamp_ms / 1000, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    return datetime.fromtimestamp(timestamp_ms / 1000, UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def normalized_event_time(value, fallback_ms):
@@ -101,8 +119,8 @@ def normalized_event_time(value, fallback_ms):
         return utc_iso_from_ms(numeric if numeric > 10**11 else numeric * 1000)
     parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def persist_bot_withdrawal(api, withdrawal, result, settings, context):
@@ -155,27 +173,30 @@ def persist_bot_withdrawal(api, withdrawal, result, settings, context):
 def update_dashboard_snapshot(settings, quote_balance, price, btc_balance=None, market_prices=None):
     tracked_btc = ledger_balance()
     previous = read_dashboard_snapshot()
-    write_dashboard_snapshot({
-        "exchange": settings["exchange"],
-        "quote": settings["quote"],
-        "trackedBtc": format(tracked_btc, "f"),
-        "btcBalance": str(btc_balance) if btc_balance is not None else None,
-        "price": format(price, "f"),
-        "marketPrices": market_prices or {settings["quote"]:format(price,"f")},
-        "value": format(tracked_btc * price, "f"),
-        "quoteBalance": format(quote_balance, "f"),
-        "withdrawThreshold": format(settings["withdraw_threshold"], "f"),
-        "nextPurchaseAt": previous.get("nextPurchaseAt"),
-        "nextPurchaseStatus": previous.get("nextPurchaseStatus", "Schedule pending"),
-        "updatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
-    })
+    write_dashboard_snapshot(
+        {
+            "exchange": settings["exchange"],
+            "quote": settings["quote"],
+            "trackedBtc": format(tracked_btc, "f"),
+            "btcBalance": str(btc_balance) if btc_balance is not None else None,
+            "price": format(price, "f"),
+            "marketPrices": market_prices or {settings["quote"]: format(price, "f")},
+            "value": format(tracked_btc * price, "f"),
+            "quoteBalance": format(quote_balance, "f"),
+            "withdrawThreshold": format(settings["withdraw_threshold"], "f"),
+            "nextPurchaseAt": previous.get("nextPurchaseAt"),
+            "nextPurchaseStatus": previous.get("nextPurchaseStatus", "Schedule pending"),
+            "updatedAt": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        }
+    )
 
 
 def update_dashboard_schedule(next_purchase_at, status, forecast_plan=None):
     snapshot = read_dashboard_snapshot()
     snapshot["nextPurchaseAt"] = (
-        next_purchase_at.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-        if next_purchase_at is not None else None
+        next_purchase_at.astimezone(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+        if next_purchase_at is not None
+        else None
     )
     snapshot["nextPurchaseStatus"] = status
     snapshot["withdrawalForecastPlan"] = forecast_plan
@@ -183,9 +204,7 @@ def update_dashboard_schedule(next_purchase_at, status, forecast_plan=None):
 
 
 def persist_bot_buy(api, order, settings, event_id, fallback_timestamp_ms):
-    records = api.normalize_bot_buy(
-        order, settings["quote"], event_id, fallback_timestamp_ms
-    )
+    records = api.normalize_bot_buy(order, settings["quote"], event_id, fallback_timestamp_ms)
     for record in records:
         record["exchange"] = settings["exchange"]
         record["purchaseStatus"] = "confirmed"
@@ -204,7 +223,12 @@ def persist_simulated_buy(api, settings, amount, price, quote_amount, estimated_
         "shares": format(amount, "f"),
         "amount": format(quote_amount, "f"),
         "currency": settings["quote"],
-        "fee": format(estimated_fee if estimated_fee is not None else api.estimate_taker_fee(f"BTC-{settings['quote']}", quote_amount), "f"),
+        "fee": format(
+            estimated_fee
+            if estimated_fee is not None
+            else api.estimate_taker_fee(f"BTC-{settings['quote']}", quote_amount),
+            "f",
+        ),
         "tax": "0",
     }
     record = {"id": event_id, "simulated": True, "exchange": settings["exchange"], "row": row}
@@ -212,35 +236,54 @@ def persist_simulated_buy(api, settings, amount, price, quote_amount, estimated_
 
 
 def maybe_withdraw_btc(api, state, settings, manual_request=None):
-    if manual_request is None and settings['live']:
+    if manual_request is None and settings["live"]:
         reconcile_withdrawals(api, settings)
-        last_record = get_activity_record(state.get('last_withdrawal',{}).get('activityId',''))
-        if last_record and last_record.get('withdrawalStatus')=='failed' and not state.get('withdrawal_armed',True):
-            state['withdrawal_armed']=True
-            save_state(STATE_PATH,state)
+        last_record = get_activity_record(state.get("last_withdrawal", {}).get("activityId", ""))
+        if last_record and last_record.get("withdrawalStatus") == "failed" and not state.get("withdrawal_armed", True):
+            state["withdrawal_armed"] = True
+            save_state(STATE_PATH, state)
             return
-        if not state.get('pending_withdrawal') and any(r.get('exchange')==settings['exchange'] and r.get('withdrawalStatus')=='submitted'
-               for r in withdrawal_records(unresolved=True)):
+        if not state.get("pending_withdrawal") and any(
+            r.get("exchange") == settings["exchange"] and r.get("withdrawalStatus") == "submitted"
+            for r in withdrawal_records(unresolved=True)
+        ):
             return
     if not settings["withdrawals_enabled"] and manual_request is None and not state.get("pending_withdrawal"):
         return
     if not settings["live"]:
-        log_transition(LOG, api, "withdrawal-wait", "dry-run", logging.WARNING, "Automatic withdrawal is enabled but LIVE_TRADING is false; no withdrawal will be sent.")
+        log_transition(
+            LOG,
+            api,
+            "withdrawal-wait",
+            "dry-run",
+            logging.WARNING,
+            "Automatic withdrawal is enabled but LIVE_TRADING is false; no withdrawal will be sent.",
+        )
         return
 
     pending = state.get("pending_withdrawal")
     if pending:
-        bitcoin_request = (pending.get("symbol") == "BTC" if settings["exchange"] == "BITVAVO"
-                           else pending.get("asset") == "XBT")
+        bitcoin_request = (
+            pending.get("symbol") == "BTC" if settings["exchange"] == "BITVAVO" else pending.get("asset") == "XBT"
+        )
         if not bitcoin_request:
-            raise ValueError("Saved withdrawal is not a Bitcoin request for the selected exchange; check its status before continuing")
+            raise ValueError(
+                "Saved withdrawal is not a Bitcoin request for the selected exchange; check its status before continuing"
+            )
         context = state.get("pending_withdrawal_context", {})
         if context.get("exchange", settings["exchange"]) != settings["exchange"]:
             raise ValueError("Saved withdrawal belongs to another exchange; resolve it before switching exchanges")
         result = context.get("result")
         if result is None:
             if not getattr(api, "supports_withdrawal_idempotency", False):
-                log_transition(LOG, api, "withdrawal-unknown", str(pending), logging.ERROR, "A previous withdrawal request has an unknown outcome. Verify its status with the exchange; it will not be resent.")
+                log_transition(
+                    LOG,
+                    api,
+                    "withdrawal-unknown",
+                    str(pending),
+                    logging.ERROR,
+                    "A previous withdrawal request has an unknown outcome. Verify its status with the exchange; it will not be resent.",
+                )
                 return
             try:
                 result = api.withdraw_btc(pending)
@@ -260,7 +303,7 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
         state["last_withdrawal"] = {
             "id": result.get("id"),
             "amount": pending["amount"],
-            "activityId": context.get('record_id'),
+            "activityId": context.get("record_id"),
             "balanceBefore": context.get("balanceBefore", pending["amount"]),
             "createdAt": result.get("createdAt"),
         }
@@ -286,15 +329,36 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
             save_state(STATE_PATH, state)
             LOG.info("BTC balance is below the withdrawal threshold again; automatic withdrawal is re-armed.")
         else:
-            log_transition(LOG, api, "withdrawal-wait", "balance-not-updated", logging.INFO, "Waiting for %s to reflect the previous withdrawal before another automatic withdrawal.", settings["exchange"])
+            log_transition(
+                LOG,
+                api,
+                "withdrawal-wait",
+                "balance-not-updated",
+                logging.INFO,
+                "Waiting for %s to reflect the previous withdrawal before another automatic withdrawal.",
+                settings["exchange"],
+            )
         return
     if manual_request is None and value < settings["withdraw_threshold"]:
-        LOG.debug("BTC withdrawal threshold not reached: available value %s %s, threshold %s %s.", value, settings["quote"], settings["withdraw_threshold"], settings["quote"])
+        LOG.debug(
+            "BTC withdrawal threshold not reached: available value %s %s, threshold %s %s.",
+            value,
+            settings["quote"],
+            settings["withdraw_threshold"],
+            settings["quote"],
+        )
         return
 
     amount = available.quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
     if amount <= 0:
-        log_transition(LOG, api, "withdrawal-wait", "empty", logging.INFO, "No withdrawable BTC remains after applying Bitcoin precision.")
+        log_transition(
+            LOG,
+            api,
+            "withdrawal-wait",
+            "empty",
+            logging.INFO,
+            "No withdrawable BTC remains after applying Bitcoin precision.",
+        )
         return
     idempotency_key = str(uuid.uuid4())
     withdrawal = manual_request or api.withdrawal_request(amount, idempotency_key, settings)
@@ -311,24 +375,24 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
     try:
         result = api.withdraw_btc(withdrawal)
     except DefinitiveRejection:
-        state.pop('pending_withdrawal',None)
-        state.pop('pending_withdrawal_context',None)
-        save_state(STATE_PATH,state)
+        state.pop("pending_withdrawal", None)
+        state.pop("pending_withdrawal_context", None)
+        save_state(STATE_PATH, state)
         raise
     except requests.RequestException:
         LOG.exception("Withdrawal outcome is uncertain; check the exchange before taking further action.")
         if not getattr(api, "supports_withdrawal_idempotency", False):
-            LOG.error("This exchange does not support idempotent withdrawal retries; the saved request will not be resent automatically.")
+            LOG.error(
+                "This exchange does not support idempotent withdrawal retries; the saved request will not be resent automatically."
+            )
         return
     state["pending_withdrawal_context"]["result"] = result
     save_state(STATE_PATH, state)
-    persist_bot_withdrawal(
-        api, withdrawal, result, settings, state.get("pending_withdrawal_context", {})
-    )
+    persist_bot_withdrawal(api, withdrawal, result, settings, state.get("pending_withdrawal_context", {}))
     state["last_withdrawal"] = {
         "id": result.get("id"),
         "amount": withdrawal["amount"],
-        "activityId": state.get('pending_withdrawal_context',{}).get('record_id'),
+        "activityId": state.get("pending_withdrawal_context", {}).get("record_id"),
         "createdAt": result.get("createdAt"),
         "balanceBefore": format(available, "f"),
     }
@@ -336,7 +400,13 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
     state.pop("pending_withdrawal_context", None)
     state["withdrawal_armed"] = False
     save_state(STATE_PATH, state)
-    LOG.info("BTC withdrawal submitted: amount=%s BTC (fee deducted from amount), value at submission=%s %s, withdrawalId=%s", withdrawal["amount"], value, settings["quote"], result.get("id"))
+    LOG.info(
+        "BTC withdrawal submitted: amount=%s BTC (fee deducted from amount), value at submission=%s %s, withdrawalId=%s",
+        withdrawal["amount"],
+        value,
+        settings["quote"],
+        result.get("id"),
+    )
 
 
 def defer_order_check(state, state_path, settings):
@@ -364,30 +434,43 @@ def reconcile_pending_order(api, state, state_path, settings, check_interval):
     except requests.RequestException as exc:
         LOG.warning(
             "%s order %s could not be confirmed: %s. No new order will be sent; checking again in %ss.",
-            settings["exchange"], pending.get("exchangeOrderId") or pending["clientOrderId"], exc, delay,
+            settings["exchange"],
+            pending.get("exchangeOrderId") or pending["clientOrderId"],
+            exc,
+            delay,
         )
         return defer_order_check(state, state_path, settings)
 
     status = str(order.get("status", "")).lower()
     if status not in ("closed", "filled", "canceled", "cancelled", "expired", "rejected"):
-        log_transition(LOG, api, "order-wait", (pending["clientOrderId"], status), logging.INFO,
+        log_transition(
+            LOG,
+            api,
+            "order-wait",
+            (pending["clientOrderId"], status),
+            logging.INFO,
             "%s order %s exists but has not ended (status=%s); no new purchase; checking again in %ss.",
-            settings["exchange"], pending.get("exchangeOrderId") or pending["clientOrderId"], status or "unknown", delay,
+            settings["exchange"],
+            pending.get("exchangeOrderId") or pending["clientOrderId"],
+            status or "unknown",
+            delay,
         )
         return defer_order_check(state, state_path, settings)
 
-    records, added = persist_bot_buy(
-        api, order, settings, pending["clientOrderId"], int(pending.get("submittedAt", 0))
-    )
+    records, added = persist_bot_buy(api, order, settings, pending["clientOrderId"], int(pending.get("submittedAt", 0)))
     if not records:
         filled_raw = order.get("vol_exec", order.get("filledAmount"))
         filled = Decimal(str(filled_raw)) if filled_raw is not None else None
         if filled is None or filled > 0 or status == "filled":
-            LOG.warning("Order %s ended but its fill details are incomplete; keeping it pending.", pending["clientOrderId"])
+            LOG.warning(
+                "Order %s ended but its fill details are incomplete; keeping it pending.", pending["clientOrderId"]
+            )
             return defer_order_check(state, state_path, settings)
         state.pop("pending_order", None)
         save_state(state_path, state)
-        LOG.warning("Order %s ended without a fill (status=%s); no purchase recorded.", pending["clientOrderId"], status)
+        LOG.warning(
+            "Order %s ended without a fill (status=%s); no purchase recorded.", pending["clientOrderId"], status
+        )
         return check_interval
 
     order_cost = sum(
@@ -404,7 +487,10 @@ def reconcile_pending_order(api, state, state_path, settings, check_interval):
     settings["startup_last_buy_at"] = None
     LOG.info(
         "Confirmed %s order %s ended (status=%s); saved %s activity record(s). Recalculating the purchase schedule.",
-        settings["exchange"], pending.get("exchangeOrderId") or pending["clientOrderId"], status, added,
+        settings["exchange"],
+        pending.get("exchangeOrderId") or pending["clientOrderId"],
+        status,
+        added,
     )
     return None
 
@@ -420,12 +506,119 @@ def run_once(api, settings, check_interval, schedule_only=False):
         return _run_once(api, settings, check_interval, schedule_only)
 
 
-def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=None):
+@dataclass(frozen=True)
+class AccountCycle:
+    """Funding observations and exchange reads for one trading pass."""
+
+    data: AccountCycleData
+    spendable: Decimal
+    next_deposit: datetime
+    deposit_overdue: bool
+    deposit_received: bool
+
+
+def _read_account_cycle(
+    api: AccountReadExchange,
+    settings: dict[str, Any],
+    state: dict[str, Any],
+    state_path: Path,
+    now: datetime,
+    cycle_start: datetime,
+    next_deposit: datetime,
+    spent: Decimal,
+    cycle_data: AccountCycleData | None,
+) -> AccountCycle:
+    """Observe funding and read exchange inputs in the original transaction order."""
+    quote = settings["quote"]
+    symbol = f"BTC-{quote}"
+    # Use the current available quote balance as the DCA budget. This includes
+    # funds already on the exchange, even if they were deposited before this cycle.
+    try:
+        exchange_btc = cycle_data["btc_balance"] if cycle_data else api.balance("BTC")
+    except requests.RequestException as exc:
+        LOG.warning("Could not refresh the dashboard BTC balance: %s", exc)
+        LOG.debug("Dashboard balance refresh failure", exc_info=True)
+        exchange_btc = None
+    balance = cycle_data["balance"] if cycle_data else api.balance(quote)
+    try:
+        deposits, inserted_deposits = sync_deposits(api, settings, state, now, balance)
+    except Exception:
+        # Preserve the detection window even if the exchange response is delayed or fails.
+        save_state(state_path, state)
+        raise
+    save_state(state_path, state)
+    if inserted_deposits:
+        LOG.info(
+            "Confirmed fiat deposits recorded: count=%s; currency=%s; exchange=%s",
+            inserted_deposits,
+            quote,
+            settings["exchange"],
+        )
+    balance_after_simulated_spend = max(Decimal(0), balance - spent) if not settings["live"] else balance
+    next_deposit, deposit_overdue, deposit_received = observe_deposit(
+        state, settings, now, cycle_start, next_deposit, balance, deposits
+    )
+    if deposit_received:
+        LOG.info("Available %s funding received for the deposit cycle; resuming purchases.", quote)
+    # Fee lookup precedes the fresh market-rule check; it is cached by the adapter.
+    fee_rate = cycle_data["fee_rate"] if cycle_data else api.estimate_taker_fee(symbol, Decimal(1))
+    price = cycle_data["price"] if cycle_data else api.price(symbol)
+    market = cycle_data["market"] if cycle_data else api.market(symbol, refresh=True)
+    market_prices = cycle_data["market_prices"] if cycle_data else collect_prices(api, settings, price)
+    cycle_data = {
+        "market_prices": market_prices,
+        "balance": balance,
+        "price": price,
+        "market": market,
+        "fee_rate": fee_rate,
+        "btc_balance": exchange_btc,
+    }
+    return AccountCycle(cycle_data, balance_after_simulated_spend, next_deposit, deposit_overdue, deposit_received)
+
+
+def _plan_purchase(
+    market: dict[str, Any],
+    configured: Decimal,
+    price: Decimal,
+    fee_rate: Decimal,
+    affordable_budget: Decimal,
+    check_interval: int,
+    next_deposit: datetime,
+) -> tuple[OrderPlan, ForecastPlan]:
+    """Create the executable order and its serializable reporting reference."""
+    plan = plan_order(market, configured, price, fee_rate, affordable_budget)
+    forecast_plan: ForecastPlan = {
+        "orderAmount": str(plan.quantity),
+        "plannedCost": str(plan.cost),
+        "baseOrderAmount": str(plan.base_quantity),
+        "basePlannedCost": str(plan.base_cost),
+        "useRemainingBudget": plan.remaining_budget,
+        "budget": str(affordable_budget),
+        "marketRules": {
+            key: market[key]
+            for key in ("minOrderInBaseAsset", "minOrderInQuoteAsset", "quantityDecimals", "notionalDecimals")
+        },
+        "feeRate": str(fee_rate),
+        "intervalSeconds": check_interval,
+        "nextDepositAt": next_deposit.isoformat(),
+    }
+    return plan, forecast_plan
+
+
+def _run_once(
+    api: Any,
+    settings: dict[str, Any],
+    check_interval: int,
+    schedule_only: bool = False,
+    cycle_data: AccountCycleData | None = None,
+) -> int:
     quote = settings["quote"]
     symbol = f"BTC-{quote}"
     state_path = STATE_PATH
     now = local_now(settings["timezone"])
-    cycle_key, cycle_start, next_deposit = cycle_dates(now, settings["deposit_day"], settings.get("deposit_time", "00:00"))
+    cycle_key, cycle_start, next_deposit = cycle_dates(
+        now, settings["deposit_day"], settings.get("deposit_time", "00:00")
+    )
     state = read_state(state_path, cycle_key)
     state["cycle"] = cycle_key
     spent = Decimal(state.get("spent", "0"))
@@ -435,135 +628,179 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
         if wait is not None:
             return wait
         return run_once(api, settings, check_interval, schedule_only=True)
-    # Use the current available quote balance as the DCA budget. This includes
-    # funds already on the exchange, even if they were deposited before this cycle.
-    try:
-        exchange_btc = cycle_data['btc_balance'] if cycle_data else api.balance("BTC")
-    except requests.RequestException as exc:
-        LOG.warning("Could not refresh the dashboard BTC balance: %s", exc)
-        LOG.debug("Dashboard balance refresh failure", exc_info=True)
-        exchange_btc = None
-    balance = cycle_data['balance'] if cycle_data else api.balance(quote)
-    try:
-        deposits, inserted_deposits = sync_deposits(api, settings, state, now, balance)
-    except Exception:
-        # Preserve the detection window even if the exchange response is delayed or fails.
-        save_state(state_path, state)
-        raise
-    save_state(state_path, state)
-    if inserted_deposits:
-        LOG.info('Confirmed fiat deposits recorded: count=%s; currency=%s; exchange=%s', inserted_deposits, quote, settings['exchange'])
-    balance_after_simulated_spend = (
-        max(Decimal(0), balance - spent) if not settings["live"] else balance
+    account_cycle = _read_account_cycle(
+        api,
+        settings,
+        state,
+        state_path,
+        now,
+        cycle_start,
+        next_deposit,
+        spent,
+        cycle_data,
     )
-    next_deposit, deposit_overdue, deposit_received = observe_deposit(state, settings, now, cycle_start, next_deposit, balance, deposits)
-    if deposit_received:
-        LOG.info('Available %s funding received for the deposit cycle; resuming purchases.', quote)
-    # Fee lookup precedes the fresh market-rule check; it is cached by the adapter.
-    fee_rate = cycle_data['fee_rate'] if cycle_data else api.estimate_taker_fee(symbol, Decimal(1))
-    price = cycle_data['price'] if cycle_data else api.price(symbol)
-    market = cycle_data['market'] if cycle_data else api.market(symbol, refresh=True)
-    market_prices = cycle_data['market_prices'] if cycle_data else collect_prices(api, settings, price)
-    cycle_data = {'market_prices':market_prices,'balance':balance,'price':price,'market':market,'fee_rate':fee_rate,'btc_balance':exchange_btc}
+    cycle_data = account_cycle.data
+    balance, price, market = cycle_data["balance"], cycle_data["price"], cycle_data["market"]
+    exchange_btc, market_prices = cycle_data["btc_balance"], cycle_data["market_prices"]
+    next_deposit = account_cycle.next_deposit
+    deposit_overdue, deposit_received = account_cycle.deposit_overdue, account_cycle.deposit_received
     update_dashboard_snapshot(settings, balance, price, exchange_btc, market_prices)
-    if state.get('fiat_observation',{}).get('pending'):
-        update_dashboard_schedule(None, 'Verifying deposit')
-        log_transition(LOG, api, 'deposit-verification', 'pending', logging.INFO,
-                       'Fiat balance increased; waiting for exchange deposit confirmation before new automatic transactions.')
+    if state.get("fiat_observation", {}).get("pending"):
+        update_dashboard_schedule(None, "Verifying deposit")
+        log_transition(
+            LOG,
+            api,
+            "deposit-verification",
+            "pending",
+            logging.INFO,
+            "Fiat balance increased; waiting for exchange deposit confirmation before new automatic transactions.",
+        )
         return check_interval
-    clear_transition(api, 'deposit-verification')
+    clear_transition(api, "deposit-verification")
     try:
         maybe_withdraw_btc(api, state, settings)
     except requests.RequestException as exc:
         LOG.warning("Automatic BTC withdrawal check failed; will retry: %s", exc)
     if market.get("status") != "trading":
         update_dashboard_schedule(None, f"Waiting for market status: {market.get('status')}")
-        log_transition(LOG, api, "purchase-wait", "market-" + str(market.get("status")), logging.INFO, "Market %s is %s; waiting.", symbol, market.get("status"))
+        log_transition(
+            LOG,
+            api,
+            "purchase-wait",
+            "market-" + str(market.get("status")),
+            logging.INFO,
+            "Market %s is %s; waiting.",
+            symbol,
+            market.get("status"),
+        )
         save_state(state_path, state)
         return check_interval
-    affordable_budget = balance_after_simulated_spend
+    affordable_budget = account_cycle.spendable
     available = affordable_budget
-    plan = plan_order(market, settings['buy_amount'], price, fee_rate, affordable_budget)
+    plan, forecast_plan = _plan_purchase(
+        market,
+        settings["buy_amount"],
+        price,
+        cycle_data["fee_rate"],
+        affordable_budget,
+        check_interval,
+        next_deposit,
+    )
     order_amount, order_quote, estimated_fee, planned_cost = plan.quantity, plan.quote, plan.fee, plan.cost
     possible_buys = plan.affordable
-    forecast_plan = {'orderAmount':str(order_amount), 'plannedCost':str(planned_cost),
-                     'baseOrderAmount':str(plan.base_quantity),'basePlannedCost':str(plan.base_cost),
-                     'useRemainingBudget':plan.remaining_budget,'budget':str(affordable_budget),
-                     'marketRules':{key:market[key] for key in ('minOrderInBaseAsset','minOrderInQuoteAsset','quantityDecimals','notionalDecimals')},
-                     'feeRate':str(fee_rate),
-                     'intervalSeconds':check_interval,'nextDepositAt':next_deposit.isoformat()}
     if possible_buys < 1:
         update_dashboard_schedule(None, "Waiting for deposit", forecast_plan)
-        if settings["live"]: state["deposit_tracking"]["waiting"] = True
+        if settings["live"]:
+            state["deposit_tracking"]["waiting"] = True
         save_state(state_path, state)
-        log_transition(LOG, api, "purchase-wait", "insufficient-funds", logging.INFO, "Waiting: available balance %s %s; minimum order %s %s.", affordable_budget, quote, order_quote, quote)
+        log_transition(
+            LOG,
+            api,
+            "purchase-wait",
+            "insufficient-funds",
+            logging.INFO,
+            "Waiting: available balance %s %s; minimum order %s %s.",
+            affordable_budget,
+            quote,
+            order_quote,
+            quote,
+        )
         return check_interval
 
-    if deposit_overdue and state.get('deposit_tracking', {}).get('unverifiedBoundary'):
-        tracking = state['deposit_tracking']
-        tracking['unverifiedBoundary'] = False
+    if deposit_overdue and state.get("deposit_tracking", {}).get("unverifiedBoundary"):
+        tracking = state["deposit_tracking"]
+        tracking["unverifiedBoundary"] = False
         if possible_buys > 1:
             # On upgrades or lost observations, a large initial balance may already
             # include this month's deposit. Do not rapidly liquidate an unknown budget.
-            next_deposit = cycle_dates(now, settings['deposit_day'], settings.get('deposit_time','00:00'))[2]
-            tracking['dueAt'] = next_deposit.isoformat()
-            tracking['firstPurchaseDue'] = True
+            next_deposit = cycle_dates(now, settings["deposit_day"], settings.get("deposit_time", "00:00"))[2]
+            tracking["dueAt"] = next_deposit.isoformat()
+            tracking["firstPurchaseDue"] = True
             deposit_overdue = False
-            LOG.info('No prior fiat observation at the deposit boundary; treating available funds as the current-cycle budget.')
-    if settings["live"]: state["deposit_tracking"]["waiting"] = False
-    last_buy = settings.get('startup_last_buy_at')
-    if last_buy is None and state.get('last_order_at'):
-        last_buy = datetime.fromisoformat(state['last_order_at'])
+            LOG.info(
+                "No prior fiat observation at the deposit boundary; treating available funds as the current-cycle budget."
+            )
+    if settings["live"]:
+        state["deposit_tracking"]["waiting"] = False
+    last_buy = settings.get("startup_last_buy_at")
+    if last_buy is None and state.get("last_order_at"):
+        last_buy = datetime.fromisoformat(state["last_order_at"])
     if last_buy is not None:
-        last_buy = last_buy.replace(tzinfo=last_buy.tzinfo or timezone.utc).astimezone(timezone.utc)
+        last_buy = last_buy.replace(tzinfo=last_buy.tzinfo or UTC).astimezone(UTC)
     clear_transition(api, "purchase-wait")
-    interval_anchor = last_buy if last_buy is not None else now.astimezone(timezone.utc)
+    interval_anchor = last_buy if last_buy is not None else now.astimezone(UTC)
     interval_seconds = purchase_interval(interval_anchor, next_deposit, possible_buys)
     LOG.info(
         "Recalculated DCA schedule: balance=%s %s; spendable=%s %s; "
         "price=%s %s/%s; estimated order=%s %s (%s %s); "
         "next deposit day=%s; amount of possible buys until next deposit=%s; "
         "purchase interval=%s minutes.",
-        balance, quote, affordable_budget, quote, price, quote, "BTC",
-        order_amount, "BTC", order_quote, quote, next_deposit.isoformat(),
-        possible_buys, int(interval_seconds / 60),
+        balance,
+        quote,
+        affordable_budget,
+        quote,
+        price,
+        quote,
+        "BTC",
+        order_amount,
+        "BTC",
+        order_quote,
+        quote,
+        next_deposit.isoformat(),
+        possible_buys,
+        int(interval_seconds / 60),
     )
-    fingerprint = ['before-deposit-interval-v3',str(affordable_budget),str(planned_cost),next_deposit.isoformat(),
-                   last_buy.isoformat() if last_buy else None]
-    previous_plan = state.get('schedule',{})
+    fingerprint = [
+        "before-deposit-interval-v3",
+        str(affordable_budget),
+        str(planned_cost),
+        next_deposit.isoformat(),
+        last_buy.isoformat() if last_buy else None,
+    ]
+    previous_plan = state.get("schedule", {})
     if deposit_received or state.get("deposit_tracking", {}).get("firstPurchaseDue"):
         due = now
-    elif previous_plan.get('fingerprint')==fingerprint:
-        due = datetime.fromisoformat(previous_plan['dueAt'])
+    elif previous_plan.get("fingerprint") == fingerprint:
+        due = datetime.fromisoformat(previous_plan["dueAt"])
     else:
         due = interval_anchor + timedelta(seconds=interval_seconds) if last_buy else now
     if deposit_overdue:
         # Spend usable remnants of the old budget instead of moving them a month away.
         due = min(due, now)
-    state['schedule']={'fingerprint':fingerprint,'dueAt':due.isoformat()}
-    save_state(state_path,state)
-    remaining=max(0,int((due.astimezone(timezone.utc)-now.astimezone(timezone.utc)).total_seconds()))
-    forecast_plan.update(intervalSeconds=interval_seconds,nextDepositAt=next_deposit.isoformat())
-    update_dashboard_schedule(due, 'Scheduled' if remaining else 'Due now', forecast_plan)
-    startup_alignment = settings.pop('startup_schedule_log_pending', False)
-    log_label = 'Restart alignment' if startup_alignment else 'Purchase schedule'
-    local_zone = ZoneInfo(settings['timezone'])
+    state["schedule"] = {"fingerprint": fingerprint, "dueAt": due.isoformat()}
+    save_state(state_path, state)
+    remaining = max(0, int((due.astimezone(UTC) - now.astimezone(UTC)).total_seconds()))
+    forecast_plan.update(intervalSeconds=interval_seconds, nextDepositAt=next_deposit.isoformat())
+    update_dashboard_schedule(due, "Scheduled" if remaining else "Due now", forecast_plan)
+    startup_alignment = settings.pop("startup_schedule_log_pending", False)
+    log_label = "Restart alignment" if startup_alignment else "Purchase schedule"
+    local_zone = ZoneInfo(settings["timezone"])
     if last_buy:
-        anchor = last_buy.replace(tzinfo=last_buy.tzinfo or timezone.utc)
-        elapsed = max(0, int((now.astimezone(timezone.utc) - anchor.astimezone(timezone.utc)).total_seconds()))
+        anchor = last_buy.replace(tzinfo=last_buy.tzinfo or UTC)
+        elapsed = max(0, int((now.astimezone(UTC) - anchor.astimezone(UTC)).total_seconds()))
         LOG.info(
             "%s: last purchase=%s; elapsed since purchase=%.1f minutes%s; "
             "calculated purchase interval=%.1f minutes; next purchase=%s; remaining wait=%.1f minutes; %s.",
-            log_label, anchor.astimezone(local_zone).isoformat(timespec='seconds'), elapsed / 60,
-            ' (including startup delay)' if startup_alignment else '', interval_seconds / 60,
-            due.astimezone(local_zone).isoformat(timespec='seconds'), remaining / 60,
-            'saved due time retained for unchanged inputs' if previous_plan.get('fingerprint') == fingerprint
-            else 'due time calculated from last purchase',
+            log_label,
+            anchor.astimezone(local_zone).isoformat(timespec="seconds"),
+            elapsed / 60,
+            " (including startup delay)" if startup_alignment else "",
+            interval_seconds / 60,
+            due.astimezone(local_zone).isoformat(timespec="seconds"),
+            remaining / 60,
+            "saved due time retained for unchanged inputs"
+            if previous_plan.get("fingerprint") == fingerprint
+            else "due time calculated from last purchase",
         )
     else:
-        LOG.info("%s: no previous purchase time available; next purchase=%s; remaining wait=%.1f minutes; first purchase due now.",
-                 log_label, due.astimezone(local_zone).isoformat(timespec='seconds'), remaining / 60)
-    if remaining: return remaining
+        LOG.info(
+            "%s: no previous purchase time available; next purchase=%s; remaining wait=%.1f minutes; first purchase due now.",
+            log_label,
+            due.astimezone(local_zone).isoformat(timespec="seconds"),
+            remaining / 60,
+        )
+    if remaining:
+        return remaining
 
     if schedule_only:
         # If the computed time has already arrived while recording the last order,
@@ -573,7 +810,18 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
     if settings["live"]:
         if available < planned_cost:
             update_dashboard_schedule(None, "Waiting for deposit")
-            log_transition(LOG, api, "purchase-wait", "insufficient-funds", logging.INFO, "Waiting for sufficient available balance: %s %s; minimum order %s %s.", available, quote, order_quote, quote)
+            log_transition(
+                LOG,
+                api,
+                "purchase-wait",
+                "insufficient-funds",
+                logging.INFO,
+                "Waiting for sufficient available balance: %s %s; minimum order %s %s.",
+                available,
+                quote,
+                order_quote,
+                quote,
+            )
             return check_interval
         pending = {
             "clientOrderId": str(uuid.uuid4()),
@@ -589,33 +837,53 @@ def _run_once(api, settings, check_interval, schedule_only=False, cycle_data=Non
         try:
             result = api.buy_btc(quote, order_amount, pending["clientOrderId"])
         except DefinitiveRejection as exc:
-            state.pop('pending_order',None)
-            state['last_rejection']={'action':'buy','reason':str(exc),'at':utc_iso_from_ms(int(time.time()*1000))}
-            save_state(state_path,state)
-            LOG.warning('Order rejected by %s: %s; no pending order remains.',settings['exchange'],exc)
+            state.pop("pending_order", None)
+            state["last_rejection"] = {
+                "action": "buy",
+                "reason": str(exc),
+                "at": utc_iso_from_ms(int(time.time() * 1000)),
+            }
+            save_state(state_path, state)
+            LOG.warning("Order rejected by %s: %s; no pending order remains.", settings["exchange"], exc)
             return check_interval
         except requests.RequestException as exc:
             LOG.warning(
                 "%s order submission has an uncertain outcome: %s. It will not be resent; checking the saved reference in %ss.",
-                settings["exchange"], exc, settings["order_status_check_seconds"],
+                settings["exchange"],
+                exc,
+                settings["order_status_check_seconds"],
             )
             return defer_order_check(state, state_path, settings)
         pending["exchangeOrderId"] = result.get("orderId")
         wait = defer_order_check(state, state_path, settings)
         LOG.info(
             "Order submitted: %s %s (estimated %s %s); orderId=%s. Checking its status in %ss; no new purchase until it has ended.",
-            order_amount, "BTC", order_quote, quote, pending.get("exchangeOrderId"), wait,
+            order_amount,
+            "BTC",
+            order_quote,
+            quote,
+            pending.get("exchangeOrderId"),
+            wait,
         )
         return wait
     else:
-        LOG.info("SIMULATION: would market-buy %s %s (estimated %s %s at %s %s/%s); saved as simulated activity.", order_amount, "BTC", order_quote, quote, price, quote, "BTC")
+        LOG.info(
+            "SIMULATION: would market-buy %s %s (estimated %s %s at %s %s/%s); saved as simulated activity.",
+            order_amount,
+            "BTC",
+            order_quote,
+            quote,
+            price,
+            quote,
+            "BTC",
+        )
         added = persist_simulated_buy(api, settings, order_amount, price, order_quote, estimated_fee)
         LOG.info("Saved %s simulated purchase record(s) for the web UI; excluded from the Parqet CSV export.", added)
 
     settings["startup_last_buy_at"] = None
     # Debit budget for Simulation too, to make its monthly schedule representative.
     state["spent"] = str(spent + order_quote + estimated_fee)
-    state["last_order_at"] = datetime.now(timezone.utc).isoformat()
+    state["last_order_at"] = datetime.now(UTC).isoformat()
     state["last_order_quote"] = str(order_quote)
     state.pop("pending_order", None)
     save_state(state_path, state)
@@ -633,19 +901,30 @@ def manual_withdrawal_service(api, settings):
         if not settings["live"]:
             raise ValueError("Manual Bitcoin withdrawals require LIVE_TRADING=true.")
         api.validate_withdrawal_settings(settings)
-        cycle, _, _ = cycle_dates(local_now(settings["timezone"]), settings["deposit_day"], settings.get("deposit_time", "00:00"))
+        cycle, _, _ = cycle_dates(
+            local_now(settings["timezone"]), settings["deposit_day"], settings.get("deposit_time", "00:00")
+        )
         state = read_state(STATE_PATH, cycle)
-        if (state.get("pending_order") or state.get("pending_withdrawal") or
-            any(r.get('exchange')==settings['exchange'] and r.get('withdrawalStatus')=='submitted'
-                for r in withdrawal_records(unresolved=True))):
+        if (
+            state.get("pending_order")
+            or state.get("pending_withdrawal")
+            or any(
+                r.get("exchange") == settings["exchange"] and r.get("withdrawalStatus") == "submitted"
+                for r in withdrawal_records(unresolved=True)
+            )
+        ):
             raise ValueError("An order or withdrawal is unresolved. Check the exchange before continuing.")
         available = api.balance("BTC").quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
         if available <= 0:
             raise ValueError("No BTC is available to withdraw.")
         last = state.get("last_withdrawal", {})
-        last_record=get_activity_record(last.get('activityId',''))
-        failed=last_record and last_record.get('withdrawalStatus')=='failed'
-        if not failed and not state.get("withdrawal_armed", True) and available >= Decimal(last.get("balanceBefore", last.get("amount", "0"))):
+        last_record = get_activity_record(last.get("activityId", ""))
+        failed = last_record and last_record.get("withdrawalStatus") == "failed"
+        if (
+            not failed
+            and not state.get("withdrawal_armed", True)
+            and available >= Decimal(last.get("balanceBefore", last.get("amount", "0")))
+        ):
             raise ValueError("Waiting for the exchange balance to reflect the previous withdrawal.")
         fingerprint = json.dumps(last, sort_keys=True)
         now = time.monotonic()
@@ -655,11 +934,20 @@ def manual_withdrawal_service(api, settings):
         if action == "preview":
             request = api.withdrawal_request(available, str(uuid.uuid4()), settings)
             key = str(uuid.uuid4())
-            previews[key] = {"session": session, "expires": time.monotonic() + 120, "request": request,
-                             "available": available, "fingerprint": fingerprint}
-            return {"token": key, "availableBtc": format(available, "f"),
-                    "netBtc": request["amount"] if settings["exchange"] == "KRAKEN" else None,
-                    "feeBtc": request.get("fee"), "destination": withdrawal_destination(settings)}
+            previews[key] = {
+                "session": session,
+                "expires": time.monotonic() + 120,
+                "request": request,
+                "available": available,
+                "fingerprint": fingerprint,
+            }
+            return {
+                "token": key,
+                "availableBtc": format(available, "f"),
+                "netBtc": request["amount"] if settings["exchange"] == "KRAKEN" else None,
+                "feeBtc": request.get("fee"),
+                "destination": withdrawal_destination(settings),
+            }
         preview = previews.get(token)
         if not preview or preview["session"] != session:
             raise ValueError("Confirmation expired or already used. Start a new withdrawal preview.")
@@ -669,14 +957,23 @@ def manual_withdrawal_service(api, settings):
         maybe_withdraw_btc(api, state, settings, manual_request=preview["request"])
         if state.get("pending_withdrawal"):
             raise UncertainWithdrawalError("Withdrawal outcome is uncertain. Check the exchange; do not submit again.")
-        return {"submitted": True, "message": "Withdrawal submitted and recorded in Activity. It will be included in Parqet exports after exchange confirmation."}
+        return {
+            "submitted": True,
+            "message": "Withdrawal submitted and recorded in Activity. It will be included in Parqet exports after exchange confirmation.",
+        }
+
     return handle
 
 
 def withdrawal_destination(settings):
     if settings["exchange"] == "KRAKEN":
         return "Kraken saved withdrawal method: " + (settings.get("kraken_withdraw_key") or "not configured")
-    return "Bitvavo address: " + (settings.get("withdraw_address") or "not configured") + "; network: " + settings.get("withdraw_network", "BTC")
+    return (
+        "Bitvavo address: "
+        + (settings.get("withdraw_address") or "not configured")
+        + "; network: "
+        + settings.get("withdraw_network", "BTC")
+    )
 
 
 def main():
@@ -686,11 +983,13 @@ def main():
     from app.trading.runtime import Runtime
     from app.trading.worker import supervise
     from app.webpage.web_ui import serve
+
     runtime = Runtime()
     port = int(os.getenv("WEB_UI_PORT", "6890"))
     if not 1 <= port <= 65535:
         raise ValueError("WEB_UI_PORT must be between 1 and 65535")
     from app.core.lifecycle import shutdown_signals
+
     with shutdown_signals(runtime.worker) as stop:
         runtime.worker.start()
         threading.Thread(target=supervise, args=(runtime.worker,), daemon=True).start()
@@ -699,4 +998,4 @@ def main():
         finally:
             stop.set()
             runtime.shutdown()
-            LOG.info('Container shutdown complete; pending transactions remain saved for restart verification')
+            LOG.info("Container shutdown complete; pending transactions remain saved for restart verification")

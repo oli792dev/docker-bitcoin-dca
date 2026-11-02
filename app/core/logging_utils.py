@@ -1,4 +1,5 @@
 """Log status transitions once, retaining repeated observations at DEBUG."""
+
 import logging
 
 

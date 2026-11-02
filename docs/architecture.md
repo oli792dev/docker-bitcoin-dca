@@ -168,3 +168,5 @@ The Period Analysis From default is the immutable UTC first-start instant in `in
 The dashboard separates exchange balances, upcoming purchases/withdrawals, analysis and paginated activities.
 
 The expected monthly deposit is edited in Bot Configuration and stored in the existing volume-backed settings. The Settings footer invokes manual withdrawal and CSV export through a same-origin, source-checked parent-frame bridge. Actions use the saved configuration, not unsaved form values; export opens its own confirmed-withdrawal cycle selector, initially matching the dashboard period where possible. Existing API authorization, withdrawal preview/confirmation, job queue and Parqet cycle boundaries remain unchanged.
+
+Development checks run before image publishing: `ruff check app`, `ruff format --check app`, and `mypy` for the typed planning, forecast, status and exchange-read contracts. Install the pinned development tools with `python -m pip install -r requirements-dev.txt`; these tools are not part of the runtime image.

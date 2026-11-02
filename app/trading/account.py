@@ -1,4 +1,5 @@
 """One account lock, independent of the engine and HTTP implementation."""
+
 from functools import wraps
 from threading import RLock
 
@@ -10,4 +11,5 @@ def serialized(function):
     def locked(*args, **kwargs):
         with ACCOUNT_LOCK:
             return function(*args, **kwargs)
+
     return locked

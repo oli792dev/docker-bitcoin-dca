@@ -41,6 +41,33 @@ class ConfigurationTests(unittest.TestCase):
         self.app.save({'current_password':PASSWORD,'settings': {**CREDENTIALS, **settings}})
         self.app.worker.reconfigure.clear()
 
+    def test_invalid_configuration_identifies_field_for_inline_errors(self):
+        for field, value in [('deposit_day',32),('deposit_time','25:00'),('timezone','Not/AZone'),('buy_amount','NaN')]:
+            with self.subTest(field=field),self.assertRaises(ValueError) as error:
+                config.validate({field:value},require_credentials=False)
+            self.assertEqual(getattr(error.exception,'field',None),field)
+
+    def test_missing_withdrawal_target_identifies_the_exchange_field(self):
+        cases=[({'exchange':'KRAKEN'},'kraken_withdraw_key'),
+               ({'exchange':'BITVAVO'},'withdraw_address'),
+               ({'exchange':'BITVAVO','withdraw_address':'example','withdraw_network':''},'withdraw_network')]
+        for settings,field in cases:
+            with self.subTest(field=field):
+                with self.assertRaises(ValueError) as error:
+                    config.validate({**settings,'withdrawals_enabled':True},require_credentials=False)
+                self.assertEqual(getattr(error.exception,'field',None),field)
+
+    def test_settings_endpoint_preserves_validation_field_metadata(self):
+        self.ready()
+        handler=object.__new__(web_ui.Handler)
+        handler.runtime=self.app;handler._json=Mock();handler._require_authentication=lambda:True
+        handler._settings_body=lambda:{'settings':{'deposit_time':'25:00'}}
+        handler._settings_post('/api/settings')
+        status,body=handler._json.call_args.args
+        self.assertEqual(status,400)
+        self.assertEqual(body['field'],'deposit_time')
+        self.assertEqual(self.store.snapshot()['settings']['deposit_time'],'00:00')
+
     def test_failed_snapshot_write_cannot_apply_settings_or_allow_transactions(self):
         self.ready();self.app.exchange_check_pending=False
         old=self.app.api

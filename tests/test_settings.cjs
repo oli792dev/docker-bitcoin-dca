@@ -15,9 +15,9 @@ class Element{
  close(){this.open=false}
 }
 const elements={};for(const match of page.matchAll(/<(\w+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)){const el=new Element(match[1]);el.id=match[3];el.type=(match[2].match(/type="([^"]+)"/)||[])[1]||'';if(match[2].includes('data-setting'))el.dataset.setting='';elements[el.id]=el}
-const requests=[],location={href:''};let reject=false;
+const requests=[],location={href:''};let reject=false,rejectField=null;
 const context={document:{documentElement:{dataset:{}},getElementById:id=>elements[id],createElement:tag=>new Element(tag),querySelectorAll:()=>Object.values(elements).filter(el=>'setting'in el.dataset)},setTimeout:fn=>{fn()},location,
- fetch:async(url,options)=>{requests.push({url,body:JSON.parse(options.body)});return {ok:!reject,json:async()=>reject?{error:'Connection failed'}:{message:'Connected',saved:true}}}};
+ fetch:async(url,options)=>{requests.push({url,body:JSON.parse(options.body)});return {ok:!reject,json:async()=>reject?{error:'Connection failed',field:rejectField}:{message:'Connected',saved:true}}}};
 vm.runInNewContext(script,context);
 function allText(el){return el.textContent+' '+el.children.map(allText).join(' ')}
 async function event(id,name='click'){if(id==='confirm'&&!elements.passwordConfirmation.hidden&&!elements.sensitivePassword.value)elements.sensitivePassword.value='current-long-password';return elements[id].listeners[name]({preventDefault(){},submitter:elements[id]})}
@@ -53,13 +53,14 @@ async function event(id,name='click'){if(id==='confirm'&&!elements.passwordConfi
  const text=allText(elements.reviewValues);assert.match(text+allText(elements.unchangedReviewValues),/Live|Simulation/);assert.match(text,/1200 EUR/);assert.match(text,/1000 EUR/);assert.match(text,/Before/);assert.match(text,/After/);assert.equal(elements.unchangedReview.hidden,false);assert.match(allText(elements.unchangedReviewValues),/BTC per purchase/);assert(!text.includes('fictional-key'));assert(!text.includes('fictional-secret'));assert.match(text,/Will be updated \(hidden\)/);
  await event('cancel');assert.equal(elements.review.open,false);await event('confirm');assert.equal(requests.filter(r=>r.url==='/api/settings').length,0,'Cancelled review must not submit');assert.equal(requests.at(-1).body.event,'settings_save_cancelled');
  await event('settingsForm','submit');await event('confirm');assert.equal(requests.at(-1).url,'/api/settings');assert.equal(requests.at(-1).body.settings.withdrawals_enabled,true);assert.equal(requests.at(-1).body.settings.display_currency,'USD');assert.equal(requests.at(-1).body.settings.timezone,'Asia/Tokyo');assert.equal(requests.at(-1).body.settings.appearance,'dark');assert.equal(requests.at(-1).body.settings.deposit_time,'09:30');
- elements.password.value='new-long-password';elements.passwordConfirm.value='different';const before=requests.length;await event('settingsForm','submit');assert.equal(requests.length,before);assert.match(elements.status.textContent,/do not match/);
+ elements.passwordConfirm.parentElement=new Element();elements.password.value='new-long-password';elements.passwordConfirm.value='different';const before=requests.length;await event('settingsForm','submit');assert.equal(requests.length,before);assert.match(elements.status.textContent,/do not match/);assert.equal(elements.passwordConfirm['aria-invalid'],'true');assert.match(elements.passwordConfirmError.textContent,/do not match/);assert.equal(elements.dashboardOptions.hidden,false);assert.equal(elements.passwordConfirm.focused,true);elements.passwordConfirm.listeners.input();assert.equal(elements.passwordConfirm['aria-invalid'],'false');assert.equal(elements.passwordConfirmError.hidden,true);
  elements.password.value='';elements.passwordConfirm.value='';elements.exchange.value='KRAKEN';await event('exchange','change');reject=true;await event('testConnection');assert.equal(elements.testConnection.disabled,false);assert.equal(elements.connectionStatus.textContent,'Connection failed');
  vm.runInContext('pending={settings:{buy_amount:"0.000"}};renderReview()',context);assert.equal(elements.reviewValues.children.length,0);assert.match(elements.reviewDescription.textContent,/No changes/);
  vm.runInContext('pending={settings:{},username:"renamed",password:"PRIVATE-DASHBOARD-PASSWORD"};renderReview()',context);const credentialReview=allText(elements.reviewValues);assert.match(credentialReview,/operator/);assert.match(credentialReview,/renamed/);assert.match(credentialReview,/Will be changed \(hidden\)/);assert(!credentialReview.includes('PRIVATE-DASHBOARD-PASSWORD'));
  assert(!page.includes('daylight saving changes are automatic'));
  vm.runInContext("pending={settings:{live:true}};initial.settings.live=false;renderReview()",context);elements.sensitivePassword.value='';const beforePassword=requests.length;await elements.confirm.listeners.click();assert.equal(requests.length,beforePassword,'Sensitive settings cannot be submitted without a password');assert.match(elements.passwordConfirmationError.textContent,/current login password/);elements.sensitivePassword.value='private-confirmation-password';await elements.confirm.listeners.click();assert.equal(requests.at(-1).body.current_password,'private-confirmation-password');assert.equal(elements.sensitivePassword.value,'');
  elements.password.value='new-long-password';elements.passwordConfirm.value='new-long-password';elements.current_password.value='current-long-password';reject=false;await event('settingsForm','submit');await event('confirm');assert.equal(requests.at(-1).body.password,'new-long-password');assert.equal(requests.at(-1).body.settings.exchange,'KRAKEN');
+ reject=true;rejectField='deposit_time';const unchangedDeposit=elements.deposit_time.value;await event('settingsForm','submit');await event('confirm');assert.equal(elements.deposit_time['aria-invalid'],'true');assert.equal(elements.botConfiguration.hidden,false);assert.equal(elements.deposit_time.value,unchangedDeposit);assert.equal(elements.deposit_time.focused,true);elements.deposit_time.listeners.input();assert.equal(elements.deposit_time['aria-invalid'],'false');reject=false;rejectField=null;
  console.log('Settings UI passed: credentials, exchange fields, read-only test, review/cancel/save and validation');
 })().catch(error=>{console.error(error);process.exitCode=1});
 
@@ -110,8 +111,8 @@ assert(scrollClasses.has('has-overflow'));assert(scrollClasses.has('has-more-rig
 area.scrollLeft=480;scrollEvents.scroll();assert(!scrollClasses.has('has-more-right'));assert(scrollClasses.has('is-scrolling'));finishScroll();assert(!scrollClasses.has('is-scrolling'));
 area.clientWidth=900;resizeScroll();assert(!scrollClasses.has('has-overflow'));
 assert(!page.includes('grid-auto-flow:column'));assert(page.includes('grid-auto-flow:row'));assert(page.includes('overflow-x:hidden;overflow-y:auto'));assert(page.includes('class="settings-fields"'));
-assert.equal((page.match(/class="horizontal-scroll(?: settings-tabs)?"/g)||[]).length,0);
-console.log('Settings reflow passed: vertical-only fields, wrapping tabs and shared dashboard scroll behavior');
+assert(page.includes('id="settingsTabs" class="settings-tabs horizontal-scroll"'));assert(page.includes('white-space:nowrap;overflow-wrap:normal'));
+console.log('Settings reflow passed: vertical-only fields, single-line tabs and shared dashboard scroll behavior');
 
 // All native dialogs lock their own page and restore its exact scroll position.
 const lockScript=page.match(/<script data-ui-dialog-lock>([\s\S]*?)<\/script>/)[1];

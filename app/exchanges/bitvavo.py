@@ -1,14 +1,16 @@
 """Bitvavo Bitcoin spot trading and withdrawal adapter."""
+
 import hashlib
 import hmac
 import json
 import time
-from datetime import datetime, timezone
+from contextlib import contextmanager
+from datetime import UTC, datetime
 from decimal import Decimal
 from urllib.parse import urlencode
 
 import requests
-from contextlib import contextmanager
+
 from app.exchanges.exchange_errors import DefinitiveRejection
 from app.exchanges.read_cache import ReadCache
 
@@ -36,36 +38,84 @@ class Bitvavo:
             timestamp = str(int(time.time() * 1000))
             message = timestamp + method + "/v2" + signed_path + payload
             signature = hmac.new(self.secret.encode(), message.encode(), hashlib.sha256).hexdigest()
-            headers.update({
-                "Bitvavo-Access-Key": self.key,
-                "Bitvavo-Access-Timestamp": timestamp,
-                "Bitvavo-Access-Signature": signature,
-                "Bitvavo-Access-Window": "10000",
-            })
-        if method != "GET": self._reads.invalidate()
+            headers.update(
+                {
+                    "Bitvavo-Access-Key": self.key,
+                    "Bitvavo-Access-Timestamp": timestamp,
+                    "Bitvavo-Access-Signature": signature,
+                    "Bitvavo-Access-Window": "10000",
+                }
+            )
+        if method != "GET":
+            self._reads.invalidate()
         response = self.session.request(
-            method, BASE_URL + path, params=params, data=payload if payload else None,
-            headers=headers, timeout=15,
+            method,
+            BASE_URL + path,
+            params=params,
+            data=payload if payload else None,
+            headers=headers,
+            timeout=15,
         )
         try:
             payload = response.json()
         except ValueError:
             response.raise_for_status()
-            if path=='/crypto/withdrawal' and response.status_code==201 and response.content==b'':
+            if path == "/crypto/withdrawal" and response.status_code == 201 and response.content == b"":
                 return {}  # Accepted; match destination/time/gross amount in history later.
             raise
-        code = payload.get('errorCode') if isinstance(payload,dict) else None
-        safe = {102,200,201,202,203,204,205,206,210,211,212,213,215,216,217,219,
-                231,300,301,302,303,304,305,306,402,403,405,406,408,409,410,411,413,414,434,435,436,437,438,439}
+        code = payload.get("errorCode") if isinstance(payload, dict) else None
+        safe = {
+            102,
+            200,
+            201,
+            202,
+            203,
+            204,
+            205,
+            206,
+            210,
+            211,
+            212,
+            213,
+            215,
+            216,
+            217,
+            219,
+            231,
+            300,
+            301,
+            302,
+            303,
+            304,
+            305,
+            306,
+            402,
+            403,
+            405,
+            406,
+            408,
+            409,
+            410,
+            411,
+            413,
+            414,
+            434,
+            435,
+            436,
+            437,
+            438,
+            439,
+        }
         if response.status_code < 500 and code in safe:
             self.invalidate_market()
-            raise DefinitiveRejection(str(payload.get('error',code)))
+            raise DefinitiveRejection(str(payload.get("error", code)))
         response.raise_for_status()
         return payload
 
     @contextmanager
     def balance_snapshot(self):
-        with self._reads.cycle(): yield
+        with self._reads.cycle():
+            yield
 
     def invalidate_market(self):
         self._markets = {}
@@ -73,27 +123,31 @@ class Bitvavo:
 
     def market(self, symbol, refresh=False):
         cached = self._markets.get(symbol)
-        if refresh or cached is None or time.monotonic()-cached[0]>=60:
-            markets = self.request('GET','/markets',params={'market':symbol})
-            if isinstance(markets,dict): markets=[markets]
-            value=next((m for m in markets if m.get('market','').upper()==symbol),None)
-            if value is None: raise ValueError(f'Bitvavo market {symbol} does not exist')
-            self._markets[symbol]=(time.monotonic(),value)
+        if refresh or cached is None or time.monotonic() - cached[0] >= 60:
+            markets = self.request("GET", "/markets", params={"market": symbol})
+            if isinstance(markets, dict):
+                markets = [markets]
+            value = next((m for m in markets if m.get("market", "").upper() == symbol), None)
+            if value is None:
+                raise ValueError(f"Bitvavo market {symbol} does not exist")
+            self._markets[symbol] = (time.monotonic(), value)
         return self._markets[symbol][1]
 
     def price(self, symbol):
-        ticker = self._reads.read(('price',symbol), lambda:self.request('GET',f'/{symbol}/ticker/price'))
-        return Decimal(ticker['price'])
+        ticker = self._reads.read(("price", symbol), lambda: self.request("GET", f"/{symbol}/ticker/price"))
+        return Decimal(ticker["price"])
 
     def estimate_taker_fee(self, symbol, quote_amount):
-        if self._fee_rate is None or time.monotonic()-self._fee_rate[0]>=300:
-            account=self.request('GET','/account',private=True)
-            self._fee_rate=(time.monotonic(),Decimal(str(account['fees']['taker'])))
-        return Decimal(str(quote_amount))*self._fee_rate[1]
+        if self._fee_rate is None or time.monotonic() - self._fee_rate[0] >= 300:
+            account = self.request("GET", "/account", private=True)
+            self._fee_rate = (time.monotonic(), Decimal(str(account["fees"]["taker"])))
+        return Decimal(str(quote_amount)) * self._fee_rate[1]
 
     def balance(self, currency):
-        accounts=self._reads.read('balances',lambda:self.request('GET','/balance',private=True))
-        return next((Decimal(a.get('available','0')) for a in accounts if a.get('symbol','').upper()==currency),Decimal(0))
+        accounts = self._reads.read("balances", lambda: self.request("GET", "/balance", private=True))
+        return next(
+            (Decimal(a.get("available", "0")) for a in accounts if a.get("symbol", "").upper() == currency), Decimal(0)
+        )
 
     def validate_withdrawal_settings(self, settings):
         if not settings.get("withdraw_address"):
@@ -115,7 +169,7 @@ class Bitvavo:
         if withdrawal.get("symbol") != "BTC":
             raise ValueError("Only Bitcoin withdrawals are supported")
         payload = dict(withdrawal)
-        payload['asset'] = payload.pop('symbol')
+        payload["asset"] = payload.pop("symbol")
         return self.request("POST", "/crypto/withdrawal", body=payload, private=True)
 
     def buy_btc(self, quote, amount, client_order_id):
@@ -131,31 +185,51 @@ class Bitvavo:
 
     def fiat_deposits(self, currency, start_ms=0, end_ms=None):
         """Fiat history includes an explicit completed/canceled status."""
-        windows=[(int(start_ms),int(end_ms) if end_ms is not None else int(time.time()*1000))]
-        result=[]
+        windows = [(int(start_ms), int(end_ms) if end_ms is not None else int(time.time() * 1000))]
+        result = []
         for _ in range(200):
-            if not windows: break
-            start,end=windows.pop()
-            rows=self.request('GET','/depositHistory',params={
-                'symbol':currency,'start':start,'end':end,'limit':1000},private=True)
-            if not isinstance(rows,list) or any(not isinstance(item,dict) for item in rows):
-                raise ValueError('Bitvavo deposit history could not be verified')
-            if len(rows)<1000:
-                result.extend(rows);continue
-            if start>=end: raise ValueError('Bitvavo deposit history exceeds the limit at one timestamp')
-            middle=(start+end)//2
-            windows.extend([(start,middle),(middle+1,end)])
-        if windows: raise ValueError('Bitvavo deposit-history page limit reached')
-        deposits=[];occurrences={}
+            if not windows:
+                break
+            start, end = windows.pop()
+            rows = self.request(
+                "GET",
+                "/depositHistory",
+                params={"symbol": currency, "start": start, "end": end, "limit": 1000},
+                private=True,
+            )
+            if not isinstance(rows, list) or any(not isinstance(item, dict) for item in rows):
+                raise ValueError("Bitvavo deposit history could not be verified")
+            if len(rows) < 1000:
+                result.extend(rows)
+                continue
+            if start >= end:
+                raise ValueError("Bitvavo deposit history exceeds the limit at one timestamp")
+            middle = (start + end) // 2
+            windows.extend([(start, middle), (middle + 1, end)])
+        if windows:
+            raise ValueError("Bitvavo deposit-history page limit reached")
+        deposits = []
+        occurrences = {}
         for item in result:
-            if item.get('symbol')!=currency or item.get('status')!='completed': continue
+            if item.get("symbol") != currency or item.get("status") != "completed":
+                continue
             # Fiat history has no transaction ID. Preserve identical entries using their occurrence number.
-            fingerprint=hashlib.sha256(json.dumps({k:item.get(k) for k in
-                ('timestamp','symbol','amount','fee','address')},sort_keys=True).encode()).hexdigest()
-            occurrences[fingerprint]=occurrences.get(fingerprint,0)+1
-            deposits.append({'id':fingerprint+':'+str(occurrences[fingerprint]),
-                'timestamp':int(item['timestamp']),'symbol':currency,'amount':str(item['amount']),
-                'fee':str(item.get('fee','0')),'status':'completed'})
+            fingerprint = hashlib.sha256(
+                json.dumps(
+                    {k: item.get(k) for k in ("timestamp", "symbol", "amount", "fee", "address")}, sort_keys=True
+                ).encode()
+            ).hexdigest()
+            occurrences[fingerprint] = occurrences.get(fingerprint, 0) + 1
+            deposits.append(
+                {
+                    "id": fingerprint + ":" + str(occurrences[fingerprint]),
+                    "timestamp": int(item["timestamp"]),
+                    "symbol": currency,
+                    "amount": str(item["amount"]),
+                    "fee": str(item.get("fee", "0")),
+                    "status": "completed",
+                }
+            )
         return deposits
 
     def btc_withdrawals(self, start_ms=0, end_ms=None):
@@ -163,25 +237,30 @@ class Bitvavo:
         windows = [(int(start_ms), int(end_ms) if end_ms is not None else int(time.time() * 1000))]
         result = []
         for _ in range(100):
-            if not windows: return result
+            if not windows:
+                return result
             start, end = windows.pop()
-            rows = self.request('GET', '/withdrawalHistory', params={
-                'symbol': 'BTC', 'start': start, 'end': end, 'limit': 1000}, private=True)
+            rows = self.request(
+                "GET",
+                "/withdrawalHistory",
+                params={"symbol": "BTC", "start": start, "end": end, "limit": 1000},
+                private=True,
+            )
             if not isinstance(rows, list) or any(not isinstance(item, dict) for item in rows):
-                raise ValueError('Bitvavo withdrawal history could not be verified.')
+                raise ValueError("Bitvavo withdrawal history could not be verified.")
             if len(rows) < 1000:
                 result.extend(rows)
                 continue
             if start >= end:
-                raise ValueError('Bitvavo withdrawal history exceeds the limit at one timestamp.')
+                raise ValueError("Bitvavo withdrawal history exceeds the limit at one timestamp.")
             middle = (start + end) // 2
             windows.extend([(start, middle), (middle + 1, end)])
-        raise ValueError('Bitvavo withdrawal-history page limit reached.')
+        raise ValueError("Bitvavo withdrawal-history page limit reached.")
 
     def open_orders(self):
-        result = self.request('GET', '/ordersOpen', private=True)
+        result = self.request("GET", "/ordersOpen", private=True)
         if not isinstance(result, list):
-            raise ValueError('Bitvavo open orders could not be verified.')
+            raise ValueError("Bitvavo open orders could not be verified.")
         return result
 
     def get_order(self, symbol, client_order_id, exchange_order_id=None):
@@ -217,20 +296,23 @@ class Bitvavo:
         else:
             raise ValueError(f"Cannot store Bitvavo trade fee in {fee_currency}; expected {quote} or BTC")
         timestamp_ms = int(order.get("updated") or order.get("created") or fallback_timestamp_ms)
-        timestamp = datetime.fromtimestamp(timestamp_ms / 1000, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-        return [{
-            "id": f"buy:{event_id}",
-            "row": {
-                "datetime": timestamp,
-                "type": "Buy",
-                "identifier": "BTC",
-                "assetType": "Crypto",
-                "price": format(price, "f"),
-                "shares": format(filled, "f"),
-                "amount": format(quote_amount, "f"),
-                "currency": quote,
-                "fee": format(fee_quote, "f"),
-                "tax": "0",
-            },
-        }]
-
+        timestamp = (
+            datetime.fromtimestamp(timestamp_ms / 1000, UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+        )
+        return [
+            {
+                "id": f"buy:{event_id}",
+                "row": {
+                    "datetime": timestamp,
+                    "type": "Buy",
+                    "identifier": "BTC",
+                    "assetType": "Crypto",
+                    "price": format(price, "f"),
+                    "shares": format(filled, "f"),
+                    "amount": format(quote_amount, "f"),
+                    "currency": quote,
+                    "fee": format(fee_quote, "f"),
+                    "tax": "0",
+                },
+            }
+        ]

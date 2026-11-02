@@ -1,4 +1,5 @@
 """Bounded, thread-safe attempt limits shared by login and sensitive settings."""
+
 import math
 import time
 from threading import RLock
@@ -14,11 +15,14 @@ class AttemptLimiter:
         """Reserve an attempt before password hashing; return retry delay or zero."""
         now = time.monotonic()
         with self.lock:
-            self.attempts = {k: [stamp for stamp in stamps if now-stamp < self.window]
-                             for k, stamps in self.attempts.items() if stamps and now-stamps[-1] < self.window}
+            self.attempts = {
+                k: [stamp for stamp in stamps if now - stamp < self.window]
+                for k, stamps in self.attempts.items()
+                if stamps and now - stamps[-1] < self.window
+            }
             stamps = self.attempts.get(key, [])
             if len(stamps) >= self.limit:
-                return max(1, math.ceil(stamps[0]+self.window-now))
+                return max(1, math.ceil(stamps[0] + self.window - now))
             if key not in self.attempts and len(self.attempts) >= self.capacity:
                 return self.window
             self.attempts.setdefault(key, []).append(now)

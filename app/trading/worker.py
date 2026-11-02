@@ -1,69 +1,88 @@
 """Single account worker: queued web actions, periodic checks and bounded health age."""
+
 import logging
-import requests
-from app.exchanges.exchange_errors import UncertainWithdrawalError
 import os
 import queue
 import threading
 import time
 import uuid
-from app.data.activity import write_json_atomic
 
-LOG=logging.getLogger('bitcoin-dca.worker')
+import requests
+
+from app.data.activity import write_json_atomic
 from app.data.storage import HEALTH_PATH
-HEARTBEAT_WRITE_INTERVAL_SECONDS=300
+from app.exchanges.exchange_errors import UncertainWithdrawalError
+
+LOG = logging.getLogger("bitcoin-dca.worker")
+
+HEARTBEAT_WRITE_INTERVAL_SECONDS = 300
 
 
 class Worker:
     def __init__(self, cycle, action, interval):
-        self.last_error=None
-        self.last_success=None
-        self.cycle=cycle
-        self.action=action
-        self.interval=interval
-        self.queue=queue.Queue(maxsize=16)
-        self.jobs={}
-        self.lock=threading.RLock()
-        self.stop=threading.Event()
-        self.reconfigure=threading.Event()
-        self.thread=None
-        self.beat=time.monotonic()
-        self.running=False
-        self._last_health=None
+        self.last_error = None
+        self.last_success = None
+        self.cycle = cycle
+        self.action = action
+        self.interval = interval
+        self.queue = queue.Queue(maxsize=16)
+        self.jobs = {}
+        self.lock = threading.RLock()
+        self.stop = threading.Event()
+        self.reconfigure = threading.Event()
+        self.thread = None
+        self.beat = time.monotonic()
+        self.running = False
+        self._last_health = None
 
     def submit(self, action, session, token=None):
-        job_id=str(uuid.uuid4())
+        job_id = str(uuid.uuid4())
         with self.lock:
-            if not self.running or self.stop.is_set(): raise ValueError('Bot worker is unavailable; check container health.')
-            self.jobs={k:v for k,v in self.jobs.items() if v['expires']>time.monotonic() or v['state'] in ('queued','running')}
-            if len(self.jobs)>=128: raise ValueError('Too many queued or recent requests; try again later.')
-            job={'session':session,'state':'queued','expires':time.monotonic()+900}
-            self.jobs[job_id]=job
-            try:self.queue.put_nowait((job_id,action,session,token))
+            if not self.running or self.stop.is_set():
+                raise ValueError("Bot worker is unavailable; check container health.")
+            self.jobs = {
+                k: v
+                for k, v in self.jobs.items()
+                if v["expires"] > time.monotonic() or v["state"] in ("queued", "running")
+            }
+            if len(self.jobs) >= 128:
+                raise ValueError("Too many queued or recent requests; try again later.")
+            job = {"session": session, "state": "queued", "expires": time.monotonic() + 900}
+            self.jobs[job_id] = job
+            try:
+                self.queue.put_nowait((job_id, action, session, token))
             except queue.Full:
                 self.jobs.pop(job_id)
-                raise ValueError('The account worker is busy. Try again shortly.')
-        return {'jobId':job_id,'state':'queued'}
+                raise ValueError("The account worker is busy. Try again shortly.") from None
+        return {"jobId": job_id, "state": "queued"}
 
     def get_job(self, job_id, session):
         with self.lock:
-            job=self.jobs.get(job_id)
-            if not job or job['session']!=session or job['expires']<time.monotonic():
-                raise ValueError('Request not found or expired. Check exchange status before starting again.')
-            return {k:v for k,v in job.items() if k not in ('session','expires')}
+            job = self.jobs.get(job_id)
+            if not job or job["session"] != session or job["expires"] < time.monotonic():
+                raise ValueError("Request not found or expired. Check exchange status before starting again.")
+            return {k: v for k, v in job.items() if k not in ("session", "expires")}
 
     def healthy(self):
-        return self.running and time.monotonic()-self.beat<600
+        return self.running and time.monotonic() - self.beat < 600
 
     def heartbeat(self):
-        self.beat=time.monotonic()
-        if self._last_health is None or self.beat-self._last_health>=HEARTBEAT_WRITE_INTERVAL_SECONDS:
-            write_json_atomic(HEALTH_PATH,{'heartbeat':time.time(),'running':self.running,'lastError':self.last_error,'lastSuccessfulCheck':self.last_success})
-            self._last_health=self.beat
+        self.beat = time.monotonic()
+        if self._last_health is None or self.beat - self._last_health >= HEARTBEAT_WRITE_INTERVAL_SECONDS:
+            write_json_atomic(
+                HEALTH_PATH,
+                {
+                    "heartbeat": time.time(),
+                    "running": self.running,
+                    "lastError": self.last_error,
+                    "lastSuccessfulCheck": self.last_success,
+                },
+            )
+            self._last_health = self.beat
 
     def start(self):
-        self.running=True
-        self.thread=threading.Thread(target=self.run, name='bitcoin-account-worker',daemon=True)
+        self.running = True
+        self.thread = threading.Thread(target=self.run, name="bitcoin-account-worker", daemon=True)
         self.thread.start()
 
     def shutdown(self, timeout=45):
@@ -73,76 +92,88 @@ class Worker:
         if self.thread and self.thread is not threading.current_thread():
             self.thread.join(timeout)
             if self.thread.is_alive():
-                LOG.warning('Worker stop timeout reached; saved pending transactions will be verified after restart')
+                LOG.warning("Worker stop timeout reached; saved pending transactions will be verified after restart")
                 return False
         return True
 
     def run(self):
-        self.running=True
-        due=time.monotonic()
+        self.running = True
+        due = time.monotonic()
         try:
             while not self.stop.is_set():
                 self.heartbeat()
                 if self.reconfigure.is_set():
                     self.reconfigure.clear()
-                    due=time.monotonic()
+                    due = time.monotonic()
                 # Due checks take precedence even when manual requests keep arriving.
                 if time.monotonic() >= due:
                     try:
-                        wait=self.cycle()
-                        self.last_error=None
-                        self.last_success=time.time()
-                        due=time.monotonic()+min(self.interval,max(1,int(wait or self.interval)))
+                        wait = self.cycle()
+                        self.last_error = None
+                        self.last_success = time.time()
+                        due = time.monotonic() + min(self.interval, max(1, int(wait or self.interval)))
                     except Exception as exc:
-                        self.last_error=str(exc)
+                        self.last_error = str(exc)
                         if isinstance(exc, requests.RequestException):
-                            LOG.warning('Account check failed; worker will retry: %s', exc)
-                            LOG.debug('Account check network failure', exc_info=True)
+                            LOG.warning("Account check failed; worker will retry: %s", exc)
+                            LOG.debug("Account check network failure", exc_info=True)
                         else:
-                            LOG.exception('Account check failed; worker will retry.')
-                        due=time.monotonic()+self.interval
+                            LOG.exception("Account check failed; worker will retry.")
+                        due = time.monotonic() + self.interval
                     continue
                 try:
-                    job_id,action,session,token=self.queue.get(timeout=min(1,max(0,due-time.monotonic())))
+                    job_id, action, session, token = self.queue.get(timeout=min(1, max(0, due - time.monotonic())))
                 except queue.Empty:
                     continue
                 if self.stop.is_set():
-                    with self.lock:self.jobs[job_id].update(state='failed',error='Container is stopping; request was not executed.')
+                    with self.lock:
+                        self.jobs[job_id].update(
+                            state="failed", error="Container is stopping; request was not executed."
+                        )
                     self.queue.task_done()
                     break
-                with self.lock:self.jobs[job_id]['state']='running'
+                with self.lock:
+                    self.jobs[job_id]["state"] = "running"
                 try:
-                    result=self.action(action,session,token)
-                    with self.lock:self.jobs[job_id].update(state='completed',result=result)
+                    result = self.action(action, session, token)
+                    with self.lock:
+                        self.jobs[job_id].update(state="completed", result=result)
                     # Manual withdrawals leave the existing account-check deadline unchanged.
                 except Exception as exc:
                     if isinstance(exc, UncertainWithdrawalError):
-                        LOG.error('Manual withdrawal outcome requires verification: %s', exc)
+                        LOG.error("Manual withdrawal outcome requires verification: %s", exc)
                     elif isinstance(exc, ValueError):
-                        LOG.info('Manual account request rejected: %s', exc)
+                        LOG.info("Manual account request rejected: %s", exc)
                     elif isinstance(exc, requests.RequestException):
-                        LOG.warning('Manual account request failed: %s', exc)
-                        LOG.debug('Manual account network failure', exc_info=True)
+                        LOG.warning("Manual account request failed: %s", exc)
+                        LOG.debug("Manual account network failure", exc_info=True)
                     else:
-                        LOG.exception('Manual account request failed unexpectedly')
-                    message = str(exc) if isinstance(exc, (ValueError, UncertainWithdrawalError)) else 'Account request failed. Check the container logs and exchange status before trying again.'
-                    with self.lock:self.jobs[job_id].update(state='failed',error=message)
+                        LOG.exception("Manual account request failed unexpectedly")
+                    message = (
+                        str(exc)
+                        if isinstance(exc, (ValueError, UncertainWithdrawalError))
+                        else "Account request failed. Check the container logs and exchange status before trying again."
+                    )
+                    with self.lock:
+                        self.jobs[job_id].update(state="failed", error=message)
                 finally:
                     self.queue.task_done()
                     self.heartbeat()
         finally:
             with self.lock:
-                self.running=False
+                self.running = False
                 while True:
-                    try: job_id, *_ = self.queue.get_nowait()
-                    except queue.Empty: break
-                    self.jobs[job_id].update(state='failed',error='Container is stopping; request was not executed.')
+                    try:
+                        job_id, *_ = self.queue.get_nowait()
+                    except queue.Empty:
+                        break
+                    self.jobs[job_id].update(state="failed", error="Container is stopping; request was not executed.")
                     self.queue.task_done()
-            write_json_atomic(HEALTH_PATH,{'heartbeat':time.time(),'running':False})
+            write_json_atomic(HEALTH_PATH, {"heartbeat": time.time(), "running": False})
 
 
 def supervise(worker):
     while not worker.stop.wait(10):
         if not worker.healthy():
-            LOG.critical('Account worker stopped or stalled; exiting for Docker restart.')
+            LOG.critical("Account worker stopped or stalled; exiting for Docker restart.")
             os._exit(1)

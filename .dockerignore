@@ -8,3 +8,9 @@ docs
 tests
 .github
 README.md
+
+.agents
+.mypy_cache
+.ruff_cache
+pyproject.toml
+requirements-dev.txt

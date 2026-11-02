@@ -74,6 +74,7 @@ async function refreshPurchaseSchedule(){
   nextPurchaseTimestamp=Number.isFinite(target)?target:null;
 
   nextPurchaseMessage=schedule.nextPurchaseStatus||"Not scheduled";
+  $('purchaseOrderDetails').hidden=schedule.startupDelayActive===true||nextPurchaseMessage===t('Waiting for startup delay');
   $("nextPurchaseAt").textContent=t(nextPurchaseTimestamp===null?nextPurchaseMessage:new Date(nextPurchaseTimestamp).toLocaleString(locale,{timeZone:schedule.timezone||"UTC",timeZoneName:"short"}));
   exchangeBtcBalance=schedule.btcBalance!=null&&Number.isFinite(Number(schedule.btcBalance))?Number(schedule.btcBalance):null;
   $("exchangeBtcBalance").textContent=t(exchangeBtcBalance===null?"—":btc(exchangeBtcBalance));

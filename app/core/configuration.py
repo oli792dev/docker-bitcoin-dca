@@ -1,4 +1,5 @@
 """Private, atomic application configuration managed exclusively through the web UI."""
+
 import base64
 import copy
 import hashlib
@@ -8,23 +9,50 @@ import logging
 import os
 import re
 import secrets
-from app.data.storage import write_json_atomic, installation_started_at
 import threading
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from datetime import datetime, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-LOG = logging.getLogger('bitcoin-dca.settings')
-CONFIG_PATH = Path('/webui-data/config.json')
+from app.data.storage import installation_started_at, write_json_atomic
 
-SECRET_FIELDS = tuple(f'{exchange}_api_{part}' for exchange in ('kraken', 'bitvavo') for part in ('key', 'secret'))
-DEFAULTS = dict(exchange='KRAKEN', quote='EUR', buy_amount='0', deposit_day=1, deposit_time='00:00',
-                startup_delay_seconds=60, order_status_check_seconds=30, check_interval_seconds=300,
-                timezone='Europe/Berlin', live=False, withdrawals_enabled=False,
-                withdraw_threshold='1000', withdraw_address='', withdraw_network='BTC', kraken_withdraw_key='',
-                manual_withdrawal_enabled=True, parqet_enabled=True, language='en', appearance='system', display_currency='EUR', expected_monthly_deposit='',
-                **{key: '' for key in SECRET_FIELDS})
+LOG = logging.getLogger("bitcoin-dca.settings")
+CONFIG_PATH = Path("/webui-data/config.json")
+
+SECRET_FIELDS = tuple(f"{exchange}_api_{part}" for exchange in ("kraken", "bitvavo") for part in ("key", "secret"))
+DEFAULTS = dict(
+    exchange="KRAKEN",
+    quote="EUR",
+    buy_amount="0",
+    deposit_day=1,
+    deposit_time="00:00",
+    startup_delay_seconds=60,
+    order_status_check_seconds=30,
+    check_interval_seconds=300,
+    timezone="Europe/Berlin",
+    live=False,
+    withdrawals_enabled=False,
+    withdraw_threshold="1000",
+    withdraw_address="",
+    withdraw_network="BTC",
+    kraken_withdraw_key="",
+    manual_withdrawal_enabled=True,
+    parqet_enabled=True,
+    language="en",
+    appearance="system",
+    display_currency="EUR",
+    expected_monthly_deposit="",
+    **{key: "" for key in SECRET_FIELDS},
+)
+
+
+class ConfigurationError(ValueError):
+    """A rejected setting with a safe field identifier for inline feedback."""
+
+    def __init__(self, message: str, field: str) -> None:
+        super().__init__(message)
+        self.field = field
 
 
 def password_hash(password):
@@ -43,85 +71,117 @@ def password_matches(password, encoded):
 
 def account_values(username, password):
     if not isinstance(username, str) or not 3 <= len(username.strip()) <= 64:
-        raise ValueError('Username must contain 3–64 characters.')
+        raise ConfigurationError("Username must contain 3–64 characters.", "username")
     if not isinstance(password, str) or not 12 <= len(password) <= 1024:
-        raise ValueError('Password must contain 12–1024 characters.')
+        raise ConfigurationError("Password must contain 12–1024 characters.", "password")
     return dict(username=username.strip(), password_hash=password_hash(password), password_change_required=False)
 
 
 def validate(values, previous=None, require_credentials=True):
     if not isinstance(values, dict) or set(values) - set(DEFAULTS):
-        raise ValueError('Unknown configuration field.')
+        raise ValueError("Unknown configuration field.")
     result = copy.deepcopy(previous or DEFAULTS)
     for key, value in values.items():
-        if key in SECRET_FIELDS and value == '':
+        if key in SECRET_FIELDS and value == "":
             continue  # Empty password fields never erase stored credentials.
         result[key] = value
     for key, default in DEFAULTS.items():
         value = result[key]
         if isinstance(default, bool):
             if type(value) is not bool:
-                raise ValueError(f'{key} must be enabled or disabled.')
+                raise ConfigurationError(f"{key} must be enabled or disabled.", key)
         elif isinstance(default, int):
             if type(value) is not int:
-                raise ValueError(f'{key} must be an integer.')
+                raise ConfigurationError(f"{key} must be an integer.", key)
         elif not isinstance(value, str) or len(value) > 2048:
-            raise ValueError(f'Invalid {key}.')
-    result['exchange'] = result['exchange'].upper()
-    result['quote'] = result['quote'].upper()
-    if result['language'] not in ('en', 'de'):
-        raise ValueError('Language must be English or German.')
-    if result['appearance'] not in ('system', 'light', 'dark'):
-        raise ValueError('Appearance must be Automatic / System, Light or Dark.')
-    result['display_currency'] = result['display_currency'].upper()
-    if result['display_currency'] not in ('EUR', 'USD'):
-        raise ValueError('Display currency must be EUR or USD.')
-    result['withdraw_network'] = result['withdraw_network'].strip().upper()
-    for key in SECRET_FIELDS + ('withdraw_address', 'kraken_withdraw_key'):
+            raise ConfigurationError(f"Invalid {key}.", key)
+    result["exchange"] = result["exchange"].upper()
+    result["quote"] = result["quote"].upper()
+    if result["language"] not in ("en", "de"):
+        raise ConfigurationError("Language must be English or German.", "language")
+    if result["appearance"] not in ("system", "light", "dark"):
+        raise ConfigurationError("Appearance must be Automatic / System, Light or Dark.", "appearance")
+    result["display_currency"] = result["display_currency"].upper()
+    if result["display_currency"] not in ("EUR", "USD"):
+        raise ConfigurationError("Display currency must be EUR or USD.", "display_currency")
+    result["withdraw_network"] = result["withdraw_network"].strip().upper()
+    for key in SECRET_FIELDS + ("withdraw_address", "kraken_withdraw_key"):
         result[key] = result[key].strip()
-    if result['exchange'] not in ('KRAKEN', 'BITVAVO') or result['quote'] not in ('EUR', 'USD'):
-        raise ValueError('Select Kraken or Bitvavo and EUR or USD.')
-    if result['exchange'] == 'BITVAVO' and result['quote'] != 'EUR':
-        raise ValueError('Bitvavo supports EUR purchases only.')
-    for key in ('buy_amount', 'withdraw_threshold', 'expected_monthly_deposit'):
-        if key == 'expected_monthly_deposit' and result[key] == '':
+    if result["exchange"] not in ("KRAKEN", "BITVAVO") or result["quote"] not in ("EUR", "USD"):
+        raise ConfigurationError(
+            "Select Kraken or Bitvavo and EUR or USD.",
+            "exchange" if result["exchange"] not in ("KRAKEN", "BITVAVO") else "quote",
+        )
+    if result["exchange"] == "BITVAVO" and result["quote"] != "EUR":
+        raise ConfigurationError("Bitvavo supports EUR purchases only.", "quote")
+    for key in ("buy_amount", "withdraw_threshold", "expected_monthly_deposit"):
+        if key == "expected_monthly_deposit" and result[key] == "":
             continue
         try:
             number = Decimal(result[key])
-            if not number.is_finite() or number < 0 or (key == 'withdraw_threshold' and number <= 0):
+            if not number.is_finite() or number < 0 or (key == "withdraw_threshold" and number <= 0):
                 raise InvalidOperation
             result[key] = str(number)
         except InvalidOperation:
-            if key == 'expected_monthly_deposit':
-                raise ValueError('Expected monthly deposit must be a finite non-negative amount.') from None
-            raise ValueError(f'{key} must be a finite positive amount (purchase amount may be zero).') from None
-    if not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d', result['deposit_time']):
-        raise ValueError('Deposit time must use HH:MM, from 00:00 to 23:59.')
-    if not 1 <= result['deposit_day'] <= 31 or not 0 <= result['startup_delay_seconds'] <= 86400:
-        raise ValueError('Deposit day must be 1–31; startup delay must be 0–86400 seconds.')
-    if not 60 <= result['check_interval_seconds'] <= 86400 or not 1 <= result['order_status_check_seconds'] <= 3600:
-        raise ValueError('Account checks must be 60–86400 seconds; order checks 1–3600 seconds.')
+            if key == "expected_monthly_deposit":
+                raise ConfigurationError(
+                    "Expected monthly deposit must be a finite non-negative amount.", key
+                ) from None
+            raise ConfigurationError(
+                f"{key} must be a finite positive amount (purchase amount may be zero).", key
+            ) from None
+    if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", result["deposit_time"]):
+        raise ConfigurationError("Deposit time must use HH:MM, from 00:00 to 23:59.", "deposit_time")
+    if not 1 <= result["deposit_day"] <= 31 or not 0 <= result["startup_delay_seconds"] <= 86400:
+        raise ConfigurationError(
+            "Deposit day must be 1–31; startup delay must be 0–86400 seconds.",
+            "deposit_day" if not 1 <= result["deposit_day"] <= 31 else "startup_delay_seconds",
+        )
+    if not 60 <= result["check_interval_seconds"] <= 86400 or not 1 <= result["order_status_check_seconds"] <= 3600:
+        raise ConfigurationError(
+            "Account checks must be 1–1440 minutes; order checks 1–3600 seconds.",
+            "check_interval_seconds"
+            if not 60 <= result["check_interval_seconds"] <= 86400
+            else "order_status_check_seconds",
+        )
     try:
-        ZoneInfo(result['timezone'])
+        ZoneInfo(result["timezone"])
     except (ZoneInfoNotFoundError, ValueError):
-        raise ValueError('Enter a valid timezone, for example Europe/Berlin.') from None
-    prefix = result['exchange'].lower()
-    if require_credentials and previous and result['exchange'] != previous['exchange']:
-        keys = [f'{prefix}_api_key', f'{prefix}_api_secret']
+        raise ConfigurationError("Enter a valid timezone, for example Europe/Berlin.", "timezone") from None
+    prefix = result["exchange"].lower()
+    if require_credentials and previous and result["exchange"] != previous["exchange"]:
+        keys = [f"{prefix}_api_key", f"{prefix}_api_secret"]
         if any(not isinstance(values.get(key), str) or not values[key].strip() for key in keys):
-            raise ValueError('Changing exchanges requires entering the API key and API secret for the selected exchange again.')
-    if require_credentials and not all(result[f'{prefix}_api_{part}'] for part in ('key', 'secret')):
-        raise ValueError('API key and secret are required for the selected exchange.')
-    if prefix == 'kraken' and result['kraken_api_secret']:
+            raise ConfigurationError(
+                "Changing exchanges requires entering the API key and API secret for the selected exchange again.",
+                next(key for key in keys if not isinstance(values.get(key), str) or not values[key].strip()),
+            )
+    if require_credentials and not all(result[f"{prefix}_api_{part}"] for part in ("key", "secret")):
+        raise ConfigurationError(
+            "API key and secret are required for the selected exchange.",
+            next(f"{prefix}_api_{part}" for part in ("key", "secret") if not result[f"{prefix}_api_{part}"]),
+        )
+    if prefix == "kraken" and result["kraken_api_secret"]:
         try:
-            if not base64.b64decode(result['kraken_api_secret'], validate=True):
+            if not base64.b64decode(result["kraken_api_secret"], validate=True):
                 raise ValueError
         except ValueError:
-            raise ValueError('Kraken API secret must be base64 encoded.') from None
-    if result['withdrawals_enabled']:
-        destination = result['kraken_withdraw_key'] if prefix == 'kraken' else result['withdraw_address'] and result['withdraw_network']
+            raise ConfigurationError("Kraken API secret must be base64 encoded.", "kraken_api_secret") from None
+    if result["withdrawals_enabled"]:
+        destination = (
+            result["kraken_withdraw_key"]
+            if prefix == "kraken"
+            else result["withdraw_address"] and result["withdraw_network"]
+        )
         if not destination:
-            raise ValueError('Configure a Bitcoin withdrawal destination before enabling automatic withdrawals.')
+            raise ConfigurationError(
+                "Configure a Bitcoin withdrawal destination before enabling automatic withdrawals.",
+                "kraken_withdraw_key"
+                if prefix == "kraken"
+                else "withdraw_address"
+                if not result["withdraw_address"]
+                else "withdraw_network",
+            )
     return result
 
 
@@ -132,7 +192,7 @@ class ConfigStore:
         self.first_started_at = installation_started_at(self.path.parent)
         if self.path.exists():
             self.data = self._read(self.path)
-            LOG.debug('Stored application configuration loaded; setup complete=%s', self.data['complete'])
+            LOG.debug("Stored application configuration loaded; setup complete=%s", self.data["complete"])
             return
         self.data = dict(version=1, complete=False, account=None, settings=validate({}, require_credentials=False))
 
@@ -141,74 +201,90 @@ class ConfigStore:
         os.chmod(path, 0o600)
         data = json.loads(path.read_text())
         # Retired feature settings must not prevent existing volumes from starting.
-        settings = {key: value for key, value in data['settings'].items()
-                    if key not in ('adaptive_dca_enabled', 'adaptive_dca_strength')}
-        data['settings'] = validate(settings, require_credentials=data['complete'])
+        settings = {
+            key: value
+            for key, value in data["settings"].items()
+            if key not in ("adaptive_dca_enabled", "adaptive_dca_strength")
+        }
+        data["settings"] = validate(settings, require_credentials=data["complete"])
         return data
 
     def _write(self, data):
         write_json_atomic(self.path, data)
 
     def snapshot(self):
-        with self.lock: return copy.deepcopy(self.data)
+        with self.lock:
+            return copy.deepcopy(self.data)
 
     def report_from(self):
         with self.lock:
-            path=self.path.with_name('report-preferences.json')
-            if not path.exists(): return self.first_started_at
-            value=json.loads(path.read_text())['from']
-            parsed=datetime.fromisoformat(value)
-            if parsed.tzinfo is None: raise ValueError('Invalid report start date.')
+            path = self.path.with_name("report-preferences.json")
+            if not path.exists():
+                return self.first_started_at
+            value = json.loads(path.read_text())["from"]
+            parsed = datetime.fromisoformat(value)
+            if parsed.tzinfo is None:
+                raise ValueError("Invalid report start date.")
             return value
 
     def save_report_from(self, value):
         try:
-            if not isinstance(value,str): raise ValueError()
-            parsed=datetime.fromisoformat(value.replace('Z','+00:00'))
-            if parsed.tzinfo is None: raise ValueError()
-            normalized=parsed.astimezone(timezone.utc).isoformat(timespec='seconds')
-        except (ValueError,TypeError,OverflowError):
-            raise ValueError('Invalid report start date.') from None
+            if not isinstance(value, str):
+                raise ValueError()
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                raise ValueError()
+            normalized = parsed.astimezone(UTC).isoformat(timespec="seconds")
+        except (ValueError, TypeError, OverflowError):
+            raise ValueError("Invalid report start date.") from None
         with self.lock:
-            write_json_atomic(self.path.with_name('report-preferences.json'),{'from':normalized})
+            write_json_atomic(self.path.with_name("report-preferences.json"), {"from": normalized})
         return normalized
 
     def public(self):
         data = self.snapshot()
-        settings = data['settings']
+        settings = data["settings"]
         for key in SECRET_FIELDS:
-            settings[key + '_configured'] = bool(settings.pop(key))
-        account = data['account']
-        return dict(complete=data['complete'], settings=settings,
-                    username=account['username'] if account else '',
-                    passwordChangeRequired=bool(account and account.get('password_change_required')))
+            settings[key + "_configured"] = bool(settings.pop(key))
+        account = data["account"]
+        return dict(
+            complete=data["complete"],
+            settings=settings,
+            username=account["username"] if account else "",
+            passwordChangeRequired=bool(account and account.get("password_change_required")),
+        )
 
     def authenticate(self, username, password):
         with self.lock:
-            account = self.data['account']
+            account = self.data["account"]
             # Always run the expensive password derivation for existing accounts.
-            return bool(account and password_matches(password, account['password_hash']) and hmac.compare_digest(username.encode(), account['username'].encode()))
+            return bool(
+                account
+                and password_matches(password, account["password_hash"])
+                and hmac.compare_digest(username.encode(), account["username"].encode())
+            )
 
     def create_account(self, username, password):
         with self.lock:
-            if self.data['account']:
-                raise ValueError('An account already exists. Sign in to change settings.')
+            if self.data["account"]:
+                raise ValueError("An account already exists. Sign in to change settings.")
             data = self.snapshot()
-            data['account'] = account_values(username, password)
+            data["account"] = account_values(username, password)
             self._write(data)
             self.data = data
-            LOG.info('Initial dashboard account created; bot configuration is required')
+            LOG.info("Initial dashboard account created; bot configuration is required")
 
     def commit(self, settings, account=None):
         with self.lock:
             data = self.snapshot()
             data.update(settings=settings, complete=True)
-            if account: data['account'] = account
+            if account:
+                data["account"] = account
             self._write(data)
             self.data = data
 
 
 def runtime_settings(values):
     result = dict(values)
-    result.update(buy_amount=Decimal(values['buy_amount']), withdraw_threshold=Decimal(values['withdraw_threshold']))
+    result.update(buy_amount=Decimal(values["buy_amount"]), withdraw_threshold=Decimal(values["withdraw_threshold"]))
     return result
