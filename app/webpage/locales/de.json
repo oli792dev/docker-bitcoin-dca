@@ -199,7 +199,6 @@
   "Waiting for account price and order minimums": "Warten auf Kontoguthaben, Kurs und Mindestkaufmenge",
   "Saving forecast amount…": "Prognosebetrag wird gespeichert …",
   "Forecast amount could not be saved.": "Prognosebetrag konnte nicht gespeichert werden.",
-  "Could not refresh the schedule. Previous values are still shown.": "Zeitplan konnte nicht aktualisiert werden. Die bisherigen Werte bleiben sichtbar.",
   "Determined by the exchange": "Wird von der Börse bestimmt",
   "Available BTC minus the exchange fee": "Verfügbare BTC abzüglich Börsengebühr",
   "Confirmation expires after two minutes. No transfer is submitted until you confirm.": "Die Bestätigung ist zwei Minuten gültig. Ohne Bestätigung wird nichts überwiesen.",

@@ -106,7 +106,7 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  const lastBalance=get('quoteBalance').textContent;
  scheduleFails=true;await vm.runInContext('refreshPurchaseSchedule()',context);
  assert.equal(get('quoteBalance').textContent,lastBalance);
- assert(get('scheduleFeedback').textContent.includes('Previous values'));
+ assert.equal(get('scheduleFeedback').textContent,'');assert.equal(get('botStatusLabel').textContent,'Connection unavailable; showing previous values');
  scheduleFails=false;
  const lastRows=get('activities').children;
  reportFails=true;await vm.runInContext('loadAnalytics()',context);

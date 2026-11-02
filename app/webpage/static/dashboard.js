@@ -82,7 +82,7 @@ async function refreshPurchaseSchedule(){
   $("withdrawalCountdownStatus").textContent=t(estimatedWithdrawalTimestamp===null?$("estimatedWithdrawalStatus").textContent:(schedule.estimatedWithdrawalStatus||"Estimate at the current BTC price, deposit and purchase interval"));
   renderPurchaseCountdown();
   sectionFeedback("scheduleFeedback","");
- }catch(e){if(request===scheduleRequest){$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");updateStatusLight("error");sectionFeedback("scheduleFeedback","Could not refresh the schedule. Previous values are still shown.",true)}}
+ }catch(e){if(request===scheduleRequest){$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");updateStatusLight("error");sectionFeedback("scheduleFeedback","")}}
 }
 let monthlyDepositDirty=false,monthlyDepositSaving=false;
 $("monthlyDeposit").addEventListener("input",()=>{monthlyDepositDirty=true});
