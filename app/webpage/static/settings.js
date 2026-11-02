@@ -27,7 +27,7 @@ const fields=[
  ['deposit_day','Deposit day (day of month)','1','1','31','Short months use their last day. Does not transfer money.'],
  ['deposit_time','Deposit time','00:00','60','23:59','Expected local deposit time for purchase planning.'],
  ['expected_monthly_deposit','Expected monthly deposit (purchase currency)','0','0.01',null,'Forecast only; assumes deposits on this day and time.'],
- ['check_interval_seconds','Account check interval (seconds)','60','1','86400','Refresh balances, prices, purchase and withdrawal schedules.'],
+ ['check_interval_seconds','Account check interval (minutes)','1','any','1440','Refresh balances, prices, purchase and withdrawal schedules.'],
  ['order_status_check_seconds','Open order check interval (seconds)','1','1','3600','Recheck pending orders; new purchases wait for confirmation.'],
  ['withdraw_threshold','Automatic withdrawal threshold (purchase currency)','0.01','any',null,'All available exchange BTC, valued in the purchase currency.']
 ];
@@ -50,7 +50,7 @@ const timezoneGroups=[
 ];
 const timezoneValues=new Set();for(const [region,zones] of timezoneGroups){const group=document.createElement('optgroup');group.label=t(region);for(const [value,label] of zones){const option=document.createElement('option');option.value=value;option.textContent=t(label+' ('+value+')');group.append(option);timezoneValues.add(value)}$('timezone').append(group)}
 const savedTimezone=initial.settings.timezone;if(typeof savedTimezone==='string'&&!timezoneValues.has(savedTimezone)){const option=document.createElement('option');option.value=savedTimezone;option.textContent=t(savedTimezone+' (saved timezone)');$('timezone').append(option)}
-for(const input of document.querySelectorAll('[data-setting]')){const v=initial.settings[input.id];if(v===undefined)continue;if(input.type==='checkbox')input.checked=v;else input.value=v}
+for(const input of document.querySelectorAll('[data-setting]')){const v=initial.settings[input.id];if(v===undefined)continue;if(input.type==='checkbox')input.checked=v;else input.value=input.id==='check_interval_seconds'?v/60:v}
 $('accountPanel').hidden=!initial.createAccount;$('settingsForm').hidden=initial.createAccount;if(document.body)document.body.classList.toggle('settings-active',!initial.createAccount);
 const showCredentials=Boolean($('dashboardCredentials'));if(showCredentials)$('username').value=initial.username||'';if(!initial.complete){$('pageHeading').textContent=t('2. Configure your bot');$('back').hidden=true}
 if(showCredentials){$('passwordRequired').hidden=!initial.passwordChangeRequired;if(initial.passwordChangeRequired){$('password').required=true;$('current_password').required=true}}
@@ -83,7 +83,7 @@ if(!initial.createAccount){
  $('settingsForm').addEventListener('invalid',event=>{if(invalidTabOpened)return;const item=settingsTabs.find(item=>item.panel.contains(event.target));if(item){activateSettingsTab(item.id);invalidTabOpened=true;setTimeout(()=>{invalidTabOpened=false},0)}},true);
 }
 $('quote').addEventListener('change',updatePurchaseCurrencyLabel);selectedExchange();$('exchange').addEventListener('change',()=>{for(const prefix of ['kraken','bitvavo'])for(const part of ['key','secret'])$(prefix+'_api_'+part).value='';connectionMessage('');selectedExchange()});
-function values(){const result={};for(const input of document.querySelectorAll('[data-setting]')){if(input.id==='withdraw_threshold'&&input.disabled){result[input.id]=initial.settings.withdraw_threshold;continue}result[input.id]=input.type==='checkbox'?input.checked:input.type==='number'&&['deposit_day','startup_delay_seconds','check_interval_seconds','order_status_check_seconds'].includes(input.id)?Number(input.value):input.value}return result}
+function values(){const result={};for(const input of document.querySelectorAll('[data-setting]')){if(input.id==='withdraw_threshold'&&input.disabled){result[input.id]=initial.settings.withdraw_threshold;continue}result[input.id]=input.id==='check_interval_seconds'?Math.round(Number(input.value)*60):input.type==='checkbox'?input.checked:input.type==='number'&&['deposit_day','startup_delay_seconds','check_interval_seconds','order_status_check_seconds'].includes(input.id)?Number(input.value):input.value}return result}
 $('accountForm').addEventListener('submit',async e=>{e.preventDefault();if($('newPassword').value!==$('confirmPassword').value){message('Passwords do not match.',true);return}const b=e.submitter;b.disabled=true;try{await request('/api/setup/account',{username:$('newUsername').value,password:$('newPassword').value});location.href='/settings'}catch(err){message(err.message,true)}finally{b.disabled=false}});
 $('testConnection').addEventListener('click',async()=>{if(!exchangeCredentialsReady())return;const b=$('testConnection');b.disabled=true;b.ariaBusy='true';b.textContent=t('Testing…');connectionMessage('Testing connection…');try{connectionMessage((await request('/api/settings/test',values())).message)}catch(err){connectionMessage(err.message,true)}finally{b.disabled=false;b.ariaBusy='false';b.textContent=t('Test connection')}});
 function needsPassword(){
@@ -111,7 +111,7 @@ function renderReview(){
  const target=settings=>settings.exchange==='KRAKEN'?'Kraken · '+(settings.kraken_withdraw_key||t('Not configured')):'Bitvavo · '+(settings.withdraw_address||t('Not configured'))+' · '+(settings.withdraw_network||'BTC');
  add('Withdrawal target',target(before),target(after));
  for(const [key,label] of [['buy_amount','BTC per purchase'],['deposit_day','Deposit day'],['deposit_time','Deposit time'],['expected_monthly_deposit','Expected monthly deposit'],['startup_delay_seconds','Startup delay'],['check_interval_seconds','Account check interval'],['order_status_check_seconds','Open order check interval'],['withdraw_threshold','Automatic withdrawal threshold']]){
-  const format=(settings)=>key==='buy_amount'?(Number(settings[key])===0?'Exchange minimum':number(settings[key])+' BTC'):['withdraw_threshold','expected_monthly_deposit'].includes(key)?(settings[key]===''?t('Not configured'):number(settings[key])+' '+settings.quote):number(settings[key])+(key.endsWith('_seconds')?t(' seconds'):'');
+  const format=(settings)=>key==='buy_amount'?(Number(settings[key])===0?'Exchange minimum':number(settings[key])+' BTC'):['withdraw_threshold','expected_monthly_deposit'].includes(key)?(settings[key]===''?t('Not configured'):number(settings[key])+' '+settings.quote):key==='check_interval_seconds'?number(settings[key]/60)+t(' minutes'):number(settings[key])+(key.endsWith('_seconds')?t(' seconds'):'');
   add(label,format(before),format(after));
  }
  add('Live trading',before.live?'Live':'Simulation',after.live?'Live':'Simulation');
