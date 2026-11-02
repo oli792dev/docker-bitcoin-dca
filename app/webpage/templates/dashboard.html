@@ -54,10 +54,10 @@
 <summary class="report-heading"><h2 id="reportHeading">Period Analysis</h2></summary>
 <p class="sub">Choose a custom date range or an interval between withdrawals to review activity and prepare a Parqet export.</p>
 <div class="controls">
-<div class="field"><label for="interval">Date range</label><select id="interval"></select></div>
-<div class="field"><label for="start">From</label><input id="start" type="datetime-local" step="1"></div>
-<div class="field"><label for="end">To</label><input id="end" type="datetime-local" step="1"></div>
-<button id="refresh">Load report</button>
+<div class="field"><label for="interval">Date range</label><select id="interval" class="report-control"></select></div>
+<div class="field"><label for="start">From</label><input id="start" class="report-control" type="datetime-local" step="1"></div>
+<div class="field"><label for="end">To</label><input id="end" class="report-control" type="datetime-local" step="1"></div>
+<button id="refresh" class="report-control">Load report</button>
 </div><p id="intervalFeedback" class="section-feedback hidden" role="status"></p><div id="error" class="error hidden" role="alert"></div><p id="reportFeedback" class="section-feedback hidden" role="status" aria-live="polite"></p>
 <div id="periodReport" class="period-summary-content" role="region" aria-labelledby="periodSummaryHeading"><h3 id="periodSummaryHeading" class="summary-subheading">Period Report</h3><div class="horizontal-scroll report-scroll" role="region" aria-label="Period report cards" tabindex="0"><div class="report-cards"><div class="grid period-summary-grid">
 <div class="card"><label>Deposits</label><div class="value" id="depositVolume">—</div></div>

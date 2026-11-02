@@ -31,7 +31,6 @@ button:not(:disabled):hover,.button:hover{filter:none!important;transform:none!i
 button:not(:disabled):active,.button:active{filter:none!important;transform:none!important;box-shadow:none!important}
 .top-actions button,.top-actions .logout-button{font:600 .94rem/1.35 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;min-height:44px;padding:10px 16px;border-radius:10px}
 .btc-balance-card #manualWithdraw{font-size:.82rem;padding:10px 14px;min-height:44px;border-radius:10px}
-.controls input,.controls select,.controls>button{height:48px;min-height:48px;font-size:.94rem}
 /* Disclosure headers are grouped surfaces rather than decorative banners. */
 details.panel{border-radius:16px;overflow:hidden;isolation:isolate;background-clip:padding-box;border-color:var(--line)}
 details.panel>.panel-heading,details.panel>.report-heading,details.panel:not([open])>summary{border-radius:0;box-shadow:none}
@@ -129,7 +128,6 @@ button.secondary.destructive,.button.secondary.destructive{color:var(--red)}
 .settings-tabs button:not(:disabled):active{background:var(--pressed);color:var(--text)}
 /* Inputs grow with text rather than clipping enlarged labels or values. */
 input:not([type=checkbox]):not([type=hidden]),select{height:auto;min-height:44px}
-.controls input,.controls select,.controls>button{box-sizing:border-box;height:3rem;min-height:48px;line-height:1.25;padding-block:10px}
 .settings-page .settings-tab-panel input:not([type=checkbox]),.settings-page .settings-tab-panel select{height:auto;min-height:44px}
 @media(pointer:coarse){
  input:not([type=checkbox]):not([type=hidden]),select,.controls input,.controls select{font-size:max(16px,1rem)}
@@ -158,3 +156,20 @@ html{scroll-padding-top:calc(88px + env(safe-area-inset-top))}
 
 /* Requested globally: keep focus behavior, but draw no focus indicators. */
 :focus,:focus-visible,:focus-within{outline:none!important;box-shadow:none!important}
+
+/* A single report-control contract outranks generic native-input sizing. */
+.report-controls .controls .report-control{
+ box-sizing:border-box;display:block;appearance:none;-webkit-appearance:none;
+ width:100%;max-width:100%;min-width:0;min-inline-size:0;
+ height:3rem;min-height:48px;max-height:3rem;
+ margin:0;padding:10px 12px;border-width:1px;border-style:solid;border-radius:10px;
+ font-family:inherit;font-size:1rem;line-height:1.25;
+}
+.report-controls .controls select.report-control{
+ padding-inline-end:36px;
+ background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+ background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;
+ background-size:5px 5px;background-repeat:no-repeat;
+}
+.report-controls .controls button.report-control{display:flex;align-items:center;justify-content:center;gap:8px}
+@media(prefers-contrast:more){.report-controls .controls .report-control{border-width:2px}}
