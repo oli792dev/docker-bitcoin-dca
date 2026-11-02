@@ -132,8 +132,8 @@ __DESIGN_CSS__
 .settings-page .setting-switch>input{margin:0;align-self:center}
 .settings-page .settings-help{margin-top:var(--space-sm);color:var(--muted);font-size:.76rem}
 .settings-page .settings-help>summary{display:flex;align-items:center;gap:var(--space-sm);min-height:44px;cursor:pointer;list-style:none}
-.settings-page .settings-help>summary::before{content:'›';font-size:1.1rem;line-height:1}
-.settings-page .settings-help[open]>summary::before{transform:rotate(90deg)}
+.settings-page .settings-help>summary::before{content:'';display:block;flex:0 0 8px;width:8px;height:8px;margin-inline:4px;border-top:1.5px solid currentColor;border-right:1.5px solid currentColor;transform:rotate(45deg);transform-origin:center;transition:transform 150ms ease}
+.settings-page .settings-help[open]>summary::before{transform:rotate(135deg)}
 .settings-page .settings-help>summary::-webkit-details-marker{display:none}
 .settings-page .settings-help p{margin:0 0 var(--space-sm)}
 .settings-page .connection-check{margin-top:var(--space-sm)}
@@ -150,3 +150,8 @@ __DESIGN_CSS__
  .settings-page .setting-pair{gap:0 var(--space-md)}
  .settings-page .setting-switch{min-height:64px;gap:var(--space-lg)}
 }
+
+.settings-page #testConnection{min-height:32px;padding:6px 10px;font-size:.76rem;line-height:1.35}
+.settings-page #credentials input::placeholder{font-size:.72rem;letter-spacing:normal}
+@media(min-width:601px){.settings-page #credentials .setting-row{grid-template-columns:minmax(0,1fr) minmax(160px,48%)}}
+@media(pointer:coarse){.settings-page #testConnection{min-height:44px}}
