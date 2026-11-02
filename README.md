@@ -1,6 +1,6 @@
 # Bitcoin DCA Bot
 
-A Docker bot that buys Bitcoin on Kraken or Bitvavo, with optional automatic and manual withdrawals. Purchases are spread across the time until your next monthly deposit. A responsive English/German dashboard provides settings, balances, scheduling, activity and Parqet CSV exports.
+A Docker bot for Bitcoin purchases on Kraken or Bitvavo, with optional automatic and manual withdrawals. It spreads purchases across the time until your next monthly deposit. The responsive dashboard supports English and German.
 
 <details>
 <summary>Dashboard preview</summary>
@@ -11,69 +11,57 @@ A Docker bot that buys Bitcoin on Kraken or Bitvavo, with optional automatic and
 
 ## Setup
 
-Requires Docker with Compose, internet access and a Kraken or Bitvavo account.
+Requires Docker Compose, internet access and an exchange account. Run one bot per exchange account.
 
-1. Download the project:
+```sh
+git clone https://github.com/oli792dev/docker-bitcoin-dca.git
+cd docker-bitcoin-dca
+cp .env.example .env
+```
 
-   ```sh
-   git clone https://github.com/oli792dev/docker-bitcoin-dca.git
-   cd docker-bitcoin-dca
-   cp .env.example .env
-   ```
+1. Set `WEB_UI_TLS_HOSTS` in `.env` to the Docker host IP or hostname you will use. Separate multiple addresses with commas.
+2. Run `docker compose up -d --build`.
+3. Open `https://<docker-host>:6890` and [trust the local certificate authority](docs/architecture.md#https-and-session-security).
+4. Create login credentials (password: at least 12 characters), then configure the exchange and bot in the setup wizard.
 
-2. In `.env`, set `WEB_UI_TLS_HOSTS` to the Docker host IP address or hostname you will use. Multiple addresses are comma-separated. The default port is `6890`.
+Grant these API permissions:
 
-3. Start the container:
-
-   ```sh
-   docker compose up -d --build
-   ```
-
-4. Open `https://<docker-host>:6890` and [trust the generated local CA](docs/architecture.md#https-and-session-security). Create login credentials with a password of at least 12 characters. The wizard then guides you through exchange access and bot settings.
-
-Create an exchange API key with these permissions:
-
-| Exchange | Read access | For live purchases | For optional withdrawals |
+| Exchange | Read access | Live purchases | Optional withdrawals |
 | --- | --- | --- | --- |
-| Kraken | Query Funds; Query Open/Closed Orders & Trades; Data → Query ledger entries | Modify Orders | Withdraw Funds; exact label of a saved Bitcoin withdrawal method |
-| Bitvavo | Read-only / View access | Trade digital assets | Withdraw digital assets; verified Bitcoin address and network |
+| Kraken | Query Funds; Query Open/Closed Orders & Trades; Query ledger entries | Modify Orders | Withdraw Funds |
+| Bitvavo | Read-only / View | Trade digital assets | Withdraw digital assets |
 
-Use Test connection to check balances and deposit-history access without placing transactions. Existing Kraken keys also need Query ledger entries. Keep credentials in the web settings; never commit credentials or `.env`.
+Use Test connection to check balances and deposit-history access. It does not prove trading or withdrawal permissions. Enter credentials only in the web settings; never commit credentials or `.env`.
 
-In Settings → Bot Configuration, choose the purchase currency, BTC amount, deposit day/time and timezone. An amount of `0` or below the exchange minimum uses that minimum; Next purchase shows the effective planned amount. New installations use Simulation; activate live trading only when ready. Settings also control withdrawals, dashboard language, display currency and appearance. Changes apply after saving.
+## Usage
 
-## How it works
+- Settings controls the exchange, purchase amount, deposit day/time, timezone and dashboard preferences. New installations use Simulation; enable live trading to place real orders. Amounts below the exchange minimum, including `0`, use that minimum.
+- Account checks normally run every five minutes. Purchases use the available fiat budget, estimated fees and time from the last purchase to the next deposit. The final purchase uses remaining funds where exchange limits allow.
+- Deposits are verified through the exchange API. Early confirmed deposits advance planning; delayed or unverified funding can pause purchases. The bot does not transfer monthly deposits itself.
+- Automatic withdrawals use all available exchange BTC, including BTC acquired outside the bot. Set a threshold and target: a saved withdrawal-method label for Kraken, or a verified address/network for Bitvavo.
+- Manual withdrawal and Parqet export are in the Settings footer. Withdrawals require live trading and send available BTC minus fees; manual withdrawals require confirmation and bypass the automatic threshold.
 
-- Account checks refresh balances, BTC prices and scheduling, normally every five minutes. Browser visits do not trigger exchange price requests.
-- The purchase interval is the time from the last purchase to the next deposit date/time divided by `(affordable purchases + 1)`. The final affordable purchase uses the remaining fiat, subject to fees and exchange minimums. Small remnants may remain.
-- A booked fiat increase triggers API verification of that deposit window; released order reservations are not deposits. Confirmed early deposits advance planning to the next month. Unverified credits pause automatic transactions; older deposit history is not imported.
-- Automatic withdrawals compare the value of all available exchange BTC against your threshold. Manual withdrawals require confirmation and use the same saved target. Both require live trading and send the available BTC less withdrawal fees.
-- Pending or unverifiable exchange transactions block further submissions until reconciled, including after restarts. Run one bot per exchange account.
+Expected monthly deposit affects only the withdrawal forecast. Browser refresh and exchange account checks have separate settings.
 
-Expected monthly deposit in Settings → Bot Configuration affects only the withdrawal forecast; it does not transfer money or change actual purchases. Forecasts assume unchanged prices, fees and future deposits.
+## Parqet export
 
-## Reports and Parqet
-
-The dashboard shows balances and upcoming purchases/withdrawals. Current analysis value and profit/loss refresh with the saved account price. Analysis summarizes purchases, deposits, withdrawals, fees and current purchase value. MTD, YTD, 30d, 90d and 1y load automatically. Custom restores your custom period; its edit button opens date controls and confirmed withdrawal intervals. Activities include purchases, confirmed fiat deposits, withdrawals and fees. From initially uses the volume-saved first container start; subsequent changes are also volume-saved. To resets to now. Existing volumes establish this timestamp on their first start with this feature.
-
-Manual withdrawal and Parqet export are available on the left of the Settings footer. Export opens a selector for confirmed withdrawal cycles.
-
-The Parqet CSV exports one consolidated Buy row for the complete cycle ending at the selected confirmed withdrawal, since its predecessor or the first recorded purchase. It uses actual purchase costs and trading fees in EUR and net withdrawn BTC after network fees. Deposits, later purchases and Simulation activity are excluded. A real purchase and confirmed withdrawal are required. Re-importing an export can create duplicates.
+Choose a confirmed withdrawal interval in the export dialog. The CSV consolidates its complete cycle into one Buy row: purchases since the previous confirmed withdrawal, EUR costs including trading fees, and net withdrawn BTC. Deposits, later purchases and Simulation are excluded. Review before importing; repeated imports can create duplicates.
 
 ## Data and updates
 
-All settings, credentials, activity and state persist in `bitcoin-dca-webui-data`. Reuse and back up this volume. Changing the active API key starts a separate scheduling/account boundary and requires a new exchange check; history is retained. Rotating only the API secret preserves that boundary. Passwords are hashed; API secrets are stored in its private configuration file, so protect volume access and backups.
+Reuse and back up `bitcoin-dca-webui-data`; it contains settings, credentials, history and scheduling state. Passwords are hashed; API secrets remain readable to anyone with volume access.
 
-After updating the source, run `docker compose up -d --build`. Do not run `docker compose down -v`: it deletes the data volume.
+To update a source-based installation:
 
-See [Architecture and operation](docs/architecture.md) for HTTPS, storage, backups, logs and health checks, and the [Changelog](docs/CHANGELOG.md) for changes.
+```sh
+git pull
+docker compose up -d --build
+```
 
-## Limitations
+Never run `docker compose down -v`: it deletes the data volume. See [Architecture and operation](docs/architecture.md) for storage, security, logs and development checks.
 
-- Bitcoin spot purchases only. Prices, fees and fills may differ from estimates; small fiat remnants can remain.
-- Forecasts depend on assumed prices and deposits. API outages or unresolved transactions can delay execution.
-- Activity is not a complete exchange account statement. CSV exports consolidate withdrawal cycles; review them before importing.
+## Limitations and disclaimer
 
-## Disclaimer
+Bitcoin spot purchases only. Execution prices, fees and timing can differ from estimates; small fiat remnants may remain. API outages and unresolved transactions can delay operation. Forecasts are assumptions, and activity is not a complete exchange statement.
 
-Provided “as is” without warranty or investment, tax or legal advice. You are responsible for configuration, credentials, monitoring, transactions and exports. To the extent permitted by law, the maintainer accepts no liability for financial losses, fees, outages, withdrawal errors or data loss.
+Provided “as is”, without warranty or investment, tax or legal advice. You are responsible for configuration, credentials, transactions, backups and exports. To the extent permitted by law, the maintainer accepts no liability for losses or service failures.

@@ -1,51 +1,72 @@
 # Architecture and operation
 
-[Back to README](../README.md)
+[Setup and usage](../README.md)
 
-One container runs the dashboard and a worker in one Python process. The worker serializes account checks, orders and manual withdrawals. Configuration changes use the same account lock. Before first-run configuration is complete, the worker remains healthy but performs no exchange actions.
+## Components
 
-~~~mermaid
-flowchart LR
-    Browser <--> Web["Dashboard and reports"]
-    Web <-->|Action queue| Worker["Account worker"]
-    Worker <--> Adapter["Kraken or Bitvavo adapter"]
-    Adapter <--> Exchange["Exchange API"]
-    Worker <--> Data["bitcoin-dca-webui-data → /webui-data"]
-    Web <--> Data
-    Web --> Sources["Frankfurter historical FX for USD exports"]
-~~~
+One Python process runs an HTTPS dashboard and a single account worker. The worker serializes exchange checks, purchases and withdrawals; settings changes use the same account lock. Web actions enter a bounded queue. Reports read saved data; browser refreshes do not request exchange prices.
 
-The application is a Python package organized by responsibility:
+| Directory | Responsibility |
+| --- | --- |
+| `app/trading/` | Worker, runtime, funding/scheduling, order and withdrawal reconciliation |
+| `app/exchanges/` | Kraken/Bitvavo adapters, transport and scoped read caches |
+| `app/data/` | Persistent storage, activity ledger, analytics and Parqet CSV |
+| `app/webpage/` | HTTPS, reporting orchestration, HTML/CSS/JavaScript and translations |
+| `app/core/` | Configuration, planning rules, security, logging and health checks |
 
-~~~text
-app/
-├── __main__.py   # python -m app
-├── webpage/      # HTTPS handlers, reports.py orchestration; templates/ and static/
-├── trading/      # Bot/worker/runtime, orders.py reconciliation, funding and withdrawals
-├── exchanges/    # Kraken/Bitvavo adapters and transport helpers
-├── data/         # Volume storage, activity ledger, analytics and CSV exports
-└── core/         # Configuration, access security, logging, shutdown and health checks
-~~~
+Docker starts `python -m app`. CI tests the code and publishes the container image to GHCR.
 
-Tests live in `tests/`. Docker copies the package to `/app/app` and starts it with `python -u -m app`. Its healthcheck runs `python -m app.core.healthcheck`; package imports use one shared set of worker locks and runtime modules.
+## Storage and account boundaries
 
-- `Dockerfile` builds the image; `docker-compose.yml` configures runtime, port and storage.
+The named volume `bitcoin-dca-webui-data` mounts at `/webui-data`:
 
-**One persistent volume:** `bitcoin-dca-webui-data`, mounted at `/webui-data`, holds private `installation.json` (immutable first-start timestamp), `config.json`, `state.json` (pending transactions and schedule), `activity.sqlite3`, FX cache, `dashboard.json`, the worker heartbeat and TLS certificates/keys. No host state directory is used during normal operation. Stop the bot for a consistent backup, or use a SQLite-aware backup. Legacy JSON activity is imported once; downgrading to a JSON-only release loses access to newer SQLite activity.
+- `config.json`: settings, API credentials and hashed login password.
+- `state.json`: schedule, funding checkpoints and pending transactions.
+- `activity.sqlite3`: activity and historical FX cache.
+- Other files: dashboard snapshot, reporting preferences, first-start timestamp, heartbeat and `tls/` certificates/keys.
 
-Back up the named volume. After updating the source, run `docker compose up -d --build`. **Do not run `docker compose down -v`: it deletes the volume.**
+JSON writes use private temporary files, atomic replacement and filesystem synchronization. SQLite writes are transactional. Stop the container for a consistent full-volume backup, or use a SQLite-aware backup. Restore the complete volume; missing transaction identifiers cannot always be reconstructed.
 
-View recent logs with `docker compose logs --tail=200`. INFO logs show schedule inputs, next purchase times, orders, withdrawals and errors. Review logs before sharing: they can contain balances and transaction identifiers.
+Exchange, currency and active API-key fingerprints separate scheduling/account state and export cycles. Changing the active key is treated as a new account, even for a key rotation; historical activity remains. Secret-only rotation preserves the binding. Unresolved transactions block account changes.
 
-Docker checks health every five minutes; the saved heartbeat must be running and less than 15 minutes old. A supervisor exits the process if the worker stops or stalls for ten minutes, allowing `restart: unless-stopped` to restart it. Docker’s unhealthy status alone does not restart a container. Health monitors worker responsiveness, not exchange availability or trading success.
+## Execution and recovery
 
-The [publish workflow](../.github/workflows/publish.yml) builds GHCR images on main pushes, version tags and manual runs; it runs Python/JavaScript regressions, static checks and isolated Chromium/WebKit layout tests before publishing. Credentials belong on the Docker host and are not included in the image.
+- After startup delay, verify open orders and BTC withdrawals before new transactions. Saved pending requests are reconciled; uncertain non-idempotent submissions are not blindly repeated.
+- Purchase interval = UTC time from the last purchase to the active deposit deadline ÷ `(affordable purchases + 1)`, minimum 60 seconds. Fees and exchange limits apply; the final purchase can use the remaining budget.
+- Deposit dates use the configured timezone and local time. Short months use their last day; daylight-saving gaps move forward and repeated times use the first occurrence.
+- Booked fiat increases trigger bounded API verification. Released order holds are not deposits. Confirmed early deposits advance the deadline; overdue deposits remain pending. Sale proceeds require matching account-history evidence. Unknown credits or incomplete history keep automatic transactions paused; a timeout never confirms funding.
+- Forecasts use saved balances/prices and assumed monthly deposits. Dashboard polling revalues reports without changing exchange-check deadlines or trading.
+- Interrupted settings writes pause trading until durable configuration is verified. SIGTERM/SIGINT stop new work and allow up to 45 seconds for the active worker operation; Compose allows 60 seconds before termination.
+
+## HTTPS and session security
+
+Only deployment parameters use `.env`: `WEB_UI_PORT` (default `6890`), `WEB_UI_TLS_HOSTS` and `LOG_LEVEL` (default `INFO`). All application settings come from the web configuration.
+
+HTTPS uses a volume-persisted local certificate authority. Set `WEB_UI_TLS_HOSTS` to every server IP/hostname used, then copy its public certificate:
+
+```sh
+docker cp bitcoin-dca:/webui-data/tls/ca.pem ./bitcoin-dca-ca.pem
+```
+
+Trust this certificate authority on each client device. Never distribute private keys. Changing hosts renews the server certificate; keeping the volume preserves the CA. A new volume requires trusting its new CA.
+
+Sessions last 30 minutes and use `Secure`, `HttpOnly` and `SameSite=Strict` cookies. Login/password-confirmation attempts are limited. Sensitive settings require the current password; changing login credentials invalidates sessions. API secrets are stored unencrypted with owner-only permissions: protect the Docker host, volume and backups. The container runs as root.
+
+## Monitoring
+
+```sh
+docker compose logs --tail=200
+```
+
+INFO records scheduling, transactions and explicit UI actions; WARNING covers recoverable failures; ERROR covers unexpected or uncertain outcomes; DEBUG adds request details and repeated waiting states. Logs can contain balances and transaction IDs.
+
+Heartbeat and Docker health checks run every five minutes. A supervisor exits after a ten-minute worker stall so Docker can restart it. Health measures worker responsiveness, not successful trading; Docker’s unhealthy status alone does not restart the container.
 
 ## Development checks
 
-From the repository root (Python 3.12+, Node 22+):
+Python 3.12+ and Node 22+:
 
-~~~sh
+```sh
 python -m pip install requests==2.34.2 -r requirements-dev.txt
 ruff check app
 ruff format --check app
@@ -56,133 +77,6 @@ node tests/test_settings.cjs
 npm ci
 npx playwright install --with-deps chromium webkit
 npm run test:browser
-~~~
+```
 
-Browser tests assemble the production dashboard, Settings and login pages with disposable configuration and intercepted `https://dca.test` responses. No live exchange or user browser profile is used. Chromium and WebKit cover desktop/mobile overflow, 44-pixel button baselines, wrapped labels, tabs, contained fields, scrolling, dialog scroll restoration and login submission. CI runs these before image publishing. Playwright and browser binaries are development-only; Docker copies only `app/`.
-
-Strict typing covers planning, forecasts, funding observations, credential identity, security/storage boundaries, order reconciliation and reporting orchestration. JSON/exchange payloads remain dynamic at their input boundaries. Regression tests retain financial uncertainty and restart cases; their count is not a target for reduction.
-
-## Log levels
-
-- **DEBUG:** routine HTTP access, unchanged waiting states, below-threshold checks, request timings and diagnostic stack traces.
-- **INFO:** startup and purchase planning, trades and successful submissions, withdrawal status changes, explicit UI actions and CSV exports. Expected validation rejections are INFO.
-- **WARNING:** transient exchange/network failures, rejected orders and failed withdrawals. Recoverable network failures do not print stack traces at this level.
-- **ERROR:** unexpected internal failures, uncertain financial outcomes requiring intervention, or a submitted withdrawal without a unique history match for at least one hour. Legacy unverified history remains DEBUG.
-- **CRITICAL:** stopped or stalled account worker; the process exits for Docker restart.
-
-Repeated waiting observations are DEBUG after their first state-change message. Purchase schedule and restart-alignment messages remain INFO. Kraken read retries remain WARNING and successful recovery remains INFO. Do not interpret a UI confirmation or accepted queue request as a completed exchange transaction.
-
-## Configuration
-
-`/webui-data/config.json` in the named `bitcoin-dca-webui-data` volume is written atomically with owner-only permissions. It contains the account name, a salted scrypt password hash and application settings, including API secrets. Protect this file and backups as credentials. The browser receives only masked credential-presence flags; leaving API fields empty keeps their values. Changing account credentials invalidates dashboard sessions. Restarting the container also invalidates sessions and withdrawal previews.
-
-A fresh installation opens account creation, then authenticated configuration. The first successful account creation closes anonymous registration. An incomplete setup cannot access account actions or reports. New settings default to Simulation. The connection test reads balances and deposit history; it does not prove trading or withdrawal permission.
-
-The web UI always runs. All bot settings, exchange credentials and dashboard login credentials come exclusively from the saved web configuration. Without it, first-run setup is required and exchange actions remain paused; environment variables cannot skip setup or override saved trading settings. Only `WEB_UI_PORT`, `WEB_UI_TLS_HOSTS` and `LOG_LEVEL` remain Docker deployment parameters. Display currency is saved with the application settings.
-
-Runtime edits and financial actions are serialized. Changes to exchange, currency, credentials or live mode are rejected while persistent transactions or queued actions are unresolved. Exchange/currency, active API-key and Simulation/live switches archive resolved scheduling state and repeat exchange checks. A SHA-256 fingerprint of exchange, purchase currency and active API key binds account checkpoints and new activity; the secret is not included. Secret-only rotation preserves the binding. A new key is conservatively treated as a new account even when it is a rotation for the same real account: its first purchase follows startup checks without reusing the previous key’s schedule. Historical records remain available, while last-purchase lookup and export cycles respect the account binding. Untagged history is associated with the first binding once; pending checkpoints are preserved. Unresolved transactions still prevent switching. Settings affecting scheduling request a fresh check; toggling presentation/export features does not change the existing account-check deadline. Manual withdrawal previews and submissions do not recalculate purchase intervals.
-
-Automatic withdrawals, manual withdrawals and Parqet export have separate settings. Manual withdrawals and exports are blocked at their API endpoints when disabled. Automatic withdrawal disabling does not stop reconciliation of an already submitted withdrawal. Notes follow the enabled features.
-
-Setup and Settings log account creation, configuration completion, changed field names, session invalidation, read-only connection tests and explicit dialog cancellations at INFO. Expected validation or pending-transaction rejections are INFO; exchange/network failures are WARNING and unexpected failures are ERROR. Stored configuration reads and sanitized failure locations are DEBUG. Passwords, API credential values, session/confirmation tokens and raw settings exception messages are never included in these logs.
-
-## Settings and activity UI
-
-The first setup step creates login credentials; the second configures the bot without repeating them. Settings later opens in a dashboard dialog with Bot Configuration, Exchange and Dashboard tabs. Login credentials are grouped under Dashboard; API credentials and withdrawal targets are under Exchange; all changes share one review/save action. Connection-test results appear beside the button. Cosmetic settings do not reschedule purchases.
-
-Settings keeps the tab bar and review/save footer outside its vertically scrolling content region. Tab changes reset that region; invalid fields reveal their tab before focus moves to them. Flat form rows retain 44 CSS-pixel button baselines (wrapped labels can grow), separate switch labels/descriptions and keyboard navigation inside scroll regions. Short displays hide the redundant brand header to preserve content space. Settings fields reflow into a single column on mobile, with no horizontal field scrolling. Mobile tabs stay on one horizontally scrollable line while the content scrolls vertically and the save footer stays fixed.
-
-The existing schedule response supplies a sanitized worker status and the matching account snapshot timestamp; it makes no extra exchange requests. The UI retains values on failures. A single labeled bot status sits beside Settings; the exchange-check timestamp appears beneath Current BTC price. Forecast explanations are reporting-only and show an approximate count based on the ordinary purchase quantity; actual final purchases, prices and fees can change the result.
-
-Settings compares current fields with the loaded draft. Its parent frame receives only a dirty boolean, never credentials. Closing or pressing Escape requests an in-page discard confirmation when needed, and successful saves clear the guard. Browser navigation uses the browser’s standard unsaved-changes protection. Automatic-withdrawal thresholds are disabled while automatic withdrawals are off; their saved values are retained. Withdrawal configuration remains editable in simulation mode without enabling transactions.
-
-The labeled bot status uses a green/amber/red indicator alongside its text: active operation, waiting/simulation, or failure. Status colors are assigned by a stable API enum, independently of the selected language; failed UI connections turn the indicator red.
-
-Only executed live fills are stored as buys; these display Confirmed. Simulations remain Simulated. Withdrawals display Confirmed only after exchange-history reconciliation, with pending, failed, cancelled and legacy-unverified outcomes kept distinct. This is exchange confirmation, not independent blockchain verification.
-
-## Startup exchange checks
-
-After setup, restart, or exchange/credential/trading-mode changes, the worker reads open account orders and BTC withdrawal status before allowing new transactions. Open or unverifiable outcomes keep purchases and withdrawals paused; checks retry at the account-check interval. HTTP polling and manual withdrawal clicks do not trigger these checks. The configured startup delay still applies.
-
-Missing scheduling state is initialized without resetting saved configuration or activity. Recorded purchases anchor the rebuilt schedule; existing pending requests retain their normal reconciliation. Lost request identifiers and unrecorded executions cannot be reconstructed from this check; restore a consistent volume backup when historical data is missing. No host migration or manual recovery menu is used. Withdrawal history is paginated with a bounded request count. Missing or repeated Kraken cursors, saturated Bitvavo timestamp windows and exhausted page limits keep the startup gate closed.
-
-## HTTPS and session security
-
-The bot serves HTTPS directly on the configured port, using TLS 1.2 or newer. Set `WEB_UI_TLS_HOSTS` in Compose or `.env` to the address you use (comma-separated hostnames/IPs). The template leaves this variable empty. `localhost` and loopback IPs are always included; fill in the variable before accessing the bot through another IP or hostname. There is no plain-HTTP listener; update saved URLs to `https://`.
-
-On first start, OpenSSL creates a private local CA and a 365-day server certificate in `/webui-data/tls`. Keys have owner-only permissions; protect this directory and volume backups. The server checks renewal daily and on startup. Host changes renew only the server certificate; keeping the volume preserves the trusted CA when relocating.
-
-Copy the public CA certificate from your Docker host:
-
-~~~sh
-docker cp bitcoin-dca:/webui-data/tls/ca.pem ./bitcoin-dca-ca.pem
-~~~
-
-Import it as a trusted certificate authority on each device. On macOS use [Keychain Access certificate trust settings](https://support.apple.com/guide/keychain-access/change-the-trust-settings-of-a-certificate-kyca11871/mac). Import only `ca.pem`; never distribute either private key. A new volume creates a new CA that must be trusted again.
-
-
-Session cookies use `Secure`, `HttpOnly` and `SameSite=Strict`, with a fixed 30-minute lifetime. Five failed sign-in attempts from one IP cause a pause until the 15-minute window expires; forwarded IP headers are not trusted. Sensitive settings require the current password: login credentials, exchange/API access, withdrawal destination/threshold, and enabling live trading or automatic withdrawals. Password confirmation attempts are also limited to five per 15 minutes. Cosmetic settings need no password confirmation. Limits are in memory and reset on process restart. These protections follow [OWASP session guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html).
-
-If a client reports `certificate unknown`, it rejected the certificate before an HTTP request was sent. Trust the current volume's `tls/ca.pem` on that device and ensure `WEB_UI_TLS_HOSTS` contains the server address used in the URL. The client IP in the log is not the server address. The first certificate rejection is WARNING; repetitions, disconnects and handshake timeouts are DEBUG. Unexpected internal request failures retain their traceback.
-
-The expected monthly deposit used by the withdrawal forecast is stored with the saved configuration in the named volume. It starts empty; browser-stored values are not imported. Updating it does not recreate the exchange adapter, advance the account-check deadline, or change actual deposits/purchases.
-
-## Resource and security boundaries
-
-The HTTPS server permits at most 64 concurrent connections; excess connections close immediately. Queued manual withdrawals revalidate the dashboard session immediately before execution. Cosmetic settings reuse the existing exchange connection pool. Unexpected worker errors return a generic browser message; diagnostic details remain in container logs.
-
-Persistent JSON files share a durable atomic writer with private temporary files and owner-only permissions. Existing scheduling state and the SQLite ledger are restricted to the owner; the process uses a private file-creation mask. API secrets remain plaintext in the protected volume: volume access or Docker-host administration still grants access to them. The container currently runs as root; changing this requires an explicit ownership plan for existing volumes.
-
-Tests are grouped by behavior rather than individual historical bug reports. Financial uncertainty, duplicate prevention, credential access, session expiry, storage failure and schedule boundaries retain regression coverage. Exchange responses are mocked; these tests do not place real orders or prove live exchange permissions. Local TLS handshakes use in-memory sockets.
-
-Kraken funding calls currently use its supported legacy endpoints. Track the [official funding API notice](https://docs.kraken.com/api-reference/funding/get-status-of-recent-withdrawals) before a future adapter migration; changing financial endpoints requires separate compatibility validation.
-
-## Shared UI design
-
-`app/webpage/static/design-system.css` and the palette helpers in `app/webpage/design_system.py` supply the shared appearance for the dashboard, login, setup and settings, including embedded editors and native dialogs. The volume-saved `appearance` setting selects `light`, `dark` or `system` (default). It is rendered before first paint on the dashboard, sign-in and settings, including embedded editors. Changing it does not reschedule purchases or recreate the exchange adapter. It also adapts to increased contrast, reduced motion, reduced transparency and forced colors. The typography uses the platform system font and relative sizing; fonts are not bundled. Controls provide at least 44 CSS-pixel targets (switches use their containing option cards), keyboard navigation and skip links. Semantic text/status colors are tested against all principal surfaces at a minimum 4.5:1 contrast; primary button text also passes 4.5:1.
-
-The web design follows the principles of Apple's [Color](https://developer.apple.com/design/human-interface-guidelines/color), [Typography](https://developer.apple.com/design/human-interface-guidelines/typography), [Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility) and [Layout](https://developer.apple.com/design/human-interface-guidelines/layout) guidance. Web zoom and browser text preferences remain available; native-only features are not simulated. Grouped panels, existing mobile overflow, saved views and financial confirmation behavior are retained.
-
-The volume-saved `language` setting selects English (`en`, default) or German (`de`). `app/webpage/i18n.py` and `locales/de.json` share translations with the browser. Static HTML, accessibility labels, dynamic feedback and dialogs are localized; dates and numbers use the selected locale. API field names, exchange identifiers, user-entered names, monetary calculations and Parqet CSV format remain unchanged. Technical logs remain English. Saving a language change does not reschedule purchases or reconnect the exchange.
-
-Focus outlines, focus shadows and focus-specific border colors are disabled across all pages at the user’s request. Keyboard focus, native dialog containment, Escape handling and skip links remain functional.
-
-Field titles use a consistent bold foreground color; explanatory text stays smaller and muted. Time inputs are constrained to their grid column for mobile WebKit, and vertical Settings scrollbars share the dashboard palette. Dismissible messages keep a 12-pixel gap above and between their text and close button.
-
-
-Dashboard, login and settings HTML live in `app/webpage/templates/`; their CSS and JavaScript, including shared styles and scroll behavior, live in `app/webpage/static/`. A cached standard-library loader assembles these local assets into the existing responses. No frontend build tools, CDN or additional requests are required.
-
-## Funding boundaries and final purchases
-
-`deposit_day` and the volume-saved `deposit_time` (`HH:MM`, default `00:00`) define monthly deposit boundaries in the configured timezone. Both purchase intervals and withdrawal forecasts use those instants. Short months clamp to the last calendar day. For daylight-saving transitions, nonexistent times move forward by the gap; repeated times use the first occurrence. Every later month rebuilds the original configured wall time, and duration arithmetic uses UTC. Changing the time refreshes scheduling without recreating the exchange adapter.
-
-Planning cost is the estimated order value plus trading fees, without the former 0.5% buffer. The interval is the UTC duration from the last execution to the active deposit deadline divided by `(affordable purchases + 1)`, with the existing minimum interval. The final planned buy therefore precedes the deadline.
-
-Live state retains the active budget deadline across month changes and restarts. Insufficient balances publish `Waiting for deposit`; executable residual fiat remains due. Confirmed deposits on the expected local date count before the configured clock, advancing the persisted deadline to the next month, including when the bot was offline. Pending orders still block new submissions; exchange constraints and execution changes can leave small remnants.
-
-`app/trading/deposits.py` synchronizes fiat deposits at account checks. Kraken uses booked `Ledgers` entries (`type=deposit`, Data → Query ledger entries); Bitvavo uses `/depositHistory` with `status=completed` (Read-only). The initial observation establishes a baseline. Detection compares booked fiat, not available fiat: releasing a trade reservation therefore does not create a pending deposit. Kraken reads booked balance separately from trade holds/credit; Bitvavo adds available and in-order balances from the same scoped response.
-
-A booked increase of at least one cent queries only the window since the prior check. Confirmed deposits are inserted idempotently before checkpoints advance. A missing/delayed API entry preserves the original window across checks/restarts and pauses new automatic transactions; elapsed time alone never releases the gate. Kraken can also classify sale proceeds when a complete ledger chain reconciles the original and current booked balances without positive non-trade credits. Unknown credits remain paused. Bitvavo verifies sale proceeds against fully paginated, date-bounded `/account/history` entries and the booked-balance difference. Neither adapter releases a pause for an unknown credit or a mismatched balance. For an older pending checkpoint without a booked baseline, Kraken can reconstruct an anchor from the preceding day’s ledger; without that evidence (or on Bitvavo), verification remains paused rather than guessing. These reads never import older transactions as activity. No balance delta or timeout fabricates a deposit. Both history adapters reject incomplete pagination; older history is not imported.
-
-Deposits retain exchange timestamps, amounts and fees as cash activity, without BTC quantity or BTC price. Kraken ledger IDs are stable; Bitvavo fiat entries use a hash of immutable transaction fields plus an occurrence index for identical entries. Bank account details are not stored. Inserts precede the durable checkpoint and are idempotent. Deposits appear in report pagination and their own currency-aware Period Report total, but remain excluded from BTC aggregates and the unchanged Parqet cycle query/calculation.
-
-BTC prices are collected with balances, including the purchase-currency quote from the selected exchange and the other display currency from Kraken ticker data. The snapshot stores both prices and the account-check timestamp. Browser report loads and status polling only read this snapshot and never request external market data. A failed conversion quote does not block purchases using the valid purchase-currency price; unavailable display conversions fall back to the purchase currency. Analysis revalues its cached report and visible rows on new saved prices without changing its period or activity page. Next purchase shows the effective amount after exchange minimums, rounding and a possible final-budget purchase. Parqet historical conversion remains unchanged.
-
-
-## Failure boundaries and shutdown
-
-Settings writes activate a transaction gate before touching persistent files. An interrupted save pauses both purchases and manual withdrawals. The worker reloads and durably verifies `config.json`, discards withdrawal previews, invalidates sessions and repeats the automatic exchange check before trading resumes. A storage failure keeps the gate closed; no manual recovery setting or host/environment import is involved.
-
-Due account checks run before queued manual actions. Manual previews and confirmations leave the existing check deadline unchanged. SIGTERM/SIGINT stop new requests, finish the active worker operation for up to 45 seconds and cancel queued actions. Connections close after the worker finishes; a timed-out operation retains its saved pending request for reconciliation after restart. Compose allows a 60-second stop grace period.
-
-SQLite schema initialization is versioned with `PRAGMA user_version`; normal reads skip table/index initialization. Unsupported newer versions are rejected without modifying activity. Existing ledger data and atomic transaction writes are preserved.
-
-The Period Analysis From default is the immutable UTC first-start instant in `installation.json`, loaded into the local date/time control with second precision. It survives account/schedule resets and container restarts; To is regenerated on page load. Changes to From are stored separately in `report-preferences.json` and loaded on future visits across browsers and restarts; page size remains browser-saved. The authenticated update endpoint writes only reporting preferences and does not refresh the account worker or change trading. Existing volumes establish this value at their first startup with the feature. Appearance selection is a draft: the saved theme remains active throughout Settings and its surrounding dialog until a successful save reloads the dashboard.
-
-The dashboard separates exchange balances, upcoming purchases/withdrawals, analysis and paginated activities. More period totals, Period activities and Calculations and details start collapsed on every page load or history-cache return; their open state is not stored. Their headings keep a neutral color when pressed and suppress the native mobile tap highlight.
-
-The expected monthly deposit is edited in Bot Configuration and stored in the existing volume-backed settings. The Settings footer invokes manual withdrawal and CSV export through a same-origin, source-checked parent-frame bridge. Actions use the saved configuration, not unsaved form values; export opens its own confirmed-withdrawal cycle selector, initially matching the dashboard period where possible. Existing API authorization, withdrawal preview/confirmation, job queue and Parqet cycle boundaries remain unchanged.
-
-`app/trading/orders.py` owns pending-order reconciliation; the engine supplies explicit persistence/recording effects. `app/webpage/reports.py` validates periods and orchestrates analysis/export independently of HTTP authentication and response handling. These boundaries preserve conservative transaction and CSV behavior without a new framework. Shared CSS rules are consolidated within equivalent conditions; responsive cascade order is retained.
-
-Dashboard settings include a volume-saved refresh interval (5–3600 seconds, default 30). It controls browser polling of saved bot data and the forecast; exchange checks retain their independent account-check interval. Requests are scheduled after the preceding response completes to avoid overlapping automatic polls.
+Tests use synthetic exchange data; Chromium/WebKit cover desktop/mobile layout and interactions. No real transactions are submitted. Browser tools are development-only and are excluded from the runtime image.
