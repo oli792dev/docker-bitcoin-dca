@@ -54,7 +54,7 @@ Expected monthly deposit in Settings → Bot Configuration affects only the with
 
 ## Reports and Parqet
 
-The dashboard shows balances and upcoming purchases/withdrawals. Analysis summarizes purchases, deposits, withdrawals, fees and current purchase value. Activities include purchases, confirmed fiat deposits, withdrawals and fees. From initially uses the volume-saved first container start; subsequent changes are also volume-saved. To resets to now. Existing volumes establish this timestamp on their first start with this feature.
+The dashboard shows balances and upcoming purchases/withdrawals. Analysis summarizes purchases, deposits, withdrawals, fees and current purchase value. Month and Year load automatically; Custom date range opens date controls and confirmed withdrawal intervals. Activities include purchases, confirmed fiat deposits, withdrawals and fees. From initially uses the volume-saved first container start; subsequent changes are also volume-saved. To resets to now. Existing volumes establish this timestamp on their first start with this feature.
 
 Manual withdrawal and Parqet export are available on the left of the Settings footer. Actions use saved settings; export uses the selected analysis period.
 

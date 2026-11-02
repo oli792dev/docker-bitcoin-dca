@@ -280,3 +280,14 @@ __DESIGN_CSS__
 .redesigned .withdrawal-disabled>:not(.plan-title):not(#estimatedWithdrawalAt),.redesigned .withdrawal-disabled #withdrawalBadge{display:none!important}
 
 .redesigned #automaticWithdrawalCard 
+.redesigned .analysis-header{margin-bottom:12px}
+.redesigned .selected-period-label{margin:0 0 24px;color:var(--muted);font-size:.76rem}
+.redesigned .report-primary{margin:0 0 24px}
+.redesigned .report-details{padding-top:12px;border-top:1px solid var(--line)}
+.report-range-dialog{width:min(620px,calc(100vw - 32px))}
+.report-range-dialog .controls{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:20px;gap:16px}
+.report-range-dialog .controls .field:first-child{grid-column:1/-1}
+.report-range-dialog .controls input,.report-range-dialog .controls select{box-sizing:border-box;height:3rem;min-height:48px;width:100%;min-width:0;max-width:100%;font-size:1rem;border-radius:var(--corner-radius)}
+.report-range-dialog .confirmation-actions{display:flex;justify-content:flex-end;margin-top:20px;gap:12px}
+.report-range-dialog #rangeError:empty{display:none}
+@media(max-width:600px){.report-range-dialog .controls{grid-template-columns:1fr}.report-range-dialog .confirmation-actions{flex-wrap:wrap}.report-range-dialog .confirmation-actions button{flex:1}}

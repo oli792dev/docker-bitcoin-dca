@@ -151,18 +151,32 @@ async function loadIntervals(){
  for(let i=1;i<withdrawals.length;i++){const a=withdrawals[i-1],b=withdrawals[i],o=document.createElement("option");o.value=a.timestamp+","+b.timestamp;o.textContent=t(dateLabel(a.timestamp)+" → "+dateLabel(b.timestamp));select.appendChild(o)}
  select.value="";
 }
+let selectedQuickRange='customRange',rangeDraft=null;
 function selectQuickRange(selected){
+ selectedQuickRange=selected;
  for(const id of ['monthRange','yearRange','customRange'])$(id).setAttribute('aria-pressed',String(id===selected));
 }
 for(const id of ['monthRange','yearRange','customRange'])$(id).addEventListener('click',async()=>{
+ if(id==='customRange'){
+  rangeDraft={start:$('start').value,end:$('end').value,interval:$('interval').value,selected:selectedQuickRange};
+  $('rangeError').textContent='';$('rangeDialog').returnValue='';$('rangeDialog').showModal();return
+ }
  selectQuickRange(id);
- if(id==='customRange'){$('start').focus();return}
  const now=new Date(),start=new Date(now.getFullYear(),id==='yearRange'?0:now.getMonth(),1);
  $('start').value=localInput(start.getTime());$('end').value=localInput(now.getTime());$('interval').value='';
  await saveReportFrom();currentPage=1;loadAnalytics();
 });
-$("interval").addEventListener("change",()=>{selectQuickRange("customRange");applySelectedInterval();saveReportFrom();saveReportView();currentPage=1;loadAnalytics()});
-["start","end"].forEach(id=>$(id).addEventListener("change",()=>{selectQuickRange("customRange");$("interval").value="";saveReportView();if(id==="start")return saveReportFrom()}));
+$("interval").addEventListener("change",()=>{applySelectedInterval();$('rangeError').textContent=''});
+["start","end"].forEach(id=>$(id).addEventListener("change",()=>{$("interval").value="";$('rangeError').textContent=''}));
+$('cancelRange').addEventListener('click',()=>$('rangeDialog').close('cancel'));
+$('rangeDialog').addEventListener('close',()=>{
+ if($('rangeDialog').returnValue!=='apply'&&rangeDraft){$('start').value=rangeDraft.start;$('end').value=rangeDraft.end;$('interval').value=rangeDraft.interval;selectQuickRange(rangeDraft.selected)}
+ rangeDraft=null;
+});
+$('rangeForm').addEventListener('submit',event=>{
+ event.preventDefault();try{selectedPeriod()}catch(error){$('rangeError').textContent=t(error.message);return}
+ selectQuickRange('customRange');$('rangeDialog').close('apply');saveReportFrom();saveReportView();currentPage=1;loadAnalytics();
+});
 function activityStatus(row){
  if(row.type==="Deposit")return row.depositStatus==="confirmed"?{label:"Confirmed ✓",tone:"confirmed"}:{label:"—",tone:"muted"};
  if(row.simulated)return {label:"Simulation",tone:"muted"};
@@ -210,8 +224,8 @@ $("pageJump").addEventListener("submit",event=>{
  if(page!==currentPage){currentPage=page;loadAnalytics()}
 });
 async function loadAnalytics(){
- const request=++reportRequest;$("refresh").ariaBusy="true";$("periodReport").ariaBusy="true";saveReportView();sectionFeedback("reportFeedback","");
- try{showError("");const p=selectedPeriod();const response=await fetch("/api/analytics?start="+p.start+"&end="+p.end+"&page="+currentPage+"&limit="+$("pageSize").value);const d=await response.json();if(!response.ok)throw new Error(d.error||"Could not load the report.");if(request!==reportRequest)return;quote=d.quote;
+ const request=++reportRequest;$("periodReport").ariaBusy="true";saveReportView();sectionFeedback("reportFeedback","");
+ try{showError("");const p=selectedPeriod();const response=await fetch("/api/analytics?start="+p.start+"&end="+p.end+"&page="+currentPage+"&limit="+$("pageSize").value);const d=await response.json();if(!response.ok)throw new Error(d.error||"Could not load the report.");if(request!==reportRequest)return;quote=d.quote;$('selectedPeriodLabel').textContent=dateLabel(p.start)+' – '+dateLabel(p.end);
  displayCurrency=["EUR","USD"].includes(d.configuration.displayCurrency)?d.configuration.displayCurrency:(["EUR","USD"].includes(quote)?quote:"EUR");
  document.title="Bitcoin DCA Dashboard";
  let livePrice=Number((d.snapshot||{}).price||0),currencyRates={[quote]:1};
@@ -261,9 +275,8 @@ async function loadAnalytics(){
  $("withdrawFees").textContent=t(moneyAvailable?money(converted.withdrawalFees,displayCurrency):"—");$("netBtc").textContent=t(btc(d.summary.netBtc));
  activityRates=currencyRates;activityRows=d.activities;activityTotal=d.pagination.total;activityPages=d.pagination.pages;currentPage=d.pagination.page;renderActivities();
  }catch(e){if(request===reportRequest)showError(e.message)}
- finally{if(request===reportRequest){$("refresh").ariaBusy="false";$("periodReport").ariaBusy="false";sectionFeedback("reportFeedback","")}}
+ finally{if(request===reportRequest){$("periodReport").ariaBusy="false";sectionFeedback("reportFeedback","")}}
 }
-$("refresh").addEventListener("click",()=>{currentPage=1;loadAnalytics()});
 async function downloadParqetCsv(){
  logUiEvent("export_clicked");
  actionFeedback("export",t("Generating CSV…"),false,true);
