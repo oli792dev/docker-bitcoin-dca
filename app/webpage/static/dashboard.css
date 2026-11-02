@@ -229,7 +229,7 @@ __DESIGN_CSS__
 .redesigned .activity-panel .activity-heading{margin-bottom:var(--space-md)}
 .redesigned .tablewrap{border:0;border-radius:0;background:transparent;padding:0}
 .redesigned .pagination{flex-wrap:wrap}
-.redesigned .dashboard-footnotes{font-size:.76rem;border-top:1px solid var(--line);margin-top:var(--space-xl);padding-top:var(--space-sm)}
+.redesigned .dashboard-footnotes{font-size:.76rem;border:0;margin-top:var(--space-lg);padding:0}
 .redesigned .dashboard-footnotes>summary{color:var(--muted);font-size:.82rem;min-height:44px;cursor:pointer}
 .redesigned [hidden]{display:none!important}
 @media(max-width:800px){
@@ -282,7 +282,7 @@ __DESIGN_CSS__
 .redesigned .analysis-header{margin-bottom:var(--space-md)}
 .redesigned .selected-period-label{margin:0 0 var(--space-lg);color:var(--muted);font-size:.76rem}
 .redesigned .report-primary{margin:0 0 var(--space-lg)}
-.redesigned .report-details{padding-top:var(--space-md);border-top:1px solid var(--line)}
+.redesigned .report-details{padding:0;border:0}
 .report-range-dialog{width:min(620px,calc(100vw - 32px))}
 .report-range-dialog .controls{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:var(--space-lg);gap:var(--space-lg)}
 .report-range-dialog .controls .field:first-child{grid-column:1/-1}
@@ -295,10 +295,11 @@ __DESIGN_CSS__
 .redesigned .withdrawal-disabled .plan-title{margin-bottom:0}
 .redesigned .withdrawal-disabled #estimatedWithdrawalAt{display:none!important}
 
-/* Immediate, themed help instead of the browser's delayed title tooltip. */
-.redesigned .bot-status{position:relative;min-height:44px;cursor:help}
-.redesigned .status-tooltip{position:absolute;z-index:100;top:calc(100% + 8px);right:0;width:max-content;max-width:min(360px,calc(100vw - 32px));padding:10px var(--space-md);border:1px solid var(--control-line);border-radius:var(--corner-radius);background:var(--panel);color:var(--text);box-shadow:0 6px 20px #0002;font-size:.76rem;font-weight:400;line-height:1.45;white-space:normal;opacity:0;visibility:hidden;pointer-events:none;transition:opacity 120ms ease}
-.redesigned .bot-status:focus-visible .status-tooltip,.redesigned .bot-status.tooltip-open .status-tooltip{opacity:1;visibility:visible}
-@media(hover:hover){.redesigned .bot-status:hover .status-tooltip{opacity:1;visibility:visible}}
-.redesigned .bot-status.tooltip-dismissed .status-tooltip{opacity:0;visibility:hidden}
-@media(max-width:600px){.redesigned .status-tooltip{left:0;right:auto}}
+
+/* Supplemental details stay within their section, without divider bars. */
+.redesigned .report-details>summary,.redesigned .dashboard-footnotes>summary{display:flex;align-items:center;gap:8px;list-style:none;min-height:44px;padding:8px 0;font-size:.82rem;font-weight:500;color:var(--muted);cursor:pointer}
+.redesigned .report-details>summary::-webkit-details-marker,.redesigned .dashboard-footnotes>summary::-webkit-details-marker{display:none}
+.redesigned .report-details>summary::before,.redesigned .dashboard-footnotes>summary::before{content:'›';font-size:1.1rem;line-height:1;transition:transform 150ms ease}
+.redesigned .report-details[open]>summary::before,.redesigned .dashboard-footnotes[open]>summary::before{transform:rotate(90deg)}
+.redesigned .report-details>summary:hover,.redesigned .dashboard-footnotes>summary:hover{color:var(--text)}
+.redesigned .dashboard-footnotes>ol{padding-top:8px}

@@ -34,11 +34,6 @@ function renderWithdrawalProgress(balance,price,threshold,enabled){
  $('withdrawalProgress').value=known?Math.min(100,Math.max(0,balance*price/threshold*100)):0;
  $('withdrawalProgressLabel').textContent=known?t('{value} of {threshold}').replace('{value}',money(balance*price,quote)).replace('{threshold}',money(threshold,quote)):t(enabled?'Waiting for account check':'Automatic withdrawals disabled');
 }
-$('botStatus').addEventListener('click',()=>{$('botStatus').classList.remove('tooltip-dismissed');$('botStatus').classList.toggle('tooltip-open')});
-$('botStatus').addEventListener('mouseenter',()=>$('botStatus').classList.remove('tooltip-dismissed'));
-$('botStatus').addEventListener('focus',()=>$('botStatus').classList.remove('tooltip-dismissed'));
-$('botStatus').addEventListener('blur',()=>$('botStatus').classList.remove('tooltip-open'));
-$('botStatus').addEventListener('keydown',event=>{if(event.key==='Escape'){$('botStatus').classList.remove('tooltip-open');$('botStatus').classList.add('tooltip-dismissed')}});
 function updateStatusLight(tone){
  $('botStatusLight').className='status-light status-'+(['active','waiting','error'].includes(tone)?tone:'waiting');
 }
@@ -71,12 +66,12 @@ async function refreshPurchaseSchedule(){
    $("orderSummary").textContent=t(schedule.finalPurchase&&effective>0?btc(effective):minimumMode?(effective>0?btc(effective):"—"):btc(schedule.configuredBuyAmount));
    $("orderSummaryNote").textContent=t(schedule.finalPurchase?"Final purchase · uses remaining fiat":minimumMode?"(exchange minimum)"+(effective>0?"":" · waiting for account check"):"");
   }
-  $("quoteBalanceLabel").textContent=t("Available "+schedule.quote+" balance on exchange");
+  $("quoteBalanceLabel").textContent=t("Available "+schedule.quote+" balance");
   const balanceKnown=schedule.quoteBalance!==null&&schedule.quoteBalance!==undefined&&Number.isFinite(Number(schedule.quoteBalance));
   $("quoteBalance").textContent=t(balanceKnown?money(schedule.quoteBalance,schedule.quote):"—");
   const checkedAt=Date.parse(schedule.balanceUpdatedAt);
   const exchangeChecked=t(Number.isFinite(checkedAt)?'Exchange last checked {date}':'Waiting for account check').replace('{date}',dateLabel(checkedAt,schedule.timezone||'UTC'));
-  $('exchangeCheckTooltip').textContent=exchangeChecked;
+  $('exchangeCheckedAt').textContent=exchangeChecked;
   nextPurchaseTimestamp=Number.isFinite(target)?target:null;
 
   nextPurchaseMessage=schedule.nextPurchaseStatus||"Not scheduled";
