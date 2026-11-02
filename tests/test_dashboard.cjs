@@ -49,7 +49,7 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
 (async()=>{
  vm.createContext(context);vm.runInContext(script,context);await settle();
  assert.equal(get('investedTotal').textContent,'€3,839.58');
- assert(html.includes('<details open class="activities-section period-activities"'));assert(html.includes('>Period activities</summary>'));
+ assert(html.includes('<details class="activities-section period-activities"'));assert(html.includes('>Period activities</summary>'));
  withdrawalHistoryEmpty=true;await context.window.DCA_DASHBOARD_ACTIONS.export();assert.equal(get('exportDialog').open,true);assert.equal(get('exportDialogMessage').textContent,'');assert.equal(get('confirmExport').disabled,false);await get('confirmExport').handlers.click();assert.match(get('exportDialogMessage').textContent,/No confirmed withdrawal/);get('cancelExport').handlers.click();
  withdrawalHistoryEmpty=false;await context.window.DCA_DASHBOARD_ACTIONS.export();assert.equal(get('exportInterval').children.length,2);assert(get('exportInterval').children[0].textContent.includes('First recorded purchase'));assert.equal(get('exportDialogMessage').textContent,'');const chosenExport=get('exportInterval').children[0].value;get('exportInterval').value=chosenExport;await get('confirmExport').handlers.click();const [exportStart,exportEnd]=chosenExport.split(',');assert(requests.includes('/api/export.csv?start='+exportStart+'&end='+exportEnd));assert.equal(get('exportDialog').open,false);
  const backgroundRefresh=vm.runInContext('refreshPurchaseSchedule()',context);assert.equal(get('scheduleFeedback').textContent,'','Background polling must not insert a layout-shifting status paragraph');assert(!html.includes('id="scheduleFeedback"'));await backgroundRefresh;
@@ -200,14 +200,15 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  assert(!html.includes('id="withdrawMessage"'),'Runtime availability must never be cached in calculation notes');
  assert(actionFeedbacks.some(item=>item.action==='withdraw'&&item.message===''));assert.equal(actionFeedbacks.at(-1).busy,false);
  assert.equal(requests.filter(u=>u==='/api/withdrawal/confirm').length,0,'Cancel never submits a withdrawal');
- // Main panel state is restored and saved independently from report data.
- const panel={open:true,getAttribute:()=>"configurationHeading",addEventListener(event,fn){this.toggle=fn}};
- stored.set('bitcoinDcaPanels',JSON.stringify({configurationHeading:false}));
- const savedDocument=context.document;context.document={querySelectorAll:()=>[panel]};
+ // Supplemental sections always start closed, including history-cache restoration.
+ const panels=[{open:true},{open:true},{open:true}],pageEvents={};
+ const savedDocument=context.document,savedListener=context.window.addEventListener;
+ context.document={querySelectorAll:()=>panels};context.window.addEventListener=(name,fn)=>pageEvents[name]=fn;
+ stored.set('bitcoinDcaPanels',JSON.stringify({activityHeading:true,notesHeading:true}));
  vm.runInContext(html.split('<script data-ui-view>')[1].split('</script>')[0],context);
- assert.equal(panel.open,false);panel.open=true;panel.toggle();
- assert.equal(JSON.parse(stored.get('bitcoinDcaPanels')).configurationHeading,true);
- context.document=savedDocument;
+ assert(panels.every(panel=>panel.open===false));
+ panels.forEach(panel=>panel.open=true);pageEvents.pageshow();assert(panels.every(panel=>panel.open===false));
+ context.document=savedDocument;context.window.addEventListener=savedListener;
 
  const scrollClasses=new Set(),scrollEvents={};let resizeScroll;
  const scrollArea={clientWidth:300,scrollWidth:900,scrollLeft:0,firstElementChild:{},

@@ -31,6 +31,8 @@ test('dashboard controls, analysis spacing and modal scroll restoration', async 
   await expect(page.locator('#investedTotal')).toContainText('501');
   await expect(page.locator('#botStatusLabel')).toHaveText('Fixture ready');
   await noPageOverflow(page);
+  const disclosures = page.locator('details.report-details,details.period-activities,details.dashboard-footnotes');
+  expect(await disclosures.evaluateAll(items => items.every(item => !item.open))).toBe(true);
   for (const id of ['monthRange', 'customRange', 'openSettings']) {
     expect((await rect(page.locator(`#${id}`))).height).toBeGreaterThanOrEqual(44);
   }
@@ -46,6 +48,7 @@ test('dashboard controls, analysis spacing and modal scroll restoration', async 
   await page.locator('.report-details>summary').click();
   await expect.poll(() => verticalGap('.report-details>summary', '.report-extra')).toBe(8);
   await expect.poll(() => verticalGap('.report-extra', '.period-activities>summary')).toBe(8);
+  await page.locator('.period-activities>summary').click();
   await expect.poll(() => verticalGap('.period-activities>summary', '.activity-panel')).toBe(8);
   const button = page.locator('#openSettings');
   await button.evaluate(el => { el.textContent = 'A deliberately long translated settings button label that must wrap'; el.style.width = '160px'; });
@@ -59,6 +62,15 @@ test('dashboard controls, analysis spacing and modal scroll restoration', async 
   await expect(page.locator('#rangeDialog')).not.toBeVisible();
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).position)).not.toBe('fixed');
   await expect.poll(() => page.evaluate(() => scrollY)).toBe(scrollBefore);
+  const summary = page.locator('.dashboard-footnotes>summary');
+  const normalColor = await summary.evaluate(el => getComputedStyle(el).color);
+  await summary.hover();
+  expect(await summary.evaluate(el => getComputedStyle(el).color)).toBe(normalColor);
+  expect(await summary.evaluate(el => getComputedStyle(el).webkitTapHighlightColor)).toBe('rgba(0, 0, 0, 0)');
+  await summary.click();
+  await page.reload();
+  expect(await disclosures.evaluateAll(items => items.every(item => !item.open))).toBe(true);
+
 });
 
 test('settings tabs stay single line and fields scroll within the content', async ({page}) => {
