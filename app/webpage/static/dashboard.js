@@ -34,43 +34,6 @@ function renderWithdrawalProgress(balance,price,threshold,enabled){
  $('withdrawalProgress').value=known?Math.min(100,Math.max(0,balance*price/threshold*100)):0;
  $('withdrawalProgressLabel').textContent=known?t('{value} of {threshold}').replace('{value}',money(balance*price,quote)).replace('{threshold}',money(threshold,quote)):t(enabled?'Waiting for account check':'Automatic withdrawals disabled');
 }
-function renderPurchaseChart(series,rates,price,currency,available,range=selectedPeriod()){
- const chart=$('purchaseChart');chart.replaceChildren();chart.setAttribute('hidden','');const tooltip=$('chartTooltip');tooltip.hidden=true;chart.onpointermove=null;chart.onkeydown=null;
- $('chartStart').textContent='';$('chartEnd').textContent='';
- if(!series?.length){$('chartMessage').textContent=t('No real purchases in this period.');return}
- if(!available||!(price>0)||series.some(point=>Object.keys(point.costs).some(c=>!(rates[c]>0)))){$('chartMessage').textContent=t('Conversion unavailable');return}
- let cost=0,quantity=0;
- const points=series.map(point=>{quantity+=Number(point.btc);cost+=Object.entries(point.costs).reduce((sum,[c,v])=>sum+Number(v)*rates[c],0);return {time:Number(point.timestamp),cost,value:quantity*price}});
- const start=range.start,end=range.end;
- const max=Math.max(...points.map(p=>Math.max(p.cost,p.value)),1)*1.1;
- const x=time=>60+Math.max(0,Math.min(1,(time-start)/Math.max(1,end-start)))*930;
- const y=value=>220-value/max*190;
- const svg=(tag,attrs,text)=>{const node=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [k,v] of Object.entries(attrs))node.setAttribute(k,String(v));if(text!==undefined)node.textContent=text;chart.appendChild(node);return node};
- for(let i=0;i<4;i++){const value=max*i/3;svg('path',{d:'M60 '+y(value)+' H990',stroke:'var(--line)',fill:'none'});svg('text',{x:0,y:y(value)+4,fill:'var(--muted)','font-size':11},money(value,currency))}
- for(const [key,color] of [['cost','var(--muted)'],['value','var(--accent)']]){
-  let path='M60 220';for(const point of points)path+=' H'+x(point.time)+' V'+y(point[key]);path+=' H990';
-  svg('path',{d:path,stroke:color,'stroke-width':key==='value'?3:2,fill:'none','vector-effect':'non-scaling-stroke'});
- }
- for(const point of points)svg('circle',{cx:x(point.time),cy:y(point.value),r:3,fill:'var(--accent)'});
- const guide=svg('path',{d:'',stroke:'var(--muted)','stroke-dasharray':'4 4',fill:'none'});
- const marker=svg('circle',{cx:0,cy:0,r:5,fill:'var(--accent)',stroke:'var(--panel)','stroke-width':2,visibility:'hidden'});
- let active=0;
- function showPoint(index){
-  active=Math.max(0,Math.min(points.length-1,index));const point=points[active];
-  guide.setAttribute('d','M'+x(point.time)+' 20 V220');marker.setAttribute('cx',x(point.time));marker.setAttribute('cy',y(point.value));marker.setAttribute('visibility','visible');
-  tooltip.textContent=t('As of {date}').replace('{date}',dateLabel(point.time))+' · '+t('Invested including trading fees')+': '+money(point.cost,currency)+' · '+t('Value at the current BTC price')+': '+money(point.value,currency);
-  tooltip.hidden=false;
- }
- function hidePoint(){tooltip.hidden=true;guide.setAttribute('d','');marker.setAttribute('visibility','hidden')}
- chart.onpointermove=event=>{const rect=chart.getBoundingClientRect(),position=(event.clientX-rect.left)/rect.width*1000;let nearest=0;for(let i=1;i<points.length;i++)if(Math.abs(x(points[i].time)-position)<Math.abs(x(points[nearest].time)-position))nearest=i;showPoint(nearest)};
- chart.onpointerleave=hidePoint;
- chart.onpointerdown=chart.onpointermove;
- chart.onblur=hidePoint;
- chart.onkeydown=event=>{if(['ArrowLeft','ArrowRight','Home','End','Escape'].includes(event.key)){event.preventDefault();if(event.key==='Escape'){hidePoint();return}showPoint(event.key==='Home'?0:event.key==='End'?points.length-1:active+(event.key==='ArrowRight'?1:-1))}};
- svg('title',{},t('Cumulative purchases and their value at the current BTC price'));
- chart.removeAttribute('hidden');$('chartMessage').textContent='';
- $('chartStart').textContent=new Date(start).toLocaleDateString(locale);$('chartEnd').textContent=new Date(end).toLocaleDateString(locale);
-}
 function updateStatusLight(tone){
  $('botStatusLight').className='status-light status-'+(['active','waiting','error'].includes(tone)?tone:'waiting');
 }
@@ -290,7 +253,6 @@ async function loadAnalytics(){
  }else{$("profitLoss").textContent=t("—");$("profitLoss").className="value"}
  $('investedTotal').textContent=moneyAvailable?money(converted.buyVolume+converted.tradeFees,displayCurrency):'—';
  $('periodValue').textContent=livePrice>0?money(Number(d.summary.boughtBtc)*livePrice,displayCurrency):'—';
- renderPurchaseChart(d.purchaseSeries,currencyRates,livePrice,displayCurrency,moneyAvailable,p);
  $('modeBadge').textContent=t(d.configuration.liveTrading?'Live':'Simulation');
  $('withdrawalBadge').textContent=t(d.configuration.withdrawalsEnabled?'Enabled':'Disabled');
  $("buyCount").textContent=t(d.summary.buyCount);$("buyBtc").textContent=t(btc(d.summary.boughtBtc));

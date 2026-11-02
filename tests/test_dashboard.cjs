@@ -9,7 +9,6 @@ class Element{
  setAttribute(name,value){this.attributes[name]=String(value);this[name]=value;if(name==='hidden')this.hidden=true}
  getAttribute(name){return this.attributes[name]??null}
  removeAttribute(name){delete this.attributes[name];delete this[name];if(name==='hidden')this.hidden=false}
- getBoundingClientRect(){return {left:0,width:1000}}
  appendChild(e){this.children.push(e)} append(...e){this.children.push(...e)} replaceChildren(...e){this.children=e}
  showModal(){this.open=true} close(value=''){this.returnValue=value;this.open=false;this.handlers.close?.()}
  set innerHTML(v){this.children=[]} addEventListener(event,handler){this.handlers[event]=handler}
@@ -23,7 +22,7 @@ const stored=new Map([['bitcoinDcaMonthlyDeposit','999']]);let expiryCallback;le
 let forecastAt='2027-01-10T12:00:00Z',automaticWithdrawals=true;
 const requests=[];let waitingDeposit=false,reportFails=false,scheduleFails=false,checks=0,eurOnly=false,priceUnavailable=false,invalidUsdRate=false,withdrawalUnavailable=false,configuredDisplayCurrency="EUR",withdrawalExchange="KRAKEN",withdrawalTarget="Example wallet",withdrawalNetwork="BTC";
 const response=data=>({ok:true,json:async()=>data});
-const context={document:{getElementById:get,createElement:()=>new Element(),createElementNS:()=>new Element()},localStorage:{getItem:key=>stored.get(key)??null,setItem:(key,value)=>stored.set(key,value)},Intl,Date,URL,console,alert(){throw Error('Withdrawal must not use a browser alert')},confirm:()=>false,setInterval(){},setTimeout(fn,ms){if(ms===120000){expiryCallback=fn;return 1}queueMicrotask(fn)},clearTimeout(){},window:{location:{reload(){throw Error('Unexpected reload')}}},fetch:async(url,options)=>{
+const context={document:{getElementById:get,createElement:()=>new Element()},localStorage:{getItem:key=>stored.get(key)??null,setItem:(key,value)=>stored.set(key,value)},Intl,Date,URL,console,alert(){throw Error('Withdrawal must not use a browser alert')},confirm:()=>false,setInterval(){},setTimeout(fn,ms){if(ms===120000){expiryCallback=fn;return 1}queueMicrotask(fn)},clearTimeout(){},window:{location:{reload(){throw Error('Unexpected reload')}}},fetch:async(url,options)=>{
  requests.push(url);const parsed=new URL(url,'http://example.test');
  if(parsed.pathname==='/api/schedule'&&scheduleFails)throw Error('Schedule offline');
  if(parsed.pathname==='/api/settings/report-period')return response({from:JSON.parse(options.body).from});
@@ -47,12 +46,7 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
 (async()=>{
  vm.createContext(context);vm.runInContext(script,context);await settle();
  assert.equal(get('investedTotal').textContent,'€3,839.58');
- const start=Date.parse(get('start').value),end=Date.parse(get('end').value);
- context.chartPoints=[{timestamp:start+1000,btc:'.001',costs:{EUR:'80.2'}},{timestamp:end,btc:'.001',costs:{USD:'100.25'}}];
- vm.runInContext('renderPurchaseChart(chartPoints,{EUR:1,USD:.9},84000,"EUR",true)',context);
- assert.equal(get('purchaseChart').hidden,false);assert.equal(get('purchaseChart').getAttribute('hidden'),null,'SVG visibility must remove the actual hidden attribute');assert(get('purchaseChart').children.some(node=>String(node.d).includes('H990')));get('purchaseChart').onpointermove({clientX:1000});assert.equal(get('chartTooltip').hidden,false);assert(get('chartTooltip').textContent.includes('€168.00'));get('purchaseChart').onkeydown({key:'Escape',preventDefault(){}});assert.equal(get('chartTooltip').hidden,true);
- vm.runInContext('renderPurchaseChart(chartPoints,{EUR:1},84000,"EUR",true)',context);assert.equal(get('purchaseChart').hidden,true);
- const previousForecast=get('estimatedWithdrawalAt').textContent;forecastAt='2027-02-15T09:00:00Z';await vm.runInContext('refreshPurchaseSchedule()',context);assert.notEqual(get('estimatedWithdrawalAt').textContent,previousForecast);assert.equal(vm.runInContext('estimatedWithdrawalTimestamp',context),Date.parse(forecastAt));assert(!html.includes('Bot details'));assert(!html.includes('id="thresholdNote"'));automaticWithdrawals=false;await vm.runInContext('refreshPurchaseSchedule()',context);assert.equal(get('estimatedWithdrawalAt').textContent,'Automatic withdrawals disabled');automaticWithdrawals=true;await vm.runInContext('refreshPurchaseSchedule()',context);assert.notEqual(get('estimatedWithdrawalAt').textContent,'Automatic withdrawals disabled');
+ const previousForecast=get('estimatedWithdrawalAt').textContent;forecastAt='2027-02-15T09:00:00Z';await vm.runInContext('refreshPurchaseSchedule()',context);assert.notEqual(get('estimatedWithdrawalAt').textContent,previousForecast);assert.equal(vm.runInContext('estimatedWithdrawalTimestamp',context),Date.parse(forecastAt));assert(html.indexOf('id="forecastAssumptions"')>html.indexOf('id="notesHeading"'),'Forecast assumptions belong in calculation notes');assert(!html.includes('Bot details'));assert(!html.includes('id="thresholdNote"'));automaticWithdrawals=false;await vm.runInContext('refreshPurchaseSchedule()',context);assert.equal(get('estimatedWithdrawalAt').textContent,'Automatic withdrawals disabled');automaticWithdrawals=true;await vm.runInContext('refreshPurchaseSchedule()',context);assert.notEqual(get('estimatedWithdrawalAt').textContent,'Automatic withdrawals disabled');
  assert.equal(get('depositVolume').textContent,'€200.00');assert(!html.includes('id="depositCount"'));assert(!html.includes('id="withdrawCount"'));
  assert(html.includes('class="report-primary"'));assert(html.indexOf('id="investedTotal"')<html.indexOf('id="depositVolume"'));
  assert(!html.includes('id="nextPurchaseStatus"'));waitingDeposit=true;await vm.runInContext('refreshPurchaseSchedule()',context);
@@ -232,7 +226,7 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
 // Render a German report without translating exchange codes or changing arithmetic.
 const germanElements={},germanGet=id=>germanElements[id]??=new Element();
 germanGet('pageSize').value='10';
-const germanContext=vm.createContext({DCA_I18N:{language:'de',catalog:JSON.parse(fs.readFileSync('app/webpage/locales/de.json','utf8'))},document:{getElementById:germanGet,createElement:()=>new Element(),createElementNS:()=>new Element()},localStorage:{getItem:()=>null,setItem(){}},Intl,Date,URL,console,setInterval(){},setTimeout(){},clearTimeout(){},window:{location:{reload(){}}},fetch:()=>new Promise(()=>{})});
+const germanContext=vm.createContext({DCA_I18N:{language:'de',catalog:JSON.parse(fs.readFileSync('app/webpage/locales/de.json','utf8'))},document:{getElementById:germanGet,createElement:()=>new Element()},localStorage:{getItem:()=>null,setItem(){}},Intl,Date,URL,console,setInterval(){},setTimeout(){},clearTimeout(){},window:{location:{reload(){}}},fetch:()=>new Promise(()=>{})});
 vm.runInContext(fs.readFileSync('app/webpage/static/i18n.js','utf8'),germanContext);
 vm.runInContext(script,germanContext);
 vm.runInContext(`displayCurrency='EUR';activityRows=[{datetime:'2026-10-22T12:00:00Z',type:'Buy',purchaseStatus:'confirmed',shares:'.001',price:'80000',amount:'80',fee:'.2',currency:'EUR'}];activityTotal=1;activityPages=1;renderActivities()`,germanContext);

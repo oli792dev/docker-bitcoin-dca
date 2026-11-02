@@ -430,15 +430,10 @@
   "Invested including trading fees": "Investiert inkl. Handelsgebühren",
   "Current value of period purchases": "Aktueller Wert der Periodenkäufe",
   "Current value minus purchase costs and trading fees": "Aktueller Wert abzüglich Kaufkosten und Handelsgebühren",
-  "Purchases over time": "Käufe im Zeitverlauf",
-  "Value at the current BTC price": "Wert zum aktuellen BTC-Kurs",
-  "Cumulative purchases and their value at the current BTC price": "Kumulierte Käufe und ihr Wert zum aktuellen BTC-Kurs",
-  "Current-price valuation, not historical portfolio performance. Withdrawals are not deducted.": "Bewertung zum aktuellen Kurs, keine historische Portfolioentwicklung. Auszahlungen werden nicht abgezogen.",
   "More period totals": "Weitere Zeitraumwerte",
   "Calculations and details": "Berechnungen und Details",
   "Withdrawal threshold progress": "Fortschritt zum Auszahlungsschwellenwert",
   "{value} of {threshold}": "{value} von {threshold}",
-  "No real purchases in this period.": "Keine echten Käufe in diesem Zeitraum.",
   "Destination: {target}": "Ziel: {target}",
   "Month": "Monat",
   "Year": "Jahr",
@@ -452,6 +447,5 @@
   "Expected monthly deposit ({currency})": "Erwartete monatliche Einzahlung ({currency})",
   "Actions use saved settings. CSV export uses the selected analysis period.": "Aktionen verwenden die gespeicherten Einstellungen. Der CSV-Export nutzt den ausgewählten Analysezeitraum.",
   "CSV export prepared.": "CSV-Export vorbereitet.",
-  "As of {date}": "Stand {date}",
   "Exchange last checked {date}": "Börse zuletzt geprüft: {date}"
 }

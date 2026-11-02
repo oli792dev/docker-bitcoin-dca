@@ -23,7 +23,7 @@ from app.exchanges import market_prices
 from app.exchanges.exchange_errors import UncertainWithdrawalError
 from app.webpage.favicon_assets import FAVICON_ICO, FAVICON_PNG, APPLE_TOUCH_ICON_PNG, FAVICON_MASK_SVG, FAVICON_SVG
 from app.data.analytics import report as build_report
-from app.data.activity import parqet_interval_records, withdrawal_records, read_report, read_purchase_series
+from app.data.activity import parqet_interval_records, withdrawal_records, read_report
 
 from app.data.activity import read_dashboard_snapshot
 from app.data.reporting import parqet_aggregate_rows, parqet_csv
@@ -604,7 +604,6 @@ class Handler(BaseHTTPRequestHandler):
                     snapshot['trackedBtc']=str(balance)
                     if snapshot.get('quote') not in (None,self.settings['quote']):snapshot['price']='0'
                     result=build_report(self.settings,totals,snapshot,page_records)
-                    result['purchaseSeries']=read_purchase_series(start_ms,end_ms)
                     limit=max(1,min(1000,limit))
                     result['pagination']={'page':page,'pageSize':limit,'total':total,'pages':max(1,(total+limit-1)//limit)}
                     self._json(200, result)
