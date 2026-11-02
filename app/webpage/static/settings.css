@@ -152,7 +152,6 @@ __DESIGN_CSS__
 }
 
 .settings-page #testConnection{min-height:32px;padding:6px 10px;font-size:.76rem;line-height:1.35}
-.settings-page #credentials input::placeholder{font-size:.72rem;letter-spacing:normal}
 @media(min-width:601px){.settings-page #credentials .setting-row{grid-template-columns:minmax(0,1fr) minmax(160px,48%)}}
 @media(pointer:coarse){.settings-page #testConnection{min-height:44px}}
 
