@@ -248,9 +248,6 @@ __DESIGN_CSS__
 .redesigned .pagination{flex-wrap:wrap}
 .redesigned .dashboard-footnotes{font-size:.76rem;border-top:1px solid var(--line);padding-top:16px}
 .redesigned .dashboard-footnotes>summary{color:var(--muted);font-size:.82rem;min-height:44px;cursor:pointer}
-.redesigned .settings-account-action{padding:8px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:flex-end;flex:0 0 auto}
-.redesigned .settings-account-action form{margin:0}
-.redesigned .settings-account-action button{font-size:.82rem;padding:8px 12px}
 .redesigned [hidden]{display:none!important}
 @media(max-width:800px){
  .redesigned .report-primary{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -291,3 +288,9 @@ __DESIGN_CSS__
 .redesigned .chart-tooltip{position:absolute;z-index:2;top:76px;left:72px;right:20px;max-width:440px;padding:12px 16px;border:1px solid var(--control-line);border-radius:var(--corner-radius);background:var(--panel);color:var(--text);font-size:.76rem;line-height:1.55;box-shadow:0 6px 24px #0002;pointer-events:none}
 .redesigned #purchaseChart{touch-action:pan-y}
 @media(max-width:600px){.redesigned .chart-tooltip{left:16px;right:16px;top:88px}}
+
+.redesigned .settings-dialog-header{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
+.redesigned .settings-header-actions{grid-column:3;grid-row:1;justify-self:end;display:flex;align-items:center;gap:8px}
+.redesigned .settings-header-actions form{margin:0}
+.redesigned .settings-header-actions .logout-button{width:auto;min-height:44px;padding:10px 14px;font-size:.82rem;line-height:1.35;white-space:nowrap}
+@media(max-width:480px){.redesigned .settings-dialog-header{grid-template-columns:minmax(0,1fr) auto;gap:8px}.redesigned .settings-dialog-header h2{grid-column:1;justify-self:start;text-align:left;font-size:1rem}.redesigned .settings-header-actions{grid-column:2}.redesigned .settings-header-actions .logout-button{padding:10px;font-size:.76rem}}
