@@ -385,3 +385,19 @@ __DESIGN_CSS__
 .redesigned .analysis-title{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 16px;min-width:0}
 .redesigned .analysis-title .selected-period-label{margin:0;font-size:.76rem;font-weight:400;line-height:1.5;color:var(--muted);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .redesigned .analysis-header{gap:12px 20px}
+
+/* Equal tracks and consistent insets across every dashboard metric surface. */
+.redesigned .balance-overview{grid-template-columns:repeat(3,minmax(0,1fr));column-gap:24px}
+.redesigned .report-primary{grid-template-columns:repeat(5,minmax(0,1fr));column-gap:24px}
+.redesigned .report-extra{grid-template-columns:repeat(3,minmax(0,1fr));column-gap:24px}
+.redesigned :is(.balance-overview,.report-primary,.report-extra)>.metric{min-width:0;align-self:start}
+.redesigned :is(.balance-overview,.report-primary,.report-extra) .metric-label{min-height:1.45em}
+@media(min-width:801px) and (max-width:1000px){.redesigned .report-primary{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:800px){.redesigned .report-primary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){
+ .redesigned .balance-overview{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px}
+ .redesigned .report-primary,.redesigned .report-extra{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px}
+}
+@media(max-width:360px){
+ .redesigned .balance-overview,.redesigned .report-primary,.redesigned .report-extra{grid-template-columns:minmax(0,1fr)}
+}
