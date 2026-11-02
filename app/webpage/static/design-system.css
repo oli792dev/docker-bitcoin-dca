@@ -1,3 +1,4 @@
+:root{--corner-radius:12px}
 
 /* Semantic surfaces, system typography and an 8-point spacing rhythm. */
 :root{color-scheme:light dark;--panel-padding:24px;--section-space:24px;--subsection-space:20px;--tile-gap:16px;--section-gap:24px;--field-gap:16px;--card-padding:20px;--control-gap:8px;font-size:106.25%;accent-color:var(--primary)}
@@ -9,15 +10,15 @@ h3,.summary-subheading{font-size:1rem;font-weight:600;line-height:1.4;letter-spa
 p{line-height:1.55}a{color:var(--accent);text-underline-offset:3px}
 .dashboard-page main{padding:32px max(20px,env(safe-area-inset-right)) max(48px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left))}
 .top{align-items:center;gap:24px;margin-bottom:20px}.top-actions{gap:12px}
-.panel{padding:var(--panel-padding);margin:20px 0;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:none}
+.panel{padding:var(--panel-padding);margin:20px 0;background:var(--panel);border:1px solid var(--line);border-radius:var(--corner-radius);box-shadow:none}
 .panel.activity-panel{background:var(--surface);box-shadow:none}
-.card,.option-card,.settings-card-grid>div:not(.option-card),.credential-editor{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:none}
+.card,.option-card,.settings-card-grid>div:not(.option-card),.credential-editor{background:var(--surface);border:1px solid var(--line);border-radius:var(--corner-radius);padding:20px;box-shadow:none}
 .card label,.field label,label{color:var(--muted);font-size:.82rem;font-weight:500;line-height:1.45}
 .card label{margin-bottom:8px}.value{font-size:1.5rem;line-height:1.3;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .small,.hint,.field-description,.notice,.inline-status,.section-feedback{color:var(--muted);font-size:.76rem;line-height:1.55}
 .small{margin-top:8px}.sub{color:var(--muted)}
 /* One primary action; secondary actions stay visually quiet. */
-button,.button,input,select{font-family:inherit;font-size:.94rem;line-height:1.35;min-height:44px;border-radius:10px}
+button,.button,input,select{font-family:inherit;font-size:.94rem;line-height:1.35;min-height:44px;border-radius:var(--corner-radius)}
 input,select{background:var(--control);color:var(--text);border:1px solid var(--control-line);padding:10px 12px;max-width:100%;min-width:0}
 input::placeholder{color:var(--muted);opacity:1}
 button,.button{background:var(--primary);color:var(--on-primary);border:1px solid transparent;font-weight:600;padding:10px 16px;transition:background-color .15s ease,border-color .15s ease;box-shadow:none}
@@ -29,17 +30,17 @@ button:not(:disabled):hover,.button:hover{filter:none!important;transform:none!i
  button.secondary:not(:disabled):not(#previousPage):not(#nextPage):not(#goToPage):hover,.button.secondary:hover{background:var(--hover)}
 }
 button:not(:disabled):active,.button:active{filter:none!important;transform:none!important;box-shadow:none!important}
-.top-actions button,.top-actions .logout-button{font:600 .94rem/1.35 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;min-height:44px;padding:10px 16px;border-radius:10px}
-.btc-balance-card #manualWithdraw{font-size:.82rem;padding:10px 14px;min-height:44px;border-radius:10px}
+.top-actions button,.top-actions .logout-button{font:600 .94rem/1.35 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;min-height:44px;padding:10px 16px;border-radius:var(--corner-radius)}
+.btc-balance-card #manualWithdraw{font-size:.82rem;padding:10px 14px;min-height:44px;border-radius:var(--corner-radius)}
 /* Disclosure headers are grouped surfaces rather than decorative banners. */
-details.panel{border-radius:16px;overflow:hidden;isolation:isolate;background-clip:padding-box;border-color:var(--line)}
+details.panel{border-radius:var(--corner-radius);overflow:hidden;isolation:isolate;background-clip:padding-box;border-color:var(--line)}
 details.panel>.panel-heading,details.panel>.report-heading,details.panel:not([open])>summary{border-radius:0;box-shadow:none}
-.panel>.panel-heading,.panel>.report-heading{margin:calc(-1 * var(--panel-padding)) calc(-1 * var(--panel-padding)) var(--panel-padding);padding:16px var(--panel-padding);background:var(--panel);border-bottom:1px solid var(--line);border-radius:15px 15px 0 0}
+.panel>.panel-heading,.panel>.report-heading{margin:calc(-1 * var(--panel-padding)) calc(-1 * var(--panel-padding)) var(--panel-padding);padding:16px var(--panel-padding);background:var(--panel);border-bottom:1px solid var(--line);border-radius:var(--corner-radius) var(--corner-radius) 0 0}
 .panel>.panel-heading h2,.panel>.report-heading h2{font-size:1.18rem;font-weight:600;line-height:1.35}
 summary{min-height:44px}details.panel>summary{min-height:56px}
 details.panel>summary h2::after{content:'›';color:var(--muted);font-size:1.5rem;line-height:1;transform:none}
 details.panel[open]>summary h2::after{content:'›';transform:rotate(90deg)}
-details.panel:not([open])>summary{margin-bottom:calc(-1 * var(--panel-padding));border-radius:15px}
+details.panel:not([open])>summary{margin-bottom:calc(-1 * var(--panel-padding));border-radius:var(--corner-radius)}
 .report-controls>.sub{font-size:.88rem}.summary-subheading{margin-bottom:var(--subsection-space)}
 /* Tables retain numeric alignment; status always has a text label. */
 th{color:var(--muted);text-transform:none;letter-spacing:normal;font-size:.76rem;font-weight:600}
@@ -50,17 +51,17 @@ td{font-size:.88rem}th,td{border-color:var(--line)}#activities td{padding:8px 12
 .positive,.status-confirmed,.withdraw-feedback.success{color:var(--green)}
 .negative,.error,.status-failed,.section-feedback.is-error,.inline-status.is-error,#status.error,#passwordConfirmationError,.export-feedback{color:var(--red)}
 .status-pending{color:var(--warning)}.status-muted{color:var(--muted)}
-.feedback-close,.settings-dialog-header button{min-width:44px;min-height:44px;width:44px;padding:0;font-size:1.18rem;line-height:1;border-radius:10px}
+.feedback-close,.settings-dialog-header button{min-width:44px;min-height:44px;width:44px;padding:0;font-size:1.18rem;line-height:1;border-radius:var(--corner-radius)}
 .feedback-close{flex:0 0 44px;margin-top:0}.withdraw-action .feedback-close{margin-top:0}
 /* Keyboard-accessible section tabs retain unsaved inputs in their panels. */
 .settings-page #settingsForm>.panel{margin:0}
-.settings-tabs{display:flex;gap:4px;align-items:center;flex-wrap:nowrap;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
-.settings-tabs button{flex:1 0 auto;white-space:nowrap;font-size:.82rem;font-weight:500;background:transparent;color:var(--muted);border:1px solid transparent;min-height:44px;padding:10px 16px;border-radius:8px}
+.settings-tabs{display:flex;gap:4px;align-items:center;flex-wrap:nowrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--corner-radius);padding:4px}
+.settings-tabs button{flex:1 0 auto;white-space:nowrap;font-size:.82rem;font-weight:500;background:transparent;color:var(--muted);border:1px solid transparent;min-height:44px;padding:10px 16px;border-radius:var(--corner-radius)}
 .settings-tabs button[aria-selected="true"]{background:var(--panel);color:var(--text);border-color:var(--line);font-weight:600}
 .settings-tabs button:not(:disabled):hover{background:var(--hover);color:var(--text)}
 .settings-tabs button[aria-selected="true"]:hover{background:var(--panel)}
 /* Native dialogs provide keyboard containment, Escape and focus restoration. */
-dialog,.confirmation-dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:20px;box-shadow:0 24px 80px #0004;padding:24px;max-height:calc(100dvh - 32px)}
+dialog,.confirmation-dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:var(--corner-radius);box-shadow:0 24px 80px #0004;padding:24px;max-height:calc(100dvh - 32px)}
 dialog::backdrop,.confirmation-dialog::backdrop{background:var(--scrim);backdrop-filter:none;-webkit-backdrop-filter:none}
 dialog h2,.confirmation-dialog h2{font-size:1.18rem;font-weight:600}
 .confirmation-values dt,dialog dt{font-size:.82rem;color:var(--muted)}
@@ -91,12 +92,12 @@ dialog h2,.confirmation-dialog h2{font-size:1.18rem;font-weight:600}
 @supports(backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px)){
  .compact-brand-bar{background:var(--glass);backdrop-filter:blur(20px) saturate(1.2);-webkit-backdrop-filter:blur(20px) saturate(1.2)}
 }
-.login-page .card{background:var(--panel);border-radius:16px;box-shadow:0 8px 32px #0001;padding:32px}
+.login-page .card{background:var(--panel);border-radius:var(--corner-radius);box-shadow:0 8px 32px #0001;padding:32px}
 .login-brand{margin:0 0 24px;gap:16px}.login-brand h1{font-size:1.6rem}.login-page label{font-size:.82rem;margin-top:20px}
 .login-page input{font-size:1rem;min-height:48px}.login-page button{margin-top:24px;min-height:48px}
 .login-support,.login-support code{font-size:.7rem;line-height:1.6;color:var(--muted)}.login-support>span{color:var(--red)}
 .login-page .error:empty{display:none}
-.skip-link{position:fixed;top:12px;left:16px;z-index:1000;background:var(--panel);color:var(--accent);border:1px solid var(--line);border-radius:10px;padding:12px 16px;transform:translateY(-200%)}
+.skip-link{position:fixed;top:12px;left:16px;z-index:1000;background:var(--panel);color:var(--accent);border:1px solid var(--line);border-radius:var(--corner-radius);padding:12px 16px;transform:translateY(-200%)}
 .skip-link:focus{transform:none}
 @media(max-width:600px){
  :root{--panel-padding:16px;--tile-gap:12px;--section-gap:20px;--card-padding:16px;--field-gap:16px}
@@ -108,7 +109,7 @@ dialog h2,.confirmation-dialog h2{font-size:1.18rem;font-weight:600}
  .option-card{min-height:96px}input,select{font-size:1rem}
  .login-page{padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom));min-height:100svh}
  .login-page .card{padding:24px}.login-brand{gap:12px}.login-brand h1{font-size:1.35rem}
- dialog,.confirmation-dialog{padding:20px;border-radius:20px}.settings-dialog{padding:0}
+ dialog,.confirmation-dialog{padding:20px;border-radius:var(--corner-radius)}.settings-dialog{padding:0}
 }
 @media(prefers-contrast:more){
  :root,:root[data-appearance="light"]{--line:#767676;--control-line:#454545;--muted:#45454a;--accent:#004b96}
@@ -162,7 +163,7 @@ html{scroll-padding-top:calc(88px + env(safe-area-inset-top))}
  box-sizing:border-box;display:block;appearance:none;-webkit-appearance:none;
  width:100%;max-width:100%;min-width:0;min-inline-size:0;
  height:3rem;min-height:48px;max-height:3rem;
- margin:0;padding:10px 12px;border-width:1px;border-style:solid;border-radius:10px;
+ margin:0;padding:10px 12px;border-width:1px;border-style:solid;border-radius:var(--corner-radius);
  font-family:inherit;font-size:1rem;line-height:1.25;
 }
 .report-controls .controls select.report-control{
