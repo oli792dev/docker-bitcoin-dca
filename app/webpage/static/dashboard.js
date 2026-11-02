@@ -155,7 +155,7 @@ function captureCustomPeriod(){return {start:$('start').value,end:$('end').value
 function restoreCustomPeriod(){if(customPeriod)for(const key of ['start','end','interval'])$(key).value=customPeriod[key]}
 const quickRangeIds=['monthRange','yearRange','days30Range','days90Range','oneYearRange','customRange'];
 function rollingRangeStart(id,now){
- if(id==='days30Range'||id==='days90Range')return new Date(now.getTime()-(id==='days30Range'?30:90)*86400000);
+ if(id==='days30Range'||id==='days90Range'){const start=new Date(now);start.setDate(start.getDate()-(id==='days30Range'?30:90));return start;}
  const start=new Date(now);start.setDate(1);start.setFullYear(now.getFullYear()-1);start.setDate(Math.min(now.getDate(),new Date(start.getFullYear(),start.getMonth()+1,0).getDate()));return start;
 }
 function selectQuickRange(selected){
