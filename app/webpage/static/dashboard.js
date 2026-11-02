@@ -37,7 +37,7 @@ function updateStatusLight(tone){
  $('botStatusLight').className='status-light status-'+(['active','waiting','error'].includes(tone)?tone:'waiting');
 }
 async function refreshPurchaseSchedule(){
- const request=++scheduleRequest;sectionFeedback("scheduleFeedback","Updating schedule…");
+ const request=++scheduleRequest;
  try{
   const response=await fetch("/api/schedule");
   if(response.status===401){window.location.reload();return}
@@ -89,8 +89,7 @@ async function refreshPurchaseSchedule(){
   renderPurchaseCountdown();
   $('automaticWithdrawalCard').classList.toggle('withdrawal-disabled',!schedule.withdrawalsEnabled);
   $('withdrawalHeading').textContent=t(schedule.withdrawalsEnabled?'Automatic withdrawal':'Automatic withdrawal disabled');
-  sectionFeedback("scheduleFeedback","");
- }catch(e){if(request===scheduleRequest){$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");updateStatusLight("error");sectionFeedback("scheduleFeedback","")}}
+ }catch(e){if(request===scheduleRequest){$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");updateStatusLight("error")}}
 }
 setInterval(renderPurchaseCountdown,1000);
 setInterval(refreshPurchaseSchedule,30000);
