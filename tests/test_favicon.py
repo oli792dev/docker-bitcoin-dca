@@ -2,12 +2,10 @@
 import io
 import json
 import struct
-import tempfile
-from pathlib import Path
 import unittest
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from app.webpage import favicon_assets
 from app.webpage import web_ui
 
@@ -89,19 +87,11 @@ class FaviconTests(unittest.TestCase):
             self.assertIn('name="apple-mobile-web-app-title" content="Bitcoin DCA"',page)
             self.assertIn('rel="apple-touch-icon" type="image/png" sizes="180x180" href="/apple-touch-icon.png?v=5"',page)
 
-    def test_only_public_ca_certificate_can_be_downloaded_without_login(self):
-        with tempfile.TemporaryDirectory() as directory:
-            ca=Path(directory)/'ca.pem';ca.write_bytes(b'public CA certificate')
-            (Path(directory)/'ca-key.pem').write_bytes(b'PRIVATE CA KEY')
-            handler=object.__new__(web_ui.Handler);handler.path='/local-ca.crt'
-            handler._send=Mock();handler._require_authentication=Mock(side_effect=AssertionError('CA must be public'))
-            with patch.object(web_ui,'LOCAL_CA_PATH',ca,create=True):handler.do_GET()
-            handler._send.assert_called_once_with(200,b'public CA certificate','application/x-x509-ca-cert',filename='bitcoin-dca-ca.crt')
-            handler._require_authentication.assert_not_called()
-            self.assertNotIn(b'PRIVATE CA KEY',handler._send.call_args.args[1])
-            ca.unlink();handler._send.reset_mock()
-            with patch.object(web_ui,'LOCAL_CA_PATH',ca,create=True):handler.do_GET()
-            self.assertEqual(handler._send.call_args.args[0],404)
+    def test_ca_download_route_is_not_available(self):
+        handler=object.__new__(web_ui.Handler);handler.path='/local-ca.crt'
+        handler._send=Mock();handler._json=Mock();handler._require_authentication=Mock(return_value=True)
+        handler.do_GET()
+        handler._json.assert_called_once_with(404,{'error':'Not found'})
 
     def test_normal_responses_remain_no_store(self):
         handler=object.__new__(web_ui.Handler)

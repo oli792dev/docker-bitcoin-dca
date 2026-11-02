@@ -19,7 +19,6 @@ from app.core.security import AttemptLimiter, PasswordConfirmationError
 from app.data.activity import parqet_interval_records, read_dashboard_snapshot, read_report, withdrawal_records
 from app.data.analytics import report as build_report
 from app.data.reporting import parqet_aggregate_rows, parqet_csv
-from app.data.storage import DATA_DIR
 from app.exchanges import market_prices
 from app.exchanges.exchange_errors import UncertainWithdrawalError
 from app.trading.forecast import forecast_details, withdrawal_forecast
@@ -39,8 +38,6 @@ HTML = load_page("dashboard")
 
 
 LOGIN_HTML = load_page("login")
-
-LOCAL_CA_PATH = DATA_DIR / "tls" / "ca.pem"
 
 SESSION_TTL_SECONDS = 30 * 60
 _SESSION_LOCK = RLock()
@@ -569,15 +566,6 @@ class Handler(BaseHTTPRequestHandler):
                 "application/manifest+json; charset=utf-8",
                 cache_control="public, max-age=3600",
             )
-            return
-        if parsed.path == "/local-ca.crt":
-            # Only the public CA is exposed; never accept a user-supplied file path.
-            try:
-                certificate = LOCAL_CA_PATH.read_bytes()
-            except FileNotFoundError:
-                self._send(404, "Local CA certificate is not available.", "text/plain; charset=utf-8")
-            else:
-                self._send(200, certificate, "application/x-x509-ca-cert", filename="bitcoin-dca-ca.crt")
             return
         icon = {
             "/bitcoin-dca-icon-v4.png": (APPLE_TOUCH_ICON_PNG, "image/png"),
