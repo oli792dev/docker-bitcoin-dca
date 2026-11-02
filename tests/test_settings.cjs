@@ -79,6 +79,9 @@ const frameWindow={},events={};modalElements.settingsFrame.contentWindow=frameWi
 const modalWindow={location:{origin:'http://dashboard.test',href:'',reload(){reloads++}},addEventListener(name,fn){events[name]=fn}};
 vm.runInNewContext(modalScript,{fetch:async()=>({ok:true}),document:{getElementById:id=>modalElements[id]},window:modalWindow});
 modalElements.openSettings.listeners.click();assert.equal(modalElements.settingsDialog.open,true);assert.equal(modalElements.settingsFrame.src,'/settings?embedded=1');
+assert.equal(modalElements.settingsFrame.style.visibility,'hidden');
+events.message({origin:'http://untrusted.test',source:frameWindow,data:{type:'dca-settings-ready'}});assert.equal(modalElements.settingsFrame.style.visibility,'hidden');
+events.message({origin:'http://dashboard.test',source:frameWindow,data:{type:'dca-settings-ready'}});assert.equal(modalElements.settingsFrame.style.visibility,'visible');
 modalElements.closeSettings.listeners.click();assert.equal(modalElements.settingsDialog.open,false);
 modalElements.settingsDialog.listeners.close();assert.equal(modalElements.settingsFrame.src,'about:blank','Closing must clear sensitive form fields');
 events.message({origin:'http://untrusted.test',source:frameWindow,data:{type:'dca-settings-saved'}});assert.equal(reloads,0);

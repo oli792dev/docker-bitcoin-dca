@@ -173,3 +173,5 @@ if(typeof window!=='undefined'&&window.addEventListener){
  window.addEventListener('message',event=>{if(initial.embedded&&event.origin===location.origin&&event.source===window.parent&&event.data?.type==='dca-settings-request-close')requestSettingsClose()});
  window.addEventListener('beforeunload',event=>{if(settingsDirty){event.preventDefault();event.returnValue=''}});
 }
+
+if(initial.embedded)window.parent.postMessage({type:'dca-settings-ready'},location.origin);
