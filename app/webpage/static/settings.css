@@ -51,7 +51,7 @@ dialog p{margin:var(--space-lg) 0;}
 dialog dl{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 dialog dd{margin:0;overflow-wrap:anywhere;}
 dialog dt{color:var(--muted);}
-.embedded{background:var(--panel);min-height:0;}
+.embedded{background:var(--bg);min-height:0;}
 .embedded main{max-width:none;margin:0;padding:20px;}
 .embedded header{display:none;}
 .embedded #settingsForm>.actions:first-child{margin:0;}
@@ -132,7 +132,7 @@ __DESIGN_CSS__
 .settings-active #settingsForm{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;overflow:hidden;gap:var(--space-md);}
 .settings-active #settingsNavigationHeading,.settings-active #settingsTabs,.settings-active .settings-footer{flex:0 0 auto;}
 .settings-content{min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain;scrollbar-width:thin;scrollbar-gutter:stable;padding:var(--space-xs) var(--space-lg) var(--space-xs) 0;flex:1 1 auto;}
-.settings-footer{display:grid;gap:var(--space-sm);padding-top:var(--space-md);border-top:1px solid var(--line);background:var(--panel);}
+.settings-footer{display:grid;gap:var(--space-sm);padding-top:var(--space-md);border-top:1px solid var(--line);background:var(--bg);}
 .settings-footer #status{padding:0;min-height:0;font-size:.85rem;overflow:auto;}
 @media (max-width:600px){
 .settings-active main{padding-top:var(--space-md);padding-bottom:max(var(--space-md),env(safe-area-inset-bottom));}
@@ -276,3 +276,5 @@ __DESIGN_CSS__
 
 .settings-error-summary{display:flex;align-items:baseline;gap:8px 12px;flex-wrap:wrap}
 .settings-error-summary[hidden]{display:none}
+
+.settings-page,.settings-page.embedded{background:var(--bg);}

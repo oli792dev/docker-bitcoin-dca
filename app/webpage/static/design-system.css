@@ -78,9 +78,10 @@ dialog h2,.confirmation-dialog h2{font-size:1.18rem;font-weight:600;}
 .confirmation-values dd,dialog dd{font-size:.94rem;color:var(--text);}
 .confirmation-values,.confirmation-actions{gap:var(--space-md);}
 .confirmation-actions{flex-wrap:wrap;}
-.settings-dialog{padding:0;overflow:hidden;}
-.settings-dialog-header{background:var(--panel);border-color:var(--line);padding:var(--space-md) var(--space-lg);}
-.settings-dialog iframe,.embedded,.embedded .panel{background:var(--panel);}
+.settings-dialog{padding:0;overflow:hidden;background:var(--bg);}
+.settings-dialog-header{background:var(--bg);border-color:var(--line);padding:var(--space-md) var(--space-lg);}
+.settings-dialog iframe,.embedded{background:var(--bg);}
+.embedded .panel{background:var(--panel);}
 .review-list dt,.review-list dd{border-color:var(--line);}
 .review-list .review-changed{background:var(--surface);border-color:var(--accent);}
 .review-list dt{font-size:.82rem;}

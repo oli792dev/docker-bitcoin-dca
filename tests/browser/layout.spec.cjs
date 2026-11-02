@@ -80,6 +80,12 @@ test('dashboard controls, analysis spacing and modal scroll restoration', async 
   await summary.click();
   await page.reload();
   expect(await disclosures.evaluateAll(items => items.every(item => !item.open))).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(page.locator('#openSettings')).toBeVisible();
+  await page.locator('#openSettings').click();
+  await expect(page.locator('.settings-dialog')).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+  await expect(page.locator('.settings-dialog-header')).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+  await expect(page.frameLocator('#settingsFrame').locator('body')).toHaveCSS('background-color', 'rgb(0, 0, 0)');
 
 });
 
@@ -93,6 +99,8 @@ test('settings tabs stay single line and fields scroll within the content', asyn
     expect((await rect(tab)).height).toBeGreaterThanOrEqual(44);
   }
   await page.emulateMedia({colorScheme: 'dark'});
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+  await expect(page.locator('.settings-footer')).toHaveCSS('background-color', 'rgb(0, 0, 0)');
   await expect(page.locator('.settings-tabs')).toHaveCSS('background-color', 'rgb(28, 28, 30)');
   const selectedTab = page.locator('#botConfigurationTab');
   const hoverTab = page.locator('#exchangeConnectionTab');
