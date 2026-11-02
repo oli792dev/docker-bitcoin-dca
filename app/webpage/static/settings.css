@@ -96,3 +96,10 @@ __DESIGN_CSS__
 .settings-page dialog>p{margin:0 0 var(--space-lg)}
 .settings-page dialog .actions{margin-top:var(--space-lg)}
 .settings-page .review-list dd{margin-bottom:var(--space-md)}
+
+/* Same compact segmented appearance as the analysis period selector. */
+.settings-page .settings-tabs{gap:2px;padding:3px;border:0;background:var(--surface);border-radius:var(--corner-radius)}
+.settings-page .settings-tabs button{min-height:32px;padding:5px 12px;border:0;background:transparent;color:var(--muted);font-size:.76rem;font-weight:500;border-radius:var(--corner-radius)}
+.settings-page .settings-tabs button[aria-selected=true]{background:var(--panel);color:var(--text);border:0;font-weight:600}
+.settings-page .settings-tabs button:not(:disabled):hover{background:var(--hover);color:var(--text)}
+@media(pointer:coarse){.settings-page .settings-tabs button{min-height:44px}}
