@@ -380,3 +380,8 @@ __DESIGN_CSS__
 @media(max-width:600px){.redesigned .balance-overview{padding:16px}}
 @media(prefers-contrast:more){.redesigned .balance-overview{border-color:var(--line)}}
 @media(forced-colors:active){.redesigned .balance-overview{border-color:CanvasText}}
+
+/* Keep the selected dates alongside their section heading. */
+.redesigned .analysis-title{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 16px;min-width:0}
+.redesigned .analysis-title .selected-period-label{margin:0;font-size:.76rem;font-weight:400;line-height:1.5;color:var(--muted);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.redesigned .analysis-header{gap:12px 20px}
