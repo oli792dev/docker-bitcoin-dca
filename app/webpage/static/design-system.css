@@ -129,7 +129,7 @@ button.secondary.destructive,.button.secondary.destructive{color:var(--red)}
 .settings-tabs button:not(:disabled):active{background:var(--pressed);color:var(--text)}
 /* Inputs grow with text rather than clipping enlarged labels or values. */
 input:not([type=checkbox]):not([type=hidden]),select{height:auto;min-height:44px}
-.controls input,.controls select,.controls>button{height:auto;min-height:48px}
+.controls input,.controls select,.controls>button{box-sizing:border-box;height:3rem;min-height:48px;line-height:1.25;padding-block:10px}
 .settings-page .settings-tab-panel input:not([type=checkbox]),.settings-page .settings-tab-panel select{height:auto;min-height:44px}
 @media(pointer:coarse){
  input:not([type=checkbox]):not([type=hidden]),select,.controls input,.controls select{font-size:max(16px,1rem)}
