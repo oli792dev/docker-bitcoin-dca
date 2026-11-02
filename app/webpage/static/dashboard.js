@@ -153,17 +153,22 @@ async function loadIntervals(){
 let selectedQuickRange='customRange',rangeDraft=null,customPeriod=null;
 function captureCustomPeriod(){return {start:$('start').value,end:$('end').value,interval:$('interval').value}}
 function restoreCustomPeriod(){if(customPeriod)for(const key of ['start','end','interval'])$(key).value=customPeriod[key]}
+const quickRangeIds=['monthRange','yearRange','days30Range','days90Range','oneYearRange','customRange'];
+function rollingRangeStart(id,now){
+ if(id==='days30Range'||id==='days90Range')return new Date(now.getTime()-(id==='days30Range'?30:90)*86400000);
+ const start=new Date(now);start.setDate(1);start.setFullYear(now.getFullYear()-1);start.setDate(Math.min(now.getDate(),new Date(start.getFullYear(),start.getMonth()+1,0).getDate()));return start;
+}
 function selectQuickRange(selected){
  selectedQuickRange=selected;
- for(const id of ['monthRange','yearRange','customRange'])$(id).setAttribute('aria-pressed',String(id===selected));
+ for(const id of quickRangeIds)$(id).setAttribute('aria-pressed',String(id===selected));
 }
-for(const id of ['monthRange','yearRange','customRange'])$(id).addEventListener('click',async()=>{
+for(const id of quickRangeIds)$(id).addEventListener('click',async()=>{
  if(selectedQuickRange==='customRange')customPeriod=captureCustomPeriod();
  if(id==='customRange'){
   restoreCustomPeriod();selectQuickRange(id);await saveReportFrom();currentPage=1;loadAnalytics();return
  }
  selectQuickRange(id);
- const now=new Date(),start=new Date(now.getFullYear(),id==='yearRange'?0:now.getMonth(),1);
+ const now=new Date(),start=['days30Range','days90Range','oneYearRange'].includes(id)?rollingRangeStart(id,now):new Date(now.getFullYear(),id==='yearRange'?0:now.getMonth(),1);
  $('start').value=localInput(start.getTime());$('end').value=localInput(now.getTime());$('interval').value='';
  await saveReportFrom();currentPage=1;loadAnalytics();
 });

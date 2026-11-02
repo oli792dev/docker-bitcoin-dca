@@ -140,6 +140,9 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  vm.runInContext('restoreReportView()',context);
  assert.equal(get('interval').value,'');assert.equal(get('end').value,vm.runInContext('localInput(Date.now())',context));
 
+ for(const [id,days] of [['days30Range',30],['days90Range',90]]){await get(id).handlers.click();await settle();assert.equal((Date.parse(get('end').value)-Date.parse(get('start').value))/86400000,days);assert.equal(get(id)['aria-pressed'],'true')}
+ await get('oneYearRange').handlers.click();await settle();assert.equal(new Date(get('start').value).getFullYear(),new Date(get('end').value).getFullYear()-1);assert.equal(vm.runInContext("rollingRangeStart('oneYearRange',new Date(2024,1,29,12,34,56)).getDate()",context),28);
+ await get('customRange').handlers.click();await settle();
  const beforeCancel=get('start').value,savedCount=requests.filter(url=>url==='/api/settings/report-period').length;
  await get('editCustomRange').handlers.click();assert.equal(get('rangeDialog').open,true);get('start').value='2026-10-03T10:00:00';get('start').handlers.change();get('cancelRange').handlers.click();assert.equal(get('start').value,beforeCancel);assert.equal(requests.filter(url=>url==='/api/settings/report-period').length,savedCount);
  await get('editCustomRange').handlers.click();get('interval').value=get('interval').children[1].value;get('interval').handlers.change();assert.equal(Date.parse(get('start').value),Number(get('interval').value.split(',')[0]));

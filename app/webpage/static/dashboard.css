@@ -357,3 +357,8 @@ __DESIGN_CSS__
 .range-edit-icon{display:block;width:14px;height:14px;border:1.5px solid currentColor;border-radius:3px;position:relative}
 .range-edit-icon::after{content:'';position:absolute;width:11px;height:3px;background:currentColor;border:2px solid var(--surface);box-sizing:content-box;transform:rotate(-45deg);right:-4px;top:0}
 @media(pointer:coarse){.redesigned .period-shortcuts #editCustomRange{flex-basis:44px;width:44px;min-height:44px}}
+
+/* Keep all analysis ranges reachable without widening a narrow viewport. */
+.redesigned .period-shortcuts{max-width:100%;min-width:0;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--muted) var(--surface)}
+.redesigned .period-shortcuts button{flex-shrink:0;white-space:nowrap}
+@media(max-width:600px){.redesigned .period-shortcuts button{flex:1 0 auto}}
