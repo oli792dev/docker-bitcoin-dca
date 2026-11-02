@@ -509,7 +509,7 @@ class Handler(BaseHTTPRequestHandler):
                 elif exchange_check_pending:
                     status_label = exchange_status
                 elif not balance_matches:
-                    status_label = 'Waiting for account check'
+                    status_label = 'No account for exchange existing'
                 elif (str(snapshot.get('nextPurchaseStatus','')).startswith(('Waiting','Checking','Verifying'))
                       and snapshot['nextPurchaseStatus'] != 'Waiting for confirmation that the previous order has ended'):
                     status_label = ('Waiting for deposit' if snapshot['nextPurchaseStatus'] == 'Waiting until the balance covers an order' else snapshot['nextPurchaseStatus'])
@@ -517,7 +517,7 @@ class Handler(BaseHTTPRequestHandler):
                     status_label = 'Simulation'
                 else:
                     status_label = 'Bot active'
-                status_warning = worker_error or bool(self.worker and not self.worker.healthy())
+                status_warning = worker_error or bool(self.worker and not self.worker.healthy()) or (not balance_matches and not exchange_check_pending)
                 status_tone = 'error' if status_warning else 'active' if status_label == 'Bot active' else 'waiting'
                 try:
                     account_price = market_prices.snapshot_market_price(snapshot, self.settings['exchange'],

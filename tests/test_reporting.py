@@ -167,6 +167,13 @@ class ScheduleBalanceTests(unittest.TestCase):
                 result=handler._json.call_args.args[1]
                 self.assertEqual((result['botStatusLabel'],result['botStatusTone']),('Bot active','active'))
 
+    def test_missing_exchange_account_snapshot_is_red(self):
+        handler=object.__new__(web_ui.Handler);handler.path='/api/schedule'
+        handler.settings={**DEFAULTS,'live':True};handler._require_authentication=lambda:True;handler._json=Mock()
+        with patch.object(web_ui,'read_dashboard_snapshot',return_value={}):handler.do_GET()
+        data=handler._json.call_args.args[1]
+        self.assertEqual((data['botStatusLabel'],data['botStatusTone']),('No account for exchange existing','error'))
+
     def test_account_status_reports_age_and_failure_without_exposing_error_details(self):
         from types import SimpleNamespace
         handler=object.__new__(web_ui.Handler);handler.path='/api/schedule'
