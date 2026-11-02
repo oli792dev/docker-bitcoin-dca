@@ -214,14 +214,6 @@ function renderActivities(){
   body.appendChild(tr)
  }
  if(!total){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=7;td.textContent=t("No activity in this period.");td.className="notice";tr.appendChild(td);body.appendChild(tr)}
- const occupiedRows=activityRows.length||(!total?1:0);
- for(let i=occupiedRows;i<pageSize;i++){
-  const tr=document.createElement("tr");tr.className="activity-placeholder";tr.ariaHidden="true";
-  for(let column=0;column<7;column++){
-   const td=document.createElement("td");td.textContent=t(" ");if(column>=2&&column<=5)td.className="num";tr.appendChild(td);
-  }
-  body.appendChild(tr);
- }
  $("pageInfo").textContent=t(total?("Showing "+(start+1)+"–"+end+" of "+total+" · Page "+currentPage+" of "+totalPages):"No entries");
  $("previousPage").disabled=currentPage<=1;$("nextPage").disabled=currentPage>=totalPages;
  $("pageNumber").value=currentPage;$("pageNumber").max=totalPages;

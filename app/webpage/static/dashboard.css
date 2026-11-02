@@ -239,7 +239,6 @@ th.num,td.num{text-align:right;font-variant-numeric:tabular-nums;font-feature-se
 }
 /* Fade only overflowing card rows with more content to their right. */
 #activities tr{height:34px;}
-#activities .activity-placeholder{user-select:none;pointer-events:none;}
 :root{--subsection-space:20px;--section-space:24px;--tile-gap:14px;}
 @media (max-width:600px){
 :root{--tile-gap:10px;}
