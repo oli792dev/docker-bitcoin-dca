@@ -65,7 +65,7 @@ th,td{border-color:var(--line);}
 .withdraw-action .feedback-close{margin-top:0;}
 /* Keyboard-accessible section tabs retain unsaved inputs in their panels. */
 .settings-page #settingsForm>.panel{margin:0;}
-.settings-tabs{display:flex;gap:var(--space-xs);align-items:center;flex-wrap:nowrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--corner-radius);padding:var(--space-xs);}
+.settings-tabs{display:flex;gap:var(--space-xs);align-items:center;flex-wrap:nowrap;background:var(--panel);border:1px solid var(--line);border-radius:var(--corner-radius);padding:var(--space-xs);}
 .settings-tabs button{flex:1 0 auto;white-space:nowrap;font-size:.82rem;font-weight:500;background:transparent;color:var(--muted);border:1px solid transparent;min-height:var(--button-height);padding:8px var(--space-lg);border-radius:var(--corner-radius);}
 .settings-tabs button[aria-selected="true"]{background:var(--panel);color:var(--text);border-color:var(--line);font-weight:600;}
 .settings-tabs button:not(:disabled):hover{background:var(--hover);color:var(--text);}

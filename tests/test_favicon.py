@@ -121,8 +121,9 @@ class DesignAccessibilityTests(unittest.TestCase):
                 for background in ('bg','panel','surface','control','pressed'):
                     with self.subTest(appearance=appearance,role=role,background=background):
                         self.assertGreaterEqual(contrast(colors[role],colors[background]),4.5)
-            for role in ('text','muted','accent'):
-                self.assertGreaterEqual(contrast(colors[role],colors['selection']),4.5)
+            # Selected and hovered tabs both use the main text foreground.
+            for background in ('selection','tab-hover'):
+                self.assertGreaterEqual(contrast(colors['text'],colors[background]),4.5)
             for role in ('primary','primary-hover','primary-pressed'):
                 self.assertGreaterEqual(contrast(colors[role],colors['on-primary']),4.5)
             self.assertGreaterEqual(contrast(colors['control-line'],colors['control']),3)

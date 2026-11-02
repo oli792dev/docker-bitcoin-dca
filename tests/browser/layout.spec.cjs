@@ -37,12 +37,13 @@ test('dashboard controls, analysis spacing and modal scroll restoration', async 
     expect((await rect(page.locator(`#${id}`))).height).toBeGreaterThanOrEqual(44);
   }
   await page.emulateMedia({colorScheme: 'dark'});
+  await expect(page.locator('.period-shortcuts')).toHaveCSS('background-color', 'rgb(28, 28, 30)');
   const selectedRange = page.locator('#customRange');
   const hoverRange = page.locator('#monthRange');
-  await expect(selectedRange).toHaveCSS('background-color', 'rgb(58, 58, 60)');
+  await expect(selectedRange).toHaveCSS('background-color', 'rgb(86, 86, 90)');
   const selectedBackground = await selectedRange.evaluate(el => getComputedStyle(el).backgroundColor);
   await hoverRange.hover();
-  await expect(hoverRange).toHaveCSS('background-color', 'rgb(48, 48, 50)');
+  await expect(hoverRange).toHaveCSS('background-color', 'rgb(58, 58, 60)');
   expect(await hoverRange.evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe(selectedBackground);
   expect(await selectedRange.evaluate(el => getComputedStyle(el).backgroundColor)).toBe(selectedBackground);
   const heading = await rect(page.locator('.analysis-header'));
@@ -92,12 +93,13 @@ test('settings tabs stay single line and fields scroll within the content', asyn
     expect((await rect(tab)).height).toBeGreaterThanOrEqual(44);
   }
   await page.emulateMedia({colorScheme: 'dark'});
+  await expect(page.locator('.settings-tabs')).toHaveCSS('background-color', 'rgb(28, 28, 30)');
   const selectedTab = page.locator('#botConfigurationTab');
   const hoverTab = page.locator('#exchangeConnectionTab');
-  await expect(selectedTab).toHaveCSS('background-color', 'rgb(58, 58, 60)');
+  await expect(selectedTab).toHaveCSS('background-color', 'rgb(86, 86, 90)');
   const selectedBackground = await selectedTab.evaluate(el => getComputedStyle(el).backgroundColor);
   await hoverTab.hover();
-  await expect(hoverTab).toHaveCSS('background-color', 'rgb(48, 48, 50)');
+  await expect(hoverTab).toHaveCSS('background-color', 'rgb(58, 58, 60)');
   expect(await hoverTab.evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe(selectedBackground);
   expect(await selectedTab.evaluate(el => getComputedStyle(el).backgroundColor)).toBe(selectedBackground);
   const time = page.locator('#deposit_time');
