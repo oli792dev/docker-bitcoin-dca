@@ -230,7 +230,6 @@ __DESIGN_CSS__
 .redesigned .tablewrap{border:0;border-radius:0;background:transparent;padding:0}
 .redesigned .pagination{flex-wrap:wrap}
 .redesigned .dashboard-footnotes{font-size:.76rem;border:0;margin-top:var(--space-lg);padding:0}
-.redesigned .dashboard-footnotes>summary{color:var(--muted);font-size:.82rem;min-height:44px;cursor:pointer}
 .redesigned [hidden]{display:none!important}
 @media(max-width:800px){
  .redesigned .report-primary{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -297,21 +296,12 @@ __DESIGN_CSS__
 
 
 /* Supplemental details stay within their section, without divider bars. */
-.redesigned .report-details>summary,.redesigned .dashboard-footnotes>summary{display:flex;align-items:center;gap:8px;list-style:none;min-height:44px;padding:8px 0;font-size:.82rem;font-weight:500;color:var(--muted);cursor:pointer}
-.redesigned .report-details>summary::-webkit-details-marker,.redesigned .dashboard-footnotes>summary::-webkit-details-marker{display:none}
-.redesigned .report-details>summary::before,.redesigned .dashboard-footnotes>summary::before{content:'›';font-size:1.1rem;line-height:1;transition:transform 150ms ease}
-.redesigned .report-details[open]>summary::before,.redesigned .dashboard-footnotes[open]>summary::before{transform:rotate(90deg)}
-.redesigned .report-details>summary:hover,.redesigned .dashboard-footnotes>summary:hover{color:var(--text)}
 .redesigned .dashboard-footnotes>ol{padding-top:8px}
 
 @media(pointer:coarse){.redesigned .period-shortcuts button{min-height:44px}}
 @media(min-width:801px) and (max-width:1000px){.redesigned .report-primary{grid-template-columns:repeat(3,minmax(0,1fr))}}
 
 .redesigned .period-activities{border:0;padding-top:0;margin-top:24px}
-.redesigned .period-activities>summary{display:flex;align-items:center;gap:8px;list-style:none;min-height:44px;padding:8px 0;color:var(--text);font-size:1.05rem;font-weight:600;cursor:pointer}
-.redesigned .period-activities>summary::-webkit-details-marker{display:none}
-.redesigned .period-activities>summary::before{content:'›';font-size:1.1rem;line-height:1;transition:transform 150ms ease}
-.redesigned .period-activities[open]>summary::before{transform:rotate(90deg)}
 .redesigned .period-activities .activity-panel{margin-top:8px}
 .redesigned .report-extra .value{color:var(--text);font-weight:600}
 
@@ -320,3 +310,12 @@ __DESIGN_CSS__
 .parqet-export-dialog select{width:100%;min-width:0;min-height:44px}
 .parqet-export-dialog .confirmation-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:16px}
 .parqet-export-dialog .feedback-wrap{margin-top:12px}
+
+/* The three supplemental disclosures share one heading and spacing contract. */
+.redesigned :is(.report-details,.period-activities,.dashboard-footnotes){margin-top:var(--space-lg);padding:0;border:0}
+.redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary{display:flex;align-items:center;gap:var(--space-sm);list-style:none;min-height:44px;margin:0;padding:var(--space-sm) 0;font-size:.9rem;font-weight:600;line-height:1.4;color:var(--text);cursor:pointer}
+.redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary::-webkit-details-marker{display:none}
+.redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary::before{content:'›';flex:0 0 12px;font-size:1.1rem;font-weight:500;line-height:1;transition:transform 150ms ease}
+.redesigned :is(.report-details,.period-activities,.dashboard-footnotes)[open]>summary::before{transform:rotate(90deg)}
+.redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary:hover{color:var(--accent)}
+.redesigned .report-extra{padding-top:var(--space-sm)}

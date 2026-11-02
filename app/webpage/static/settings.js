@@ -9,8 +9,8 @@ function exchangeName(){return $('exchange').value==='KRAKEN'?'Kraken':'Bitvavo'
 function updateExchangeGuidance(){
  const changed=exchangeChanged(),name=exchangeName();
  $('exchangePermissionsHint').textContent=t($('exchange').value==='KRAKEN'?
-  'Kraken: Query Funds, Query Open/Closed Orders & Trades and Query ledger entries. Add Modify Orders for live trading and Withdraw Funds only for withdrawals.':
-  'Bitvavo: Read-only / View access and Trade digital assets. Add Withdraw digital assets only for withdrawals.');
+  'Required API permissions for Kraken: Query Funds, Query Open/Closed Orders & Trades and Query ledger entries. For live trading: Modify Orders. For withdrawals: Withdraw Funds.':
+  'Required API permissions for Bitvavo: Read-only / View access and Trade digital assets. For withdrawals: Withdraw digital assets.');
  $('exchangeSwitchHint').hidden=!changed;
  $('exchangeSwitchHint').textContent=t(changed?'Switching to '+name+' requires entering its API key and API secret again. Enter the keys below and review the withdrawal target.':'');
  $('exchangeCredentialHint').textContent=t(changed?'Enter the API key and API secret for '+name+'. Saved keys from either exchange are not reused automatically. Confirm the '+name+' withdrawal target if you use withdrawals.':'Leave API fields empty to keep saved '+name+' keys. The withdrawal target below applies to '+name+'.');
