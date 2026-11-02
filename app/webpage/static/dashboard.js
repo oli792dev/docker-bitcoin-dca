@@ -35,7 +35,7 @@ function renderWithdrawalProgress(balance,price,threshold,enabled){
  $('withdrawalProgressLabel').textContent=known?t('{value} of {threshold}').replace('{value}',money(balance*price,quote)).replace('{threshold}',money(threshold,quote)):t(enabled?'Waiting for account check':'Automatic withdrawals disabled');
 }
 function renderPurchaseChart(series,rates,price,currency,available,range=selectedPeriod()){
- const chart=$('purchaseChart');chart.replaceChildren();chart.hidden=true;const tooltip=$('chartTooltip');tooltip.hidden=true;chart.onpointermove=null;chart.onkeydown=null;
+ const chart=$('purchaseChart');chart.replaceChildren();chart.setAttribute('hidden','');const tooltip=$('chartTooltip');tooltip.hidden=true;chart.onpointermove=null;chart.onkeydown=null;
  $('chartStart').textContent='';$('chartEnd').textContent='';
  if(!series?.length){$('chartMessage').textContent=t('No real purchases in this period.');return}
  if(!available||!(price>0)||series.some(point=>Object.keys(point.costs).some(c=>!(rates[c]>0)))){$('chartMessage').textContent=t('Conversion unavailable');return}
@@ -68,7 +68,7 @@ function renderPurchaseChart(series,rates,price,currency,available,range=selecte
  chart.onblur=hidePoint;
  chart.onkeydown=event=>{if(['ArrowLeft','ArrowRight','Home','End','Escape'].includes(event.key)){event.preventDefault();if(event.key==='Escape'){hidePoint();return}showPoint(event.key==='Home'?0:event.key==='End'?points.length-1:active+(event.key==='ArrowRight'?1:-1))}};
  svg('title',{},t('Cumulative purchases and their value at the current BTC price'));
- chart.hidden=false;$('chartMessage').textContent='';
+ chart.removeAttribute('hidden');$('chartMessage').textContent='';
  $('chartStart').textContent=new Date(start).toLocaleDateString(locale);$('chartEnd').textContent=new Date(end).toLocaleDateString(locale);
 }
 function updateStatusLight(tone){
@@ -88,46 +88,39 @@ async function refreshPurchaseSchedule(){
    const market=schedule.accountMarketPrice;
    balanceDisplayPrice=Number(market.price);balanceDisplayCurrency=market.currency;
    $('spot').textContent=money(market.price,market.currency)+'/BTC';
-   $('spotUpdated').textContent=t('Last checked '+dateLabel(Number(market.updatedAt)*1000));
+
    renderExchangeBtcValue();
   }
   const detail=schedule.forecastDetails;
   $('forecastProgress').textContent=detail?t('About {btc} BTC · {buys} purchases remaining'.replace('{btc}',Number(detail.remainingBtc).toLocaleString(locale,{maximumFractionDigits:8})).replace('{buys}',detail.remainingPurchases)):'';
   $('forecastAssumptions').hidden=!detail;
   if(detail)$('forecastAssumptionsText').textContent=t('BTC price: {price}. BTC per purchase: {quantity}. Threshold: {threshold}. Assumes unchanged price and fees. Monthly deposit: {amount}. Deposit: day {day}, {time} ({zone}).'.replace('{price}',money(detail.price,detail.quote)).replace('{quantity}',btc(detail.quantity)).replace('{threshold}',money(detail.threshold,detail.quote)).replace('{amount}',detail.monthlyDeposit?money(detail.monthlyDeposit,detail.quote):t('Not configured')).replace('{day}',detail.depositDay).replace('{time}',detail.depositTime).replace('{zone}',detail.timezone));
-  $('forecastDepositSummary').textContent=schedule.expectedMonthlyDeposit!==''&&schedule.expectedMonthlyDeposit!=null
-   ?t('Forecast assumes {amount} monthly').replace('{amount}',money(schedule.expectedMonthlyDeposit,schedule.quote))
-   :t('Set an expected monthly deposit in Settings for the forecast.');
   const depositDate=Date.parse(schedule.nextDepositAt);
   $('nextDepositAt').textContent=Number.isFinite(depositDate)?t('Next deposit: {date}').replace('{date}',dateLabel(depositDate,schedule.timezone||'UTC')):'';
   if(schedule.configuredBuyAmount!==undefined){
    const minimumMode=Number(schedule.configuredBuyAmount)===0;
    const effective=Number(schedule.effectiveBuyAmount);
-   $("buyAmount").textContent=t(schedule.finalPurchase&&effective>0?btc(effective):minimumMode?(effective>0?btc(effective):"—"):btc(schedule.configuredBuyAmount));
-   $("buyAmountNote").textContent=t(schedule.finalPurchase?"Final purchase · uses remaining fiat":minimumMode?"(exchange minimum)"+(effective>0?"":" · waiting for account check"):"");
+   $("orderSummary").textContent=t(schedule.finalPurchase&&effective>0?btc(effective):minimumMode?(effective>0?btc(effective):"—"):btc(schedule.configuredBuyAmount));
+   $("orderSummaryNote").textContent=t(schedule.finalPurchase?"Final purchase · uses remaining fiat":minimumMode?"(exchange minimum)"+(effective>0?"":" · waiting for account check"):"");
   }
   $("quoteBalanceLabel").textContent=t("Available "+schedule.quote+" balance on exchange");
   const balanceKnown=schedule.quoteBalance!==null&&schedule.quoteBalance!==undefined&&Number.isFinite(Number(schedule.quoteBalance));
   $("quoteBalance").textContent=t(balanceKnown?money(schedule.quoteBalance,schedule.quote):"—");
   const checkedAt=Date.parse(schedule.balanceUpdatedAt);
-  $("quoteBalanceUpdated").textContent=t(balanceKnown
-   ?(Number.isFinite(checkedAt)?"Last checked "+dateLabel(checkedAt,schedule.timezone||"UTC"):"Last account check")
-   :"Waiting for account check");
+  $("accountCheckedAt").textContent=t(Number.isFinite(checkedAt)?"Last checked "+dateLabel(checkedAt,schedule.timezone||"UTC"):"Waiting for account check");
   nextPurchaseTimestamp=Number.isFinite(target)?target:null;
 
   nextPurchaseMessage=schedule.nextPurchaseStatus||"Not scheduled";
   $("nextPurchaseAt").textContent=t(nextPurchaseTimestamp===null?nextPurchaseMessage:new Date(nextPurchaseTimestamp).toLocaleString(locale,{timeZone:schedule.timezone||"UTC",timeZoneName:"short"}));
   exchangeBtcBalance=schedule.btcBalance!=null&&Number.isFinite(Number(schedule.btcBalance))?Number(schedule.btcBalance):null;
   $("exchangeBtcBalance").textContent=t(exchangeBtcBalance===null?"—":btc(exchangeBtcBalance));
-  $("exchangeBtcUpdated").textContent=t(exchangeBtcBalance===null?"Waiting for account check":(Number.isFinite(checkedAt)?"Last checked "+dateLabel(checkedAt,schedule.timezone||"UTC"):"Last account check"));
+
   renderExchangeBtcValue();
   const withdrawalTarget=Date.parse(schedule.estimatedWithdrawalAt);
   estimatedWithdrawalTimestamp=Number.isFinite(withdrawalTarget)?withdrawalTarget:null;
   $("estimatedWithdrawalAt").textContent=t(estimatedWithdrawalTimestamp===null?"Not estimated":new Date(estimatedWithdrawalTimestamp).toLocaleString(locale,{timeZone:schedule.timezone||"UTC",timeZoneName:"short"}));
   $("estimatedWithdrawalStatus").textContent=t(estimatedWithdrawalTimestamp===null?(schedule.estimatedWithdrawalStatus||"Waiting for account check"):(schedule.estimatedWithdrawalStatus||"Estimate at the current BTC price, deposit and purchase interval"));
   $("withdrawalCountdownStatus").textContent=t(estimatedWithdrawalTimestamp===null?$("estimatedWithdrawalStatus").textContent:(schedule.estimatedWithdrawalStatus||"Estimate at the current BTC price, deposit and purchase interval"));
-  $('orderSummary').textContent=$('buyAmount').textContent;
-  $('orderSummaryNote').textContent=$('buyAmountNote').textContent;
   renderWithdrawalProgress(exchangeBtcBalance,Number(schedule.purchaseCurrencyPrice),Number(schedule.withdrawalThreshold),schedule.withdrawalsEnabled);
   renderPurchaseCountdown();
   sectionFeedback("scheduleFeedback","");
@@ -254,7 +247,7 @@ async function loadAnalytics(){
  const request=++reportRequest;$("refresh").ariaBusy="true";$("periodReport").ariaBusy="true";saveReportView();sectionFeedback("reportFeedback","");
  try{showError("");const p=selectedPeriod();const response=await fetch("/api/analytics?start="+p.start+"&end="+p.end+"&page="+currentPage+"&limit="+$("pageSize").value);const d=await response.json();if(!response.ok)throw new Error(d.error||"Could not load the report.");if(request!==reportRequest)return;quote=d.quote;
  displayCurrency=["EUR","USD"].includes(d.configuration.displayCurrency)?d.configuration.displayCurrency:(["EUR","USD"].includes(quote)?quote:"EUR");
- const ex=d.exchange==="KRAKEN"?"Kraken":d.exchange==="BITVAVO"?"Bitvavo":d.exchange;document.title="Bitcoin DCA Dashboard";
+ document.title="Bitcoin DCA Dashboard";
  let livePrice=Number((d.snapshot||{}).price||0),currencyRates={[quote]:1};
  const currencies=[...new Set([...Object.keys(d.summaryByCurrency||{}),...Object.keys(d.depositsByCurrency||{})])];
  try{
@@ -263,14 +256,12 @@ async function loadAnalytics(){
   fxRate=Number(market.conversionRate);livePrice=Number(market.price);currencyRates=Object.fromEntries(Object.entries(market.conversionRates||{[quote]:fxRate})
    .map(([currency,rate])=>[currency,Number(rate)]).filter(([,rate])=>Number.isFinite(rate)&&rate>0));
   currencyRates[displayCurrency]=1;
-  $("spotUpdated").textContent=t("Last checked "+dateLabel(Number(market.updatedAt)*1000));
+
  }catch(priceError){
   if(request!==reportRequest)return;
   displayCurrency=quote;fxRate=1;
   if(!(livePrice>0)&&balanceDisplayCurrency===quote&&balanceDisplayPrice>0)livePrice=balanceDisplayPrice;
-  const checked=Date.parse((d.snapshot||{}).updatedAt);
-  if(Number((d.snapshot||{}).price)>0&&Number.isFinite(checked))
-   $("spotUpdated").textContent=t("Last checked "+dateLabel(checked));
+
  }
  balanceDisplayPrice=livePrice;balanceDisplayCurrency=displayCurrency;renderExchangeBtcValue();
  $("spot").textContent=t(livePrice>0?money(livePrice,displayCurrency)+"/BTC":"—");
@@ -299,15 +290,6 @@ async function loadAnalytics(){
  renderPurchaseChart(d.purchaseSeries,currencyRates,livePrice,displayCurrency,moneyAvailable,p);
  $('modeBadge').textContent=t(d.configuration.liveTrading?'Live':'Simulation');
  $('withdrawalBadge').textContent=t(d.configuration.withdrawalsEnabled?'Enabled':'Disabled');
- $("settingExchange").textContent=t(ex);$("settingQuoteCurrency").textContent=t(quote);$("tradingMode").textContent=t(d.configuration.liveTrading?"Live":"Simulation");
- const amountSnapshot=d.snapshot||{};
- const effectiveMinimum=amountSnapshot.exchange===d.exchange&&amountSnapshot.quote===quote?Number((amountSnapshot.withdrawalForecastPlan||{}).orderAmount):NaN;
- $("buyAmount").textContent=t(d.snapshot.withdrawalForecastPlan?.useRemainingBudget&&effectiveMinimum>0?btc(effectiveMinimum):Number(d.configuration.buyAmount)===0
-  ?(Number.isFinite(effectiveMinimum)&&effectiveMinimum>0?btc(effectiveMinimum):"—")
-  :btc(d.configuration.buyAmount));
- $("buyAmountNote").textContent=t(d.snapshot.withdrawalForecastPlan?.useRemainingBudget?"Final purchase · uses remaining fiat":Number(d.configuration.buyAmount)===0?"(exchange minimum)"+(Number.isFinite(effectiveMinimum)&&effectiveMinimum>0?"":" · waiting for account check"):"");
- $("depositDay").textContent=t(String(d.configuration.depositDay));$("depositTime").textContent=t((d.configuration.depositTime||"00:00")+" · "+(d.configuration.timezone||"UTC"));$("withdrawEnabled").textContent=t(d.configuration.withdrawalsEnabled?"Enabled":"Disabled");
- $("threshold").textContent=t(money(Number(d.configuration.withdrawalThreshold)*fxRate,displayCurrency));$("thresholdCard").classList.toggle("threshold-inactive",!d.configuration.withdrawalsEnabled);$("thresholdNote").textContent=t(d.configuration.withdrawalsEnabled?"Threshold in "+quote+", shown in "+displayCurrency:"Automatic withdrawals disabled");
  $("buyCount").textContent=t(d.summary.buyCount);$("buyBtc").textContent=t(btc(d.summary.boughtBtc));
  $("buyVolume").textContent=t(moneyAvailable?money(converted.buyVolume,displayCurrency):"—");$("avgPrice").textContent=t(moneyAvailable?"Average: "+money(Number(d.summary.boughtBtc)>0?converted.buyVolume/Number(d.summary.boughtBtc):0,displayCurrency)+"/BTC":"Conversion unavailable");
  $("tradeFees").textContent=t(moneyAvailable?money(converted.tradeFees,displayCurrency):"—");$("withdrawBtc").textContent=t(btc(d.summary.withdrawnBtc));
@@ -354,9 +336,6 @@ async function loadWithdrawalConfiguration(){
     :"BTC is sent to "+d.target+" via "+(d.network||"BTC")+" on Bitvavo.")
   :"No withdrawal target is configured for "+(d.exchange==="KRAKEN"?"Kraken":"Bitvavo")+".";
  $("withdrawalDestination").textContent=t(destinationText);$("automaticWithdrawalDestination").textContent=t(destinationText);
- const target=d.target||"";
- $("withdrawalTarget").textContent=target?(d.exchange==="BITVAVO"&&target.length>22?target.slice(0,10)+"…"+target.slice(-8):target):"Not configured";
- $("withdrawalTarget").title=target;$("planWithdrawalTarget").textContent=target?t("Destination: {target}").replace("{target}",$("withdrawalTarget").textContent):t("Not configured");
  $("withdrawMessage").textContent=t(d.reason||"Manual withdrawals are available. Automatic withdrawals may remain disabled.");
  return d;
 }

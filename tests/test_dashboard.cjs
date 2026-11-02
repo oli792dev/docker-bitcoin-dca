@@ -5,8 +5,10 @@ import sys;sys.path.insert(0,'.');from app.webpage.scroll_ui import SCROLL_CSS,S
 from app.webpage.templates import dashboard_page;print(json.dumps(dashboard_page()))`],{encoding:'utf8'}));
 const script=html.split('<script>')[1].split('</script>')[0];
 class Element{
- constructor(){this.value='';this.children=[];this.handlers={};this.textContent='';this.disabled=false;this.classList={toggle(){},add(){},remove(){}}}
- setAttribute(name,value){this[name]=value}
+ constructor(){this.attributes={};this.value='';this.children=[];this.handlers={};this.textContent='';this.disabled=false;this.classList={toggle(){},add(){},remove(){}}}
+ setAttribute(name,value){this.attributes[name]=String(value);this[name]=value;if(name==='hidden')this.hidden=true}
+ getAttribute(name){return this.attributes[name]??null}
+ removeAttribute(name){delete this.attributes[name];delete this[name];if(name==='hidden')this.hidden=false}
  getBoundingClientRect(){return {left:0,width:1000}}
  appendChild(e){this.children.push(e)} append(...e){this.children.push(...e)} replaceChildren(...e){this.children=e}
  showModal(){this.open=true} close(value=''){this.returnValue=value;this.open=false;this.handlers.close?.()}
@@ -48,17 +50,17 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  const start=Date.parse(get('start').value),end=Date.parse(get('end').value);
  context.chartPoints=[{timestamp:start+1000,btc:'.001',costs:{EUR:'80.2'}},{timestamp:end,btc:'.001',costs:{USD:'100.25'}}];
  vm.runInContext('renderPurchaseChart(chartPoints,{EUR:1,USD:.9},84000,"EUR",true)',context);
- assert.equal(get('purchaseChart').hidden,false);assert(get('purchaseChart').children.some(node=>String(node.d).includes('H990')));get('purchaseChart').onpointermove({clientX:1000});assert.equal(get('chartTooltip').hidden,false);assert(get('chartTooltip').textContent.includes('€168.00'));get('purchaseChart').onkeydown({key:'Escape',preventDefault(){}});assert.equal(get('chartTooltip').hidden,true);
+ assert.equal(get('purchaseChart').hidden,false);assert.equal(get('purchaseChart').getAttribute('hidden'),null,'SVG visibility must remove the actual hidden attribute');assert(get('purchaseChart').children.some(node=>String(node.d).includes('H990')));get('purchaseChart').onpointermove({clientX:1000});assert.equal(get('chartTooltip').hidden,false);assert(get('chartTooltip').textContent.includes('€168.00'));get('purchaseChart').onkeydown({key:'Escape',preventDefault(){}});assert.equal(get('chartTooltip').hidden,true);
  vm.runInContext('renderPurchaseChart(chartPoints,{EUR:1},84000,"EUR",true)',context);assert.equal(get('purchaseChart').hidden,true);
- const previousForecast=get('estimatedWithdrawalAt').textContent;forecastAt='2027-02-15T09:00:00Z';await vm.runInContext('refreshPurchaseSchedule()',context);assert.notEqual(get('estimatedWithdrawalAt').textContent,previousForecast);assert.equal(vm.runInContext('estimatedWithdrawalTimestamp',context),Date.parse(forecastAt));assert.equal(get('thresholdNote').textContent,'Automatic withdrawals disabled');
+ const previousForecast=get('estimatedWithdrawalAt').textContent;forecastAt='2027-02-15T09:00:00Z';await vm.runInContext('refreshPurchaseSchedule()',context);assert.notEqual(get('estimatedWithdrawalAt').textContent,previousForecast);assert.equal(vm.runInContext('estimatedWithdrawalTimestamp',context),Date.parse(forecastAt));assert(!html.includes('Bot details'));assert(!html.includes('id="thresholdNote"'));
  assert.equal(get('depositVolume').textContent,'€200.00');assert(!html.includes('id="depositCount"'));assert(!html.includes('id="withdrawCount"'));
  assert(html.includes('class="report-primary"'));assert(html.indexOf('id="investedTotal"')<html.indexOf('id="depositVolume"'));
  assert(!html.includes('id="nextPurchaseStatus"'));waitingDeposit=true;await vm.runInContext('refreshPurchaseSchedule()',context);
  assert.equal(get('nextPurchaseAt').textContent,'Waiting for deposit');assert.equal(get('nextPurchaseCountdown').textContent,'Waiting for deposit');
  vm.runInContext('renderPurchaseCountdown()',context);assert.equal(get('nextPurchaseCountdown').textContent,'Waiting for deposit');waitingDeposit=false;await vm.runInContext('refreshPurchaseSchedule()',context);
  assert(!html.includes('id="monthlyDeposit"'),'Forecast amount is edited in Settings only');
- assert.match(get('forecastDepositSummary').textContent,/Settings/);
- configuredMonthlyDeposit='350';await vm.runInContext('refreshPurchaseSchedule()',context);assert.match(get('forecastDepositSummary').textContent,/350/);
+ assert(!html.includes('id="forecastDepositSummary"'));assert(!html.includes('id="planWithdrawalTarget"'));
+ configuredMonthlyDeposit='350';await vm.runInContext('refreshPurchaseSchedule()',context);
  assert(get('start').value&&get('end').value,'Both dates must initialize for the selected interval');
  assert.equal(get('end').value,vm.runInContext('localInput(Date.now())',context),'Each page load uses the current end time');
  assert.equal(get('interval').value,'','A range ending now must not claim to be a closed withdrawal interval');
@@ -94,7 +96,7 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  assert.equal(get('buyVolume').textContent,'€3,600.00','EUR string rate must retain monetary totals');
  assert.equal(get('error').textContent,'','EUR-only history must not report mixed currencies');
  priceUnavailable=true;await vm.runInContext('loadAnalytics()',context);
- assert(get('spotUpdated').textContent.startsWith('Last checked '));
+ assert(get('accountCheckedAt').textContent.startsWith('Last checked '));
  assert(!html.includes('id="priceFeedback"'));
  assert.equal(get('buyVolume').textContent,'€3,600.00','EUR totals need no external conversion rate');
  assert(!get('error').textContent.includes('multiple currencies'));
