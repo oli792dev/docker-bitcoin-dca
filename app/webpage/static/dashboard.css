@@ -188,3 +188,5 @@ __DESIGN_CSS__
 .status-light.status-active{background:var(--green)}
 .status-light.status-waiting{background:var(--warning)}
 .status-light.status-error{background:var(--red)}
+
+#thresholdCard.threshold-inactive .value{color:var(--muted);opacity:.55}

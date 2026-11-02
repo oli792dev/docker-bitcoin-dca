@@ -259,7 +259,7 @@ async function loadAnalytics(){
   :btc(d.configuration.buyAmount));
  $("buyAmountNote").textContent=t(d.snapshot.withdrawalForecastPlan?.useRemainingBudget?"Final purchase · uses remaining fiat":Number(d.configuration.buyAmount)===0?"(exchange minimum)"+(Number.isFinite(effectiveMinimum)&&effectiveMinimum>0?"":" · waiting for account check"):"");
  $("depositDay").textContent=t(String(d.configuration.depositDay));$("depositTime").textContent=t((d.configuration.depositTime||"00:00")+" · "+(d.configuration.timezone||"UTC"));$("withdrawEnabled").textContent=t(d.configuration.withdrawalsEnabled?"Enabled":"Disabled");
- $("threshold").textContent=t(money(Number(d.configuration.withdrawalThreshold)*fxRate,displayCurrency));$("thresholdNote").textContent=t("Threshold in "+quote+", shown in "+displayCurrency);
+ $("threshold").textContent=t(money(Number(d.configuration.withdrawalThreshold)*fxRate,displayCurrency));$("thresholdCard").classList.toggle("threshold-inactive",!d.configuration.withdrawalsEnabled);$("thresholdNote").textContent=t(d.configuration.withdrawalsEnabled?"Threshold in "+quote+", shown in "+displayCurrency:"Automatic withdrawals disabled");
  $("buyCount").textContent=t(d.summary.buyCount);$("buyBtc").textContent=t(btc(d.summary.boughtBtc));
  $("buyVolume").textContent=t(moneyAvailable?money(converted.buyVolume,displayCurrency):"—");$("avgPrice").textContent=t(moneyAvailable?"Average: "+money(Number(d.summary.boughtBtc)>0?converted.buyVolume/Number(d.summary.boughtBtc):0,displayCurrency)+"/BTC":"Conversion unavailable");
  $("tradeFees").textContent=t(moneyAvailable?money(converted.tradeFees,displayCurrency):"—");$("withdrawBtc").textContent=t(btc(d.summary.withdrawnBtc));

@@ -67,6 +67,15 @@ class MonthlyForecastTests(unittest.TestCase):
         self.snapshot["withdrawalForecastPlan"]["nextDepositAt"]="2026-11-01T09:30:00+00:00"
         target,_=withdrawal_forecast(self.settings,self.snapshot,"202",self.now)
         self.assertEqual(datetime.fromisoformat(target),datetime(2026,11,16,9,30,tzinfo=timezone.utc))
+    def test_account_check_values_recalculate_forecast(self):
+        original,_=withdrawal_forecast(self.settings,self.snapshot,'202',self.now)
+        self.snapshot['btcBalance']='.003'
+        updated,_=withdrawal_forecast(self.settings,self.snapshot,'202',self.now)
+        self.assertLess(datetime.fromisoformat(updated),datetime.fromisoformat(original))
+        self.snapshot['price']='200000'
+        repriced,_=withdrawal_forecast(self.settings,self.snapshot,'202',self.now)
+        self.assertEqual(repriced,self.now.isoformat())
+
     def test_waiting_for_deposit_forecasts_without_a_scheduled_purchase(self):
         self.snapshot['nextPurchaseAt']=None
         self.snapshot['withdrawalForecastPlan']['budget']='0'
