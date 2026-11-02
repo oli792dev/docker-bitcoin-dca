@@ -288,10 +288,13 @@ class Handler(BaseHTTPRequestHandler):
         if not settings.get('parqet_enabled', True): hidden += ['#download', '#parqet-actions', '#exportMessage', '#parqet-note', '#manual-export-note']
         if not settings.get('withdrawals_enabled', False): hidden += ['#automatic-withdrawal-note']
         styles = '<style>' + ','.join(hidden) + '{display:none!important}</style>' if hidden else ''
+        kraken = settings['exchange']=='KRAKEN'
+        target = settings.get('kraken_withdraw_key' if kraken else 'withdraw_address')
+        destination = ('BTC is sent to the address saved in Kraken under “'+target+'”.' if kraken else
+                       'BTC is sent to '+target+' via '+(settings.get('withdraw_network') or 'BTC')+' on Bitvavo.') if target else 'No withdrawal target is configured for '+('Kraken' if kraken else 'Bitvavo')+'.'
+        destination = html.escape(translate(destination,settings.get('language','en')))
         first_start = self.runtime.store.report_from() if self.runtime and hasattr(self.runtime.store,'report_from') else ''
-        page = HTML.replace('__REPORT_FROM__', html.escape(first_start, quote=True)).replace('</head>', styles + '</head>')
-        if not settings.get('withdrawals_enabled', False):
-            page = page.replace('Schedule and automatic withdrawal</strong>', 'Purchase schedule</strong>')
+        page = HTML.replace('__WITHDRAW_DESTINATION__',destination).replace('__REPORT_FROM__', html.escape(first_start, quote=True)).replace('</head>', styles + '</head>')
         if not settings.get('parqet_enabled', True):
             page = page.replace('Period analysis and Parqet export</strong>', 'Period analysis</strong>')
             page = page.replace('to review activity and prepare a Parqet export.', 'to review activity.')
@@ -450,17 +453,17 @@ class Handler(BaseHTTPRequestHandler):
             if not settings.get('manual_withdrawal_enabled', True):
                 missing.append('enable manual withdrawals in Settings')
             if not settings["live"]:
-                missing.append("enable LIVE_TRADING=true")
+                missing.append("enable live trading in Settings")
             if kraken:
                 if not settings.get("kraken_withdraw_key"):
-                    missing.append("set KRAKEN_WITHDRAW_KEY to your saved Bitcoin withdrawal method in Settings")
+                    missing.append("set a Bitcoin withdrawal method in Settings → Exchange")
             else:
                 if not settings.get("withdraw_address"):
-                    missing.append("set WITHDRAW_ADDRESS in Settings")
+                    missing.append("set a Bitcoin withdrawal address in Settings → Exchange")
                 if not settings.get("withdraw_network"):
-                    missing.append("set WITHDRAW_NETWORK in Settings")
+                    missing.append("set a Bitcoin network in Settings → Exchange")
             if not self.withdrawal_service:
-                missing.append("restart the bot to enable the withdrawal service")
+                missing.append("wait for the withdrawal service to become available")
             reason = "Manual withdrawal is unavailable: " + "; ".join(missing) + "." if missing else ""
             self._json(200, {"destination": destination, "enabled": not missing, "reason": reason,
                              "exchange": settings["exchange"],
@@ -557,6 +560,7 @@ class Handler(BaseHTTPRequestHandler):
                     {
                         "timestamp": _row_timestamp_ms(record["row"]),
                         "txId": record.get("id", ""),
+                        "exchange": record.get("exchange", ""),
                     }
                     for record in withdrawal_records()
                     if record.get('withdrawalStatus')=='completed' 

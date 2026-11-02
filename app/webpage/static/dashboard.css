@@ -306,3 +306,17 @@ __DESIGN_CSS__
 
 @media(pointer:coarse){.redesigned .period-shortcuts button{min-height:44px}}
 @media(min-width:801px) and (max-width:1000px){.redesigned .report-primary{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+.redesigned .period-activities{border:0;padding-top:0;margin-top:24px}
+.redesigned .period-activities>summary{display:flex;align-items:center;gap:8px;list-style:none;min-height:44px;padding:8px 0;color:var(--text);font-size:1.05rem;font-weight:600;cursor:pointer}
+.redesigned .period-activities>summary::-webkit-details-marker{display:none}
+.redesigned .period-activities>summary::before{content:'›';font-size:1.1rem;line-height:1;transition:transform 150ms ease}
+.redesigned .period-activities[open]>summary::before{transform:rotate(90deg)}
+.redesigned .period-activities .activity-panel{margin-top:8px}
+.redesigned .report-extra .value{color:var(--text);font-weight:600}
+
+.parqet-export-dialog{width:min(620px,calc(100vw - 32px))}
+.parqet-export-dialog .field{margin-top:16px}
+.parqet-export-dialog select{width:100%;min-width:0;min-height:44px}
+.parqet-export-dialog .confirmation-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:16px}
+.parqet-export-dialog .feedback-wrap{margin-top:12px}

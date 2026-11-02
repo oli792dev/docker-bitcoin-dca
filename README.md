@@ -56,9 +56,9 @@ Expected monthly deposit in Settings → Bot Configuration affects only the with
 
 The dashboard shows balances and upcoming purchases/withdrawals. Analysis summarizes purchases, deposits, withdrawals, fees and current purchase value. Month and Year load automatically; Custom date range opens date controls and confirmed withdrawal intervals. Activities include purchases, confirmed fiat deposits, withdrawals and fees. From initially uses the volume-saved first container start; subsequent changes are also volume-saved. To resets to now. Existing volumes establish this timestamp on their first start with this feature.
 
-Manual withdrawal and Parqet export are available on the left of the Settings footer. Actions use saved settings; export uses the selected analysis period.
+Manual withdrawal and Parqet export are available on the left of the Settings footer. Export opens a selector for confirmed withdrawal cycles.
 
-The Parqet CSV exports one consolidated Buy row for the complete cycle after the previous confirmed withdrawal through the last confirmed withdrawal in the selected range. It uses actual purchase costs and trading fees in EUR and net withdrawn BTC after network fees. Deposits, later purchases and Simulation activity are excluded. A real purchase and confirmed withdrawal are required. Re-importing an export can create duplicates.
+The Parqet CSV exports one consolidated Buy row for the complete cycle ending at the selected confirmed withdrawal, since its predecessor or the first recorded purchase. It uses actual purchase costs and trading fees in EUR and net withdrawn BTC after network fees. Deposits, later purchases and Simulation activity are excluded. A real purchase and confirmed withdrawal are required. Re-importing an export can create duplicates.
 
 ## Data and updates
 

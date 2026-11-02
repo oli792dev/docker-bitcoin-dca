@@ -113,8 +113,8 @@ class Tests(unittest.TestCase):
         self.assertEqual(len(self.api.sent),1)
 
     def test_withdrawal_configuration_reports_missing_settings(self):
-        for exchange, missing in [('KRAKEN', ['LIVE_TRADING', 'KRAKEN_WITHDRAW_KEY']),
-                                  ('BITVAVO', ['LIVE_TRADING', 'WITHDRAW_ADDRESS', 'WITHDRAW_NETWORK'])]:
+        for exchange, missing in [('KRAKEN', ['live trading', 'withdrawal method']),
+                                  ('BITVAVO', ['live trading', 'withdrawal address', 'Bitcoin network'])]:
             handler = object.__new__(web_ui.Handler)
             handler.settings = {**self.s, 'exchange': exchange, 'live': False,
                                 'kraken_withdraw_key': '', 'withdraw_address': '', 'withdraw_network': ''}
@@ -129,18 +129,27 @@ class Tests(unittest.TestCase):
             for setting in missing:
                 self.assertIn(setting, result[0][1]['reason'])
 
-    def test_manual_withdrawal_configuration_ignores_automatic_toggle(self):
-        handler = object.__new__(web_ui.Handler)
-        handler.settings = {**self.s, 'withdrawals_enabled': False}
-        handler.withdrawal_service = lambda *args: None
-        handler.path = '/api/withdrawal/config'
-        handler._require_authentication = lambda: True
-        result = []
-        handler._json = lambda status, body: result.append((status, body))
-        handler.do_GET()
-        self.assertEqual(result[0][0], 200)
-        self.assertTrue(result[0][1]['enabled'])
-        self.assertEqual(result[0][1]['reason'], '')
+    def test_manual_withdrawal_configuration_tracks_runtime_gate_without_caching_it_in_notes(self):
+        from itertools import product
+        from types import SimpleNamespace
+        from app.core.configuration import DEFAULTS
+        for exchange,live,manual,target,pending,automatic in product(('KRAKEN','BITVAVO'),*( (False,True),)*5):
+            with self.subTest(exchange=exchange,live=live,manual=manual,target=target,pending=pending,automatic=automatic):
+                handler=object.__new__(web_ui.Handler)
+                values={**DEFAULTS,'exchange':exchange,'live':live,'manual_withdrawal_enabled':manual,
+                                  'withdrawals_enabled':automatic,'kraken_withdraw_key':'Wallet' if target else '',
+                                  'withdraw_address':'bc1-test' if target else '','withdraw_network':'BTC'}
+                handler.settings=values
+                handler.runtime=SimpleNamespace(exchange_check_pending=pending,store=SimpleNamespace(snapshot=lambda:{'settings':values},report_from=lambda:'2026-01-01T00:00:00Z'))
+                handler.withdrawal_service=lambda *args:None;handler.path='/api/withdrawal/config'
+                handler._require_authentication=lambda:True
+                result=[];handler._json=lambda status,body:result.append(body)
+                handler.do_GET()
+                self.assertEqual(result[0]['enabled'],live and manual and target and not pending)
+                page=handler._dashboard_html()
+                self.assertNotIn('id="withdrawMessage"',page)
+                self.assertNotIn('__WITHDRAW_DESTINATION__',page)
+                if target:self.assertIn('Wallet' if exchange=='KRAKEN' else 'bc1-test',page)
 
     def test_route_auth_and_csrf(self):
         handler=object.__new__(web_ui.Handler);handler.path='/api/withdrawal/confirm';handler.headers={};handler._json=lambda status,result:statuses.append(status)

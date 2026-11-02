@@ -20,19 +20,26 @@ function updatePurchaseCurrencyLabel(){$('withdraw_thresholdLabel').textContent=
 function selectedExchange(){const kraken=$('exchange').value==='KRAKEN';for(const prefix of ['kraken','bitvavo'])for(const part of ['key','secret'])$(prefix+'_api_'+part).parentElement.hidden=(prefix==='kraken')!==kraken;$('krakenTarget').hidden=!kraken;$('bitvavoTarget').hidden=kraken;$('bitvavoNetwork').hidden=kraken;$('quote').options[1].disabled=!kraken;if(!kraken)$('quote').value='EUR';updateExchangeGuidance();updatePurchaseCurrencyLabel()}
 function exchangeCredentialsReady(){if(!exchangeChanged())return true;const prefix=$('exchange').value.toLowerCase();if(!$(prefix+'_api_key').value.trim()||!$(prefix+'_api_secret').value.trim()){activateSettingsTab('exchangeConnection');connectionMessage('Enter '+exchangeName()+' API key and API secret before testing or saving.',true);return false}return true}
 
-for(const prefix of ['kraken','bitvavo'])for(const part of ['key','secret']){const key=prefix+'_api_'+part,field=document.createElement('div'),label=document.createElement('label'),input=document.createElement('input');label.htmlFor=key;label.textContent=t(prefix[0].toUpperCase()+prefix.slice(1)+' API '+part);input.id=key;input.type='password';input.autocomplete='off';input.autocapitalize='none';input.spellcheck=false;input.setAttribute('aria-describedby','exchangePermissionsHint');input.dataset.setting='';input.placeholder=t(initial.settings[key+'_configured']?'Saved · leave empty to keep':'Not configured');field.append(label,input);$('credentials').append(field)}
+for(const prefix of ['kraken','bitvavo'])for(const part of ['key','secret']){const key=prefix+'_api_'+part,field=document.createElement('div'),label=document.createElement('label'),input=document.createElement('input');label.htmlFor=key;label.textContent=t(prefix[0].toUpperCase()+prefix.slice(1)+' API '+part);input.id=key;input.type='password';input.autocomplete='off';input.autocapitalize='none';input.spellcheck=false;input.setAttribute('aria-describedby','exchangePermissionsHint');input.dataset.setting='';input.placeholder=t(initial.settings[key+'_configured']?'Saved · leave empty to keep':'Not configured');field.className='setting-row';field.append(label,input);$('credentials').append(field)}
 const fields=[
  ['buy_amount','BTC per purchase (0 = exchange minimum)','0','any',null,'Amounts below exchange minimum are not applied.'],
- ['startup_delay_seconds','Startup delay (seconds)','0','1','86400','Delay before the first account check after startup or setup.'],
- ['deposit_day','Deposit day (day of month)','1','1','31','Monthly day; shorter months use their last day. Does not initiate deposits.'],
- ['deposit_time','Deposit time','00:00','60','23:59','Expected local deposit time, used to calculate purchase intervals.'],
- ['expected_monthly_deposit','Expected monthly deposit (purchase currency)','0','0.01',null,'Forecast only. Assumes deposits on the configured day and time; does not transfer money or change actual purchases.'],
- ['check_interval_seconds','Account check interval (seconds)','60','1','86400','Time until the next balance refresh and recalculation of the purchase and withdrawal schedules.'],
- ['order_status_check_seconds','Open order check interval (seconds)','1','1','3600','Recheck submitted orders; unresolved orders block new purchases.'],
- ['withdraw_threshold','Automatic withdrawal threshold (purchase currency)','0.01','any',null,'Withdraw when all available exchange BTC reaches this value in the purchase currency. Requires automatic withdrawals and live trading.']
+ ['startup_delay_seconds','Startup delay (seconds)','0','1','86400','Wait before the first account check after startup.'],
+ ['deposit_day','Deposit day (day of month)','1','1','31','Short months use their last day. Does not transfer money.'],
+ ['deposit_time','Deposit time','00:00','60','23:59','Expected local deposit time for purchase planning.'],
+ ['expected_monthly_deposit','Expected monthly deposit (purchase currency)','0','0.01',null,'Forecast only; assumes deposits on this day and time.'],
+ ['check_interval_seconds','Account check interval (seconds)','60','1','86400','Refresh balances, prices, purchase and withdrawal schedules.'],
+ ['order_status_check_seconds','Open order check interval (seconds)','1','1','3600','Recheck pending orders; new purchases wait for confirmation.'],
+ ['withdraw_threshold','Automatic withdrawal threshold (purchase currency)','0.01','any',null,'All available exchange BTC, valued in the purchase currency.']
 ];
-$('purchaseFields').append($('liveTradingCard'));
-for(const [key,title,min,step,max,description] of fields){if(key==='withdraw_threshold')$('purchaseFields').append($('automaticWithdrawalsCard'));const field=document.createElement('div'),label=document.createElement('label'),input=document.createElement('input'),hint=document.createElement('small');label.htmlFor=key;label.id=key+'Label';label.textContent=t(title);input.id=key;input.type=key==='deposit_time'?'time':'number';if(input.type==='number')input.inputMode=['buy_amount','withdraw_threshold','expected_monthly_deposit'].includes(key)?'decimal':'numeric';input.required=key!=='expected_monthly_deposit';input.dataset.setting='';input.min=min;input.step=step;if(max)input.max=max;hint.id=key+'Hint';hint.className='hint field-description';hint.textContent=t(description);input.setAttribute('aria-describedby',hint.id);field.append(label,input,hint);$('purchaseFields').append(field)}
+const settingGroups={};
+for(const [id,title] of [['purchase','Purchases'],['deposit','Deposits'],['withdrawal','Withdrawals'],['timing','Timing']]){
+ const group=document.createElement('section'),heading=document.createElement('h3'),list=document.createElement('div');
+ group.className='settings-group';heading.id=id+'GroupTitle';heading.textContent=t(title);group.setAttribute('aria-labelledby',heading.id);list.id=id+'GroupFields';list.className='setting-list';group.append(heading,list);$('purchaseFields').append(group);settingGroups[id]=list;
+}
+settingGroups.purchase.append($('liveTradingCard'));settingGroups.withdrawal.append($('automaticWithdrawalsCard'));
+const depositDateFields=document.createElement('div');depositDateFields.id='depositDateFields';depositDateFields.className='setting-pair';settingGroups.deposit.append(depositDateFields);
+const fieldGroup={buy_amount:'purchase',deposit_day:'deposit',deposit_time:'deposit',expected_monthly_deposit:'deposit',withdraw_threshold:'withdrawal',startup_delay_seconds:'timing',check_interval_seconds:'timing',order_status_check_seconds:'timing'};
+for(const [key,title,min,step,max,description] of fields){const field=document.createElement('div'),label=document.createElement('label'),input=document.createElement('input'),hint=document.createElement('small');field.className='setting-row';label.htmlFor=key;label.id=key+'Label';label.textContent=t(title);input.id=key;input.type=key==='deposit_time'?'time':'number';if(input.type==='number')input.inputMode=['buy_amount','withdraw_threshold','expected_monthly_deposit'].includes(key)?'decimal':'numeric';input.required=key!=='expected_monthly_deposit';input.dataset.setting='';input.min=min;input.step=step;if(max)input.max=max;hint.id=key+'Hint';hint.className='hint field-description';hint.textContent=t(description);input.setAttribute('aria-describedby',hint.id);field.append(label,input,hint);(['deposit_day','deposit_time'].includes(key)?depositDateFields:settingGroups[fieldGroup[key]]).append(field)}
 const timezoneGroups=[
  ['Universal',[['UTC','UTC']]],
  ['Europe',[['Europe/Berlin','Berlin'],['Europe/London','London'],['Europe/Paris','Paris'],['Europe/Zurich','Zurich'],['Europe/Helsinki','Helsinki'],['Europe/Istanbul','Istanbul'],['Europe/Moscow','Moscow']]],
@@ -179,7 +186,7 @@ if(initial.embedded)window.parent.postMessage({type:'dca-settings-ready'},locati
 
 // Account actions use the saved dashboard configuration, never the Settings draft.
 if(initial.complete&&initial.embedded){
- $('settingsQuickActions').hidden=false;$('settingsActionsHint').hidden=false;
+ $('settingsQuickActions').hidden=false;
  $('settingsWithdraw').hidden=!initial.settings.manual_withdrawal_enabled;
  $('settingsExport').hidden=!initial.settings.parqet_enabled;
  for(const [id,action] of [['settingsWithdraw','withdraw'],['settingsExport','export']])$(id).addEventListener('click',()=>{

@@ -277,18 +277,43 @@ async function loadAnalytics(){
  }catch(e){if(request===reportRequest)showError(e.message)}
  finally{if(request===reportRequest){$("periodReport").ariaBusy="false";sectionFeedback("reportFeedback","")}}
 }
-async function downloadParqetCsv(){
- logUiEvent("export_clicked");
- actionFeedback("export",t("Generating CSV…"),false,true);
+let exportDialogRequest=0,exportIntervalError='';
+function exportDialogMessage(message){$('exportDialogMessage').textContent=t(message);$('exportDialogMessage').classList.toggle('hidden',!message)}
+async function requestParqetExport(){
+ logUiEvent('export_clicked');actionFeedback('export','',false,false);
+ const request=++exportDialogRequest,select=$('exportInterval');select.replaceChildren();select.disabled=true;$('confirmExport').disabled=true;exportIntervalError='';exportDialogMessage('');$('exportDialog').showModal();
  try{
-  const p=selectedPeriod(),response=await fetch("/api/export.csv?start="+p.start+"&end="+p.end);
-  if(!response.ok){const d=await response.json();throw new Error(d.error||"Could not generate the CSV export.")}
-  const blob=await response.blob(),url=URL.createObjectURL(blob),a=document.createElement("a");
-  a.href=url;a.download="parqet_btc_"+new Date(p.start).toISOString().slice(0,10)+"_"+new Date(p.end).toISOString().slice(0,10)+".csv";
-  a.click();URL.revokeObjectURL(url);
- actionFeedback("export",t("CSV export prepared."),false);
- }catch(e){actionFeedback("export",t(e.message),true)}
- finally{actionFeedback("export",null,false,false)}
+  const response=await fetch('/api/withdrawals');if(!response.ok)throw new Error('Could not load withdrawal history.');
+  const records=await response.json();if(request!==exportDialogRequest)return;
+  const previous=new Map();let period;try{period=selectedPeriod()}catch{period={start:0,end:Date.now()}}let preferred='';
+  for(const withdrawal of records){
+   const end=Number(withdrawal.timestamp);if(!Number.isFinite(end)||end<=0)continue;
+   const exchange=withdrawal.exchange||'',start=previous.get(exchange)||0;previous.set(exchange,end);if(start>=end)continue;
+   const option=document.createElement('option');option.value=start+','+end;
+   const name=exchange==='KRAKEN'?'Kraken':exchange==='BITVAVO'?'Bitvavo':exchange;
+   option.textContent=(name?name+' · ':'')+(start?dateLabel(start):t('First recorded purchase'))+' → '+dateLabel(end);
+   select.appendChild(option);if(end>period.start&&end<=period.end)preferred=option.value;
+  }
+  if(!select.children.length){const option=document.createElement('option');option.value='';option.textContent=t('Select a withdrawal interval');select.appendChild(option);select.value=''}
+  else{select.disabled=false;select.value=preferred||select.children[select.children.length-1].value}
+ }catch(error){if(request!==exportDialogRequest)return;exportIntervalError=error.message;const option=document.createElement('option');option.value='';option.textContent=t('Select a withdrawal interval');select.appendChild(option);select.value=''}
+ finally{if(request===exportDialogRequest)$('confirmExport').disabled=false}
+}
+$('cancelExport').addEventListener('click',()=>$('exportDialog').close());
+$('confirmExport').addEventListener('click',downloadParqetCsv);
+async function downloadParqetCsv(){
+ const button=$('confirmExport');exportDialogMessage('');button.disabled=true;
+ try{
+  if(exportIntervalError)throw new Error(exportIntervalError);
+  const choice=$('exportInterval').value;
+  if(!choice)throw new Error('No confirmed withdrawal is available. Export after your first confirmed withdrawal.');
+  const [start,end]=choice.split(',').map(Number);if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||start>=end)throw new Error('Please choose a valid withdrawal interval.');
+  const response=await fetch('/api/export.csv?start='+start+'&end='+end);
+  if(!response.ok){const data=await response.json();throw new Error(data.error||'Could not generate the CSV export.')}
+  const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='parqet_btc_'+new Date(end).toISOString().slice(0,10)+'.csv';link.click();URL.revokeObjectURL(url);
+  $('exportDialog').close();actionFeedback('export',t('CSV export prepared.'),false);
+ }catch(error){exportDialogMessage(error.message)}
+ finally{button.disabled=false}
 }
 
 async function withdrawalPost(path, body){
@@ -314,7 +339,7 @@ async function loadWithdrawalConfiguration(){
     :"BTC is sent to "+d.target+" via "+(d.network||"BTC")+" on Bitvavo.")
   :"No withdrawal target is configured for "+(d.exchange==="KRAKEN"?"Kraken":"Bitvavo")+".";
  $("withdrawalDestination").textContent=t(destinationText);$("automaticWithdrawalDestination").textContent=t(destinationText);
- $("withdrawMessage").textContent=t(d.reason||"Manual withdrawals are available. Automatic withdrawals may remain disabled.");
+
  return d;
 }
 function actionFeedback(action,message,error=false,busy=null){
@@ -322,7 +347,7 @@ function actionFeedback(action,message,error=false,busy=null){
  frame?.contentWindow?.postMessage({type:'dca-dashboard-action-feedback',action,message,error,busy},window.location.origin);
 }
 function showWithdrawalMessage(message,error=true){
- $("withdrawMessage").textContent=t(message);
+
  actionFeedback('withdraw',t(message),error);
 }
 async function requestManualWithdrawal(){
@@ -334,7 +359,7 @@ async function requestManualWithdrawal(){
  if(!configuration.enabled){showWithdrawalMessage(configuration.reason||"Manual withdrawal is not configured. See Notes.");return}
  const p=await withdrawalPost("/api/withdrawal/preview",{});
  if(!await confirmWithdrawal(p)){
-  $("withdrawMessage").textContent=t(configuration.reason||"");
+
   actionFeedback("withdraw","",false);
   return;
  }
@@ -344,8 +369,7 @@ async function requestManualWithdrawal(){
  }catch(e){showWithdrawalMessage(e.message)}
  finally{actionFeedback("withdraw",null,false,false)}
 }
-window.DCA_DASHBOARD_ACTIONS={withdraw:requestManualWithdrawal,export:downloadParqetCsv};
-loadWithdrawalConfiguration().catch(e=>{showWithdrawalMessage(e.message)});
+window.DCA_DASHBOARD_ACTIONS={withdraw:requestManualWithdrawal,export:requestParqetExport};
 refreshPurchaseSchedule();
 
 (async()=>{
