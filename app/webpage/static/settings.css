@@ -156,7 +156,8 @@ __DESIGN_CSS__
 @media(min-width:601px){.settings-page #credentials .setting-row{grid-template-columns:minmax(0,1fr) minmax(160px,48%)}}
 @media(pointer:coarse){.settings-page #testConnection{min-height:44px}}
 
-/* Login is a full-width group within Dashboard settings. */
-.settings-page #dashboardCredentials{grid-column:1/-1}
+/* Features and Login share the right-hand Dashboard column. */
+.settings-page .dashboard-secondary{display:flex;flex-direction:column;gap:var(--space-xl);min-width:0}
+.settings-page .dashboard-secondary #dashboardEditor .setting-list{display:flex;flex-direction:column;gap:0}
 
 .settings-page #testConnection{border-color:transparent}
