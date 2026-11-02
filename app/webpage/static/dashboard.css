@@ -319,3 +319,34 @@ __DESIGN_CSS__
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)[open]>summary::before{transform:rotate(90deg)}
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary:hover{color:var(--accent)}
 .redesigned .report-extra{padding-top:var(--space-sm)}
+
+/* Quiet surfaces and a deliberate hierarchy for financial data. */
+.redesigned .balance-overview{column-gap:clamp(20px,4vw,48px);padding-bottom:28px}
+.redesigned .metric>.value{font-weight:600;letter-spacing:-.035em;line-height:1.22;margin-top:8px}
+.redesigned .balance-overview>.metric:first-child>.value{font-size:clamp(1.65rem,3vw,2.2rem)}
+.redesigned .value-unit{font-size:.62em;font-weight:500;letter-spacing:0;color:var(--muted);white-space:nowrap}
+.redesigned .metric-label{font-weight:500}
+.redesigned .planning-overview{gap:16px}
+.redesigned .plan-card{border-color:transparent;padding:20px;gap:0}
+.redesigned .plan-title{margin-bottom:12px;align-items:baseline}
+.redesigned .plan-title h2{font-weight:600;letter-spacing:-.015em}
+.redesigned .plan-card>.value{font-size:clamp(1.35rem,2.5vw,1.65rem);line-height:1.3;letter-spacing:-.025em}
+.redesigned .plan-countdown{color:var(--text);font-weight:500;margin-top:6px}
+.redesigned .plan-footer{border:0;padding-top:0;margin-top:16px;font-size:.82rem}
+.redesigned progress{margin-top:16px;height:4px}
+.redesigned .analysis-section{padding-top:24px;margin-top:24px}
+.redesigned .selected-period-label{margin-bottom:20px;font-size:.94rem}
+.redesigned .report-primary{gap:20px 24px}
+.redesigned .report-primary .value{font-weight:600;line-height:1.25;margin-top:8px}
+.redesigned .report-extra{gap:16px 24px}
+.redesigned .activity-panel .activity-heading{margin-bottom:8px}
+.redesigned th.num{text-align:right;font-variant-numeric:tabular-nums}
+.redesigned .plan-title>span:empty{display:none}
+@media(max-width:600px){
+ .redesigned .balance-overview{gap:20px 16px;padding-bottom:20px}
+ .redesigned .metric>.value{font-size:1.45rem}
+ .redesigned .plan-card{padding:16px}
+ .redesigned .report-primary{gap:20px 16px}
+}
+@media(prefers-contrast:more){.redesigned .plan-card{border-color:var(--line)}}
+@media(forced-colors:active){.redesigned .plan-card{border-color:CanvasText}}

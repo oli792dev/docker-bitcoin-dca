@@ -14,7 +14,8 @@ function renderExchangeBtcValue(){
 let nextPurchaseTimestamp=null, estimatedWithdrawalTimestamp=null, scheduleClockOffset=0, nextPurchaseMessage="Not scheduled";
 function renderCountdown(id, timestamp){
  const output=$(id);
- if(timestamp===null){output.textContent=t("—");return}
+ output.hidden=timestamp===null;
+ if(timestamp===null){output.textContent="";return}
  let seconds=Math.max(0,Math.ceil((timestamp-Date.now()-scheduleClockOffset)/1000));
  if(!seconds){output.textContent=t("Due now");return}
  const days=Math.floor(seconds/86400);seconds%=86400;
@@ -24,9 +25,7 @@ function renderCountdown(id, timestamp){
 }
 function renderPurchaseCountdown(){
  renderCountdown("nextPurchaseCountdown",nextPurchaseTimestamp);
- if(nextPurchaseTimestamp===null)$("nextPurchaseCountdown").textContent=t(nextPurchaseMessage);
  renderCountdown("withdrawalCountdown",estimatedWithdrawalTimestamp);
- if(estimatedWithdrawalTimestamp===null)$("withdrawalCountdown").textContent=t("Not estimated");
 }
 function renderWithdrawalProgress(balance,price,threshold,enabled){
  const known=enabled&&Number.isFinite(balance)&&price>0&&threshold>0;
@@ -378,4 +377,21 @@ refreshPurchaseSchedule();
   sectionFeedback("intervalFeedback","Withdrawal intervals unavailable. Custom dates remain available.",true);
  }
  restoreReportView();await loadAnalytics();
+})();
+
+// Preserve readable text and values; only changed account/report numbers fade briefly.
+(()=>{
+ if(typeof MutationObserver==='undefined'||!document.querySelectorAll||!document.createTextNode)return;
+ const previous=new WeakMap();
+ for(const element of document.querySelectorAll('.metric>.value,.plan-card>.value')){
+  let animation;
+  const update=()=>{
+   const text=element.textContent,old=previous.get(element);
+   previous.set(element,text);
+   const unit=text.match(/(\sBTC|\/BTC)$/);
+   if(unit&&!element.querySelector('.value-unit')){const suffix=document.createElement('span');suffix.className='value-unit';suffix.textContent=unit[0];element.replaceChildren(document.createTextNode(text.slice(0,-unit[0].length)),suffix)}
+   if(text!==old&&old&&old!=='—'&&/\d/.test(text)&&element.animate){animation?.cancel();animation=element.animate([{opacity:.6},{opacity:1}],{duration:180,easing:'ease-out'})}
+  };
+  update();new MutationObserver(update).observe(element,{childList:true,characterData:true,subtree:true});
+ }
 })();

@@ -197,3 +197,18 @@ button,.button{transition:background-color 120ms ease,border-color 120ms ease,co
 
 /* Scripted disclosure sizing also works without ::details-content support. */
 details.panel.panel-animating{overflow:hidden}
+
+/* Secondary actions defer to the filled primary action; inputs retain clear edges. */
+.confirmation-actions button.secondary,.settings-page .settings-footer-actions button.secondary{border-color:transparent;background:var(--surface)}
+.settings-dialog-header{border-bottom-color:transparent}
+.settings-page .settings-group{box-shadow:none}
+summary::before,summary::after{transition:transform 180ms var(--motion-ease),color 120ms ease}
+@supports selector(details::details-content){
+ details:is(.report-details,.period-activities,.dashboard-footnotes)::details-content{
+  overflow:clip;block-size:0;opacity:0;
+  transition:block-size 200ms var(--motion-ease),opacity 160ms ease,content-visibility 200ms allow-discrete;
+  interpolate-size:allow-keywords;
+ }
+ details:is(.report-details,.period-activities,.dashboard-footnotes)[open]::details-content{block-size:auto;opacity:1}
+}
+@media(prefers-contrast:more){.confirmation-actions button.secondary{border-color:var(--control-line)}}
