@@ -401,3 +401,11 @@ __DESIGN_CSS__
 @media(max-width:360px){
  .redesigned .balance-overview,.redesigned .report-primary,.redesigned .report-extra{grid-template-columns:minmax(0,1fr)}
 }
+
+/* Page size belongs with the other table navigation controls. */
+.redesigned .pagination>.page-size{flex:0 0 auto;width:auto;justify-content:flex-start;margin-inline-end:auto}
+.redesigned .pagination>.notice{flex:1 1 auto;min-width:0}
+@media(max-width:600px){
+ .redesigned .pagination>.page-size{order:0;flex:1 1 auto}
+ .redesigned .pagination>.notice{order:3;flex-basis:100%}
+}
