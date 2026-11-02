@@ -220,7 +220,7 @@ __DESIGN_CSS__
 .redesigned .analysis-header .bottom-actions{margin:0}
 .redesigned .analysis-header .feedback-wrap{flex-basis:100%;margin:0}
 .redesigned .analysis-header .feedback-wrap:has(.hidden){display:none}
-.redesigned .report-primary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-xl);margin:28px 0}
+.redesigned .report-primary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--space-xl);margin:28px 0}
 .redesigned .report-primary .value{font-size:1.45rem}
 .redesigned .report-details{margin-top:var(--space-lg);color:var(--muted);font-size:.82rem}
 .redesigned .report-extra{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-lg) var(--space-xl);padding:var(--space-md) 0}
@@ -257,11 +257,11 @@ __DESIGN_CSS__
  .redesigned .report-primary .value{font-size:1.3rem}
 }
 
-.redesigned .period-shortcuts{display:flex;gap:var(--space-xs);border:1px solid var(--line);background:var(--surface);border-radius:var(--corner-radius);padding:var(--space-xs);margin-left:auto}
-.redesigned .period-shortcuts button{font-size:.76rem;min-height:44px;padding:var(--space-sm) 14px;background:transparent;color:var(--muted);border:1px solid transparent;border-radius:var(--corner-radius)}
-.redesigned .period-shortcuts button[aria-pressed=true]{background:var(--panel);color:var(--text);border-color:var(--line)}
+.redesigned .period-shortcuts{display:flex;gap:2px;border:0;background:var(--surface);border-radius:var(--corner-radius);padding:3px;margin-left:auto}
+.redesigned .period-shortcuts button{font-size:.76rem;min-height:32px;padding:5px 12px;background:transparent;color:var(--muted);border:0;border-radius:var(--corner-radius)}
+.redesigned .period-shortcuts button[aria-pressed=true]{background:var(--panel);color:var(--text);border:0;font-weight:600}
 .redesigned .period-shortcuts button:hover{background:var(--hover);color:var(--text)}
-@media(max-width:600px){.redesigned .period-shortcuts{order:3;flex-basis:100%;margin:0}.redesigned .period-shortcuts button{flex:1;padding:var(--space-sm)}.redesigned .analysis-header .bottom-actions{margin-left:auto}}
+@media(max-width:600px){.redesigned .period-shortcuts{order:3;flex-basis:100%;margin:0}.redesigned .period-shortcuts button{flex:1;padding:5px 8px}.redesigned .analysis-header .bottom-actions{margin-left:auto}}
 
 
 .redesigned .settings-dialog-header{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
@@ -280,7 +280,7 @@ __DESIGN_CSS__
 .redesigned .withdrawal-disabled>:not(.plan-title):not(#estimatedWithdrawalAt),.redesigned .withdrawal-disabled #withdrawalBadge{display:none!important}
 
 .redesigned .analysis-header{margin-bottom:var(--space-md)}
-.redesigned .selected-period-label{margin:0 0 var(--space-lg);color:var(--muted);font-size:.76rem}
+.redesigned .selected-period-label{margin:0 0 var(--space-xl);color:var(--text);font-size:1rem;font-weight:500;line-height:1.5;font-variant-numeric:tabular-nums}
 .redesigned .report-primary{margin:0 0 var(--space-lg)}
 .redesigned .report-details{padding:0;border:0}
 .report-range-dialog{width:min(620px,calc(100vw - 32px))}
@@ -303,3 +303,6 @@ __DESIGN_CSS__
 .redesigned .report-details[open]>summary::before,.redesigned .dashboard-footnotes[open]>summary::before{transform:rotate(90deg)}
 .redesigned .report-details>summary:hover,.redesigned .dashboard-footnotes>summary:hover{color:var(--text)}
 .redesigned .dashboard-footnotes>ol{padding-top:8px}
+
+@media(pointer:coarse){.redesigned .period-shortcuts button{min-height:44px}}
+@media(min-width:801px) and (max-width:1000px){.redesigned .report-primary{grid-template-columns:repeat(3,minmax(0,1fr))}}

@@ -452,5 +452,6 @@
   "Apply period": "Zeitraum übernehmen",
   "Automatic withdrawal disabled": "Automatische Auszahlung deaktiviert",
   "Available fiat balance": "Verfügbares Fiatguthaben",
-  "Available {currency} balance": "Verfügbares {currency}-Guthaben"
+  "Available {currency} balance": "Verfügbares {currency}-Guthaben",
+  "Amount of BTC purchases": "Anzahl der BTC-Käufe"
 }
