@@ -7,9 +7,10 @@ import sqlite3
 import time
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from threading import RLock
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.data.storage import write_json_atomic
 
@@ -235,7 +236,56 @@ def ledger_balance():
     return _balance(activity_totals())
 
 
-def read_report(start, end, page=1, limit=20, kind="", status=""):
+def _matches_search(payload, query, zone=UTC):
+    record = json.loads(payload)
+
+    def values(value):
+        if isinstance(value, dict):
+            return " ".join(values(item) for item in value.values())
+        if isinstance(value, list):
+            return " ".join(values(item) for item in value)
+        return str(value).casefold()
+
+    text = values(record)
+    row = record.get("row", {})
+    stamp = row.get("datetime")
+    if stamp:
+        parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        parsed = parsed.replace(tzinfo=parsed.tzinfo or UTC).astimezone(zone)
+        text += " " + parsed.strftime("%d/%m/%Y %H:%M:%S %d.%m.%Y")
+    aliases = {"Buy": "buy kauf", "TransferOut": "withdrawal auszahlung", "Deposit": "deposit einzahlung"}
+    text += " " + aliases.get(row.get("type"), "")
+    if record.get("simulated"):
+        text += " simulation simuliert"
+    elif (
+        row.get("type") == "Buy"
+        and record.get("purchaseStatus", "confirmed") == "confirmed"
+        or record.get("depositStatus") == "confirmed"
+        or record.get("withdrawalStatus") == "completed"
+    ):
+        text += " confirmed bestätigt completed abgeschlossen"
+    status = str(record.get("withdrawalStatus", record.get("purchaseStatus", ""))).lower()
+    text += " " + {
+        "submitted": "pending ausstehend eingereicht",
+        "failed": "fehlgeschlagen",
+        "canceled": "cancelled storniert abgebrochen",
+        "cancelled": "canceled storniert abgebrochen",
+        "legacy_unverified": "unverified unbestätigt ungeprüft",
+    }.get(status, "")
+    symbol = {"EUR": "€", "USD": "$"}.get(row.get("currency"), "")
+    for field in ("amount", "price", "fee"):
+        try:
+            number = Decimal(str(row.get(field, "0")))
+        except InvalidOperation:
+            continue
+        if number.is_finite() and number.adjusted() < 20:
+            formatted = format(number, ",.2f")
+            text += " " + symbol + formatted + " " + symbol + formatted.translate(str.maketrans(".,", ",."))
+    text += " " + text.replace(".", ",")
+    return all(term in text for term in query.casefold().split())
+
+
+def read_report(start, end, page=1, limit=20, kind="", status="", search="", search_timezone="UTC"):
     """Rows, totals and global balance from one consistent SQLite read transaction."""
     if kind not in ("", "Buy", "TransferOut", "Deposit") or status not in (
         "",
@@ -250,6 +300,14 @@ def read_report(start, end, page=1, limit=20, kind="", status=""):
         "legacy_unverified",
     ):
         raise ValueError("Invalid Activity filter.")
+    if not isinstance(search, str) or len(search) > 256:
+        raise ValueError("Activity search must contain at most 256 characters.")
+    try:
+        if not isinstance(search_timezone, str) or len(search_timezone) > 128:
+            raise ValueError
+        zone = ZoneInfo(search_timezone)
+    except (ValueError, ZoneInfoNotFoundError):
+        raise ValueError("Invalid Activity search timezone.") from None
     limit = max(1, min(1000, int(limit)))
     with _db() as db:
         db.execute("BEGIN")
@@ -266,6 +324,12 @@ def read_report(start, end, page=1, limit=20, kind="", status=""):
         elif status:
             where += " AND CASE WHEN kind='Deposit' THEN json_extract(payload,'$.depositStatus') WHEN kind='Buy' AND simulated=0 THEN coalesce(json_extract(payload,'$.purchaseStatus'),'confirmed') WHEN status='cancelled' THEN 'canceled' ELSE status END=?"
             args.append(status)
+        if search.strip():
+            db.create_function(
+                "activity_matches", 2, lambda payload, query: _matches_search(payload, query, zone), deterministic=True
+            )
+            where += " AND activity_matches(payload,?)"
+            args.append(search.strip())
         total = db.execute("SELECT count(*) FROM activity WHERE " + where, args).fetchone()[0]
         page = max(1, min(int(page), max(1, (total + limit - 1) // limit)))
         rows = db.execute(

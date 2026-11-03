@@ -226,7 +226,7 @@ function renderActivities(){
   const status=activityStatus(row);
   const tr=document.createElement("tr"),type=row.simulated?"Buy (Simulation)":(row.type==="TransferOut"?"Withdrawal":row.type),vals=[Number.isFinite(Date.parse(row.datetime))?dateLabel(Date.parse(row.datetime)):"—",t(type||"—"),row.type==="Deposit"?"—":activityBtc(row.shares),row.type==="Deposit"?"—":activityMoney(row.price,rate,currency,"/BTC"),activityMoney(row.amount,rate,currency),(row.type==="Deposit"&&!row.depositStatus)?"—":(row.simulated&&knownNumber(row.fee)?"~":"")+activityMoney(row.fee,rate,currency),t(status.label)];
   vals.forEach((v,i)=>{const td=document.createElement("td");td.textContent=v;if(i>=2&&i<=5)td.className="num";if(i===6)td.className="activity-status status-"+status.tone;tr.appendChild(td)});
-  const dateCell=tr.children[0];if(dateCell){const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent=vals[0];button.addEventListener('click',()=>showActivityDetail(row.activityId));dateCell.textContent='';dateCell.append(button)}
+  const dateCell=tr.children[0];if(dateCell){const button=document.createElement('button');button.type='button';button.className='activity-date-link';button.textContent=vals[0];button.addEventListener('click',()=>showActivityDetail(row.activityId));dateCell.textContent='';dateCell.append(button)}
   body.appendChild(tr)
  }
  if(!total){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=7;td.textContent=t("No activity in this period.");td.className="notice";tr.appendChild(td);body.appendChild(tr)}
@@ -245,7 +245,7 @@ $("pageJump").addEventListener("submit",event=>{
 });
 async function loadAnalytics(){
  const request=++reportRequest;$("periodReport").ariaBusy="true";saveReportView();sectionFeedback("reportFeedback","");
- try{showError("");const p=selectedPeriod();const response=await fetch("/api/analytics?start="+p.start+"&end="+p.end+"&page="+currentPage+"&limit="+$("pageSize").value+"&type="+encodeURIComponent($("activityType")?.value||"")+"&status="+encodeURIComponent($("activityStatusFilter")?.value||""));const d=await response.json();if(!response.ok)throw new Error(d.error||"Could not load the report.");if(request!==reportRequest)return;quote=d.quote;$('selectedPeriodLabel').textContent=dateLabel(p.start)+' – '+dateLabel(p.end);
+ try{showError("");const p=selectedPeriod();const response=await fetch("/api/analytics?start="+p.start+"&end="+p.end+"&page="+currentPage+"&limit="+$("pageSize").value+"&q="+encodeURIComponent($("activitySearch")?.value||"")+"&tz="+encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC"));const d=await response.json();if(!response.ok)throw new Error(d.error||"Could not load the report.");if(request!==reportRequest)return;quote=d.quote;$('selectedPeriodLabel').textContent=dateLabel(p.start)+' – '+dateLabel(p.end);
  displayCurrency=["EUR","USD"].includes(d.configuration.displayCurrency)?d.configuration.displayCurrency:(["EUR","USD"].includes(quote)?quote:"EUR");
  document.title="Bitcoin DCA Dashboard";
  let livePrice=Number((d.snapshot||{}).price||0),currencyRates={[quote]:1},marketUpdatedAt=Date.parse((d.snapshot||{}).updatedAt)/1000||0;
@@ -425,13 +425,14 @@ refreshPurchaseSchedule();
  }
 })();
 
-for(const id of ['activityType','activityStatusFilter'])$(id)?.addEventListener('change',()=>{currentPage=1;loadAnalytics()});
+let activitySearchTimer;
+$('activitySearch')?.addEventListener('input',()=>{clearTimeout(activitySearchTimer);++reportRequest;activitySearchTimer=setTimeout(()=>{currentPage=1;loadAnalytics()},200)});
 async function showActivityDetail(identifier){
  const output=$('activityDetailValues');output.replaceChildren();$('activityDetail').showModal();
  try{const response=await fetch('/api/activity/detail?id='+encodeURIComponent(identifier));const data=await response.json();if(!response.ok)throw Error(data.error||'Activity record not found.');
  const row=data.row||{},feeEquivalent=data.networkFeeBtc==null&&Number(row.price)>0&&knownNumber(row.fee)?btc(Number(row.fee)/Number(row.price)):null;
  const fields=[...(feeEquivalent==null?[]:[['Fee equivalent (BTC at execution price)',feeEquivalent]]),['Activity ID',data.id],['Exchange',data.exchange],['Account identity',data.accountIdentity],...Object.entries(data.row||{}),...Object.entries(data).filter(([key])=>!['id','exchange','accountIdentity','row'].includes(key))];
- for(const [key,value] of fields){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=t(({datetime:'Execution time',type:'Type',identifier:'Asset',shares:'Executed BTC',amount:'Value',fee:'Fee (fiat)',price:'Execution price',currency:'Currency',networkFeeBtc:'Network fee (BTC)',grossWithdrawalAmountBtc:'Gross BTC debit',withdrawalId:'Withdrawal ID',withdrawalStatus:'Withdrawal status',depositStatus:'Deposit status',accountIdentity:'Account identity',simulated:'Simulation',manual:'Manual',purchaseStatus:'Purchase status',withdrawalAddress:'Destination',withdrawalNetwork:'Network'})[key]||key);dd.textContent=value==null?'—':typeof value==='object'?JSON.stringify(value):String(value);output.append(dt,dd)}
+ for(const [key,value] of fields){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=t(({datetime:'Execution time',type:'Type',identifier:'Asset',shares:'Executed BTC',amount:'Value',fee:'Fee (fiat)',price:'Execution price',currency:'Currency',networkFeeBtc:'Network fee (BTC)',grossWithdrawalAmountBtc:'Gross BTC debit',withdrawalId:'Withdrawal ID',withdrawalStatus:'Withdrawal status',depositStatus:'Deposit status',accountIdentity:'Account identity',simulated:'Simulation',manual:'Manual',purchaseStatus:'Purchase status',withdrawalAddress:'Destination',withdrawalNetwork:'Network'})[key]||key);dd.textContent=value==null?'—':typeof value==='object'?JSON.stringify(value):String(value);const field=document.createElement('div');field.className='activity-detail-field';field.append(dt,dd);output.append(field)}
  }catch(error){output.textContent=t(error.message)}
 }
 $('closeActivityDetail')?.addEventListener('click',()=>$('activityDetail').close());

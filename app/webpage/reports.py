@@ -58,11 +58,28 @@ class ReportService:
         return self.format_csv(rows), len(rows)
 
     def analytics(
-        self, start: int, end: int, page: int, limit: int, settings: Mapping[str, Any], kind: str = "", status: str = ""
+        self,
+        start: int,
+        end: int,
+        page: int,
+        limit: int,
+        settings: Mapping[str, Any],
+        kind: str = "",
+        status: str = "",
+        search: str = "",
+        search_timezone: str = "UTC",
     ) -> dict[str, Any]:
         records, total, page, totals, balance = (
-            self.read_report(start, end, page, limit, kind=kind, status=status)
-            if kind or status
+            self.read_report(
+                start,
+                end,
+                page,
+                limit,
+                kind=kind,
+                status=status,
+                **({"search": search, "search_timezone": search_timezone} if search else {}),
+            )
+            if kind or status or search
             else self.read_report(start, end, page, limit)
         )
         snapshot = self.read_snapshot()

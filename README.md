@@ -41,7 +41,7 @@ Test connection reports funds, orders, history, trade and withdrawal access sepa
 - Automatic withdrawals use all available exchange BTC, including BTC acquired outside the bot. Set a threshold and target: a saved withdrawal-method label for Kraken, or a verified address/network for Bitvavo.
 - Manual withdrawal and Parqet export are in the Settings footer. Withdrawals require live trading and send available BTC minus fees; manual withdrawals require confirmation and bypass the automatic threshold.
 
-Pause transactions in Bot Configuration indefinitely or until a local date/time. Account checks and reconciliation continue; new purchases and withdrawals (including Simulation and manual requests) stop. Resume retains the existing schedule. “Why this next purchase?” shows the actual plan inputs. Activity has server-side type/status filters and read-only entry details; filters do not change period totals or Parqet export.
+Use the Pause transactions switch below live trading in Bot Configuration. Account checks and reconciliation continue; new purchases and withdrawals (including Simulation and manual requests) stop. Resume retains the existing schedule. “Why this next purchase?” shows the actual plan inputs. Activity has a server-side text search across saved attributes and read-only entry details; filters do not change period totals or Parqet export.
 
 Expected monthly deposit affects only the withdrawal forecast. Browser refresh and exchange account checks have separate settings.
 
@@ -53,7 +53,7 @@ Choose a confirmed withdrawal interval in the export dialog. The CSV consolidate
 
 Reuse and back up `bitcoin-dca-webui-data`; it contains settings, credentials, history and scheduling state. Passwords are hashed; API secrets remain readable to anyone with volume access.
 
-Use Settings → Backup to create a password-protected full backup (settings, login, state and Activity) or Activity-only backup. Both require your current dashboard password and a separate backup password of at least 12 characters. Encrypted copies are saved under `backups/` in the volume and downloaded. Keep an off-host copy and its password separately; the password cannot be recovered.
+Use Settings → Backup to create a password-protected full backup (settings, login, state and Activity) or Activity-only backup. Both require your current dashboard password and a separate backup password of at least 12 characters. Encrypted backups are downloaded directly; no archive is retained in the volume. Keep an off-host copy and its password separately; the password cannot be recovered.
 
 Restore can be opened after creating a login on a fresh installation. Full restore replaces login credentials; sign in with the archived login afterward. Activity-only restore adds history without deleting or overwriting entries. Conflicts, unresolved transactions and full restores that would remove history or rewind financial state are rejected. Every successful restore leaves transactions paused and requests an automatic exchange check; resume explicitly afterward. TLS certificates, derived caches and previously saved backup files are excluded. Backups are limited to 32 MiB.
 

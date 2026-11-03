@@ -278,3 +278,20 @@ __DESIGN_CSS__
 .settings-error-summary[hidden]{display:none}
 
 .settings-page,.settings-page.embedded{background:var(--bg);}
+
+.settings-page .backup-groups{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-xl);min-width:0;}
+.settings-page .backup-groups>.settings-group{display:flex;flex-direction:column;gap:var(--space-sm);}
+.settings-page .backup-groups>.settings-group>button{align-self:flex-start;margin-top:var(--space-sm);min-height:var(--button-height);font-size:.82rem;}
+.settings-page .backup-groups label{margin-bottom:0;}
+.settings-page .backup-status{grid-column:1/-1;}
+.settings-page #pauseStatus:empty{display:none;}
+@media(min-width:900px){.settings-page .backup-groups{grid-template-columns:repeat(2,minmax(0,1fr));}}
+
+@media(max-width:600px){.settings-page .backup-groups>.settings-group>button{font-size:.76rem;}}
+
+.settings-page .backup-status:empty{display:none;}
+
+.settings-page .backup-groups input[type=file]{height:auto;padding:0;border:0;background:transparent;}
+.settings-page .backup-groups input[type=file]::file-selector-button{min-height:var(--button-height);margin-inline-end:var(--space-sm);padding:8px var(--space-lg);border:0;border-radius:var(--corner-radius);background:var(--surface);color:var(--accent);font:600 .82rem/1.35 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;cursor:pointer;}
+.settings-page .backup-groups input[type=file]::file-selector-button:hover{background:var(--hover);}
+@media(max-width:600px){.settings-page .backup-groups input[type=file]::file-selector-button{font-size:.76rem;}}

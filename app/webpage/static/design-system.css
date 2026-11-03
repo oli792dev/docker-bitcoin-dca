@@ -245,3 +245,5 @@ details:is(.report-details,.period-activities,.dashboard-footnotes)[open]::detai
 
 /* Shared sizing for text and icon buttons; wrapped labels can grow naturally. */
 button,.button{box-sizing:border-box;min-height:var(--button-height);height:auto;max-height:none;padding-block:8px}
+
+button.secondary,.button.secondary,.confirmation-actions button.secondary{border-color:transparent;}

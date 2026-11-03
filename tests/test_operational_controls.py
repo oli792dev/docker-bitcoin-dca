@@ -111,7 +111,8 @@ class BackupIntegrationTests(unittest.TestCase):
         manager=Backups(self.root)
         self.activity.bind_legacy_account('KRAKEN','EUR','identity')
         filename,raw=manager.create('activity','long backup password')
-        self.assertEqual((self.root/'backups'/filename).read_bytes(),raw)
+        self.assertFalse((self.root/'backups').exists())
+        self.assertTrue(filename.endswith('.dcabackup'))
         manifest,data=unpack(decrypt(raw,'long backup password'))
         self.assertEqual(manifest['scope'],'activity')
         self.activity.append_activity_records([self.record('later')])
@@ -294,3 +295,31 @@ class ReviewFixTests(unittest.TestCase):
             manager.restore(raw,'long backup password','full')
         self.assertEqual(self.store.report_from(),'2025-01-01T00:00:00+00:00')
         self.assertFalse((self.root/'.restore-journal').exists())
+
+class ActivitySearchTests(unittest.TestCase):
+    def test_search_matches_hidden_attributes_unicode_and_dates_across_pages(self):
+        from app.data import activity
+        with tempfile.TemporaryDirectory() as tmp, patch.object(activity, 'ACTIVITY_PATH', Path(tmp)/'activity.json'):
+            for i in range(12):
+                activity.append_activity_records([{'id':str(i),'exchange':'KRAKEN','withdrawalId':'Überweisung-123' if i==11 else 'other','row':{'datetime':'2026-01-02T12:34:00Z','type':'Buy','identifier':'BTC','shares':'0.001','price':'100','amount':'10','fee':'1','currency':'EUR'}}])
+            rows,total,page,totals,_=activity.read_report(0,2000000000000,limit=5,search='ÜBERWEISUNG-123 kraken')
+            self.assertEqual([r['id'] for r in rows],['11'])
+            self.assertEqual(total,1)
+            self.assertEqual(sum(g['count'] for g in totals),12)
+            self.assertEqual(activity.read_report(0,2000000000000,search='02/01/2026')[1],12)
+            self.assertEqual(activity.read_report(0,2000000000000,search='€10,00')[1],12)
+            self.assertEqual(activity.read_report(0,2000000000000,search="%' OR 1=1")[1],0)
+            with self.assertRaises(ValueError): activity.read_report(0,2000000000000,search='x'*257)
+
+    def test_unknown_optional_amounts_do_not_break_text_search(self):
+        from app.data.activity import _matches_search
+        record={'exchange':'KRAKEN','row':{'type':'Buy','fee':None,'price':None,'amount':None}}
+        self.assertTrue(_matches_search(json.dumps(record),'Kraken'))
+
+    def test_search_uses_the_tables_browser_timezone_at_midnight(self):
+        from app.data import activity
+        with tempfile.TemporaryDirectory() as tmp, patch.object(activity,'ACTIVITY_PATH',Path(tmp)/'activity.json'):
+            activity.append_activity_records([{'id':'midnight','row':{'datetime':'2026-01-01T23:30:00Z','type':'Buy','identifier':'BTC','shares':'1','amount':'10','price':'10','fee':'0','currency':'EUR'}}])
+            self.assertEqual(activity.read_report(0,2000000000000,search='02/01/2026 00:30',search_timezone='Europe/Berlin')[1],1)
+            self.assertEqual(activity.read_report(0,2000000000000,search='02/01/2026 00:30',search_timezone='UTC')[1],0)
+            with self.assertRaises(ValueError):activity.read_report(0,2000000000000,search='test',search_timezone='Unknown/Timezone')

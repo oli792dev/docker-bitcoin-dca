@@ -290,19 +290,8 @@ class Backups:
                 for name, value in data.items():
                     archive.writestr(name, value)
             encrypted = encrypt(output.getvalue(), password)
-            # Persist only ciphertext; passwords and plaintext never enter the backup directory.
-            destination = self.directory / "backups"
-            destination.mkdir(mode=0o700, exist_ok=True)
-            path = destination / (
-                "bitcoin-dca-" + scope + "-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ") + ".dcabackup"
-            )
-            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            with os.fdopen(descriptor, "wb") as stream:
-                stream.write(encrypted)
-                stream.flush()
-                os.fsync(stream.fileno())
-            _sync_directory(destination)
-            return path.name, encrypted
+            filename = "bitcoin-dca-" + scope + "-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ") + ".dcabackup"
+            return filename, encrypted
 
     def restore(self, encrypted, password, scope, unresolved=False):
         if scope not in ("full", "activity") or unresolved:

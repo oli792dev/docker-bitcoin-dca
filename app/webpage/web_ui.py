@@ -788,6 +788,8 @@ class Handler(BaseHTTPRequestHandler):
                             self.settings,
                             query.get("type", [""])[0],
                             query.get("status", [""])[0],
+                            query.get("q", [""])[0],
+                            query.get("tz", ["UTC"])[0],
                         ),
                     )
                 return

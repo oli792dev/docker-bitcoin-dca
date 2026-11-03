@@ -10,12 +10,14 @@ const analytics = {
   activities: [], pagination: {total: 0, pages: 1, page: 1},
 };
 test.beforeEach(async ({page}) => {
+  let paused=false;
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     if (url.origin !== 'https://dca.test') throw new Error(`Unexpected external request: ${url.origin}`);
     const rendered=pages[url.pathname+url.search]||pages[url.pathname];
     if (rendered) return route.fulfill({contentType: 'text/html', body: rendered});
-    const data = url.pathname === '/api/analytics' ? analytics
+    if(url.pathname==='/api/settings/pause')paused=route.request().postDataJSON().paused;
+    const data = url.pathname === '/api/controls' ? {paused,until:null} : url.pathname === '/api/analytics' ? analytics
       : url.pathname === '/api/market-price' ? {price: 60000, conversionRate: 1, conversionRates: {EUR: 1}}
       : url.pathname === '/api/schedule' ? {botStatusLabel: 'Fixture ready', dashboardRefreshSeconds: 3600, quote: 'EUR', quoteBalance: 600}
       : url.pathname === '/api/withdrawals' ? [] : {};
@@ -176,10 +178,18 @@ test('operational controls, backup review and Activity filters remain usable', a
   await page.goto('/settings');
   await page.getByRole('tab', {name:'Bot Configuration',exact:true}).click();
   await expect(page.locator('#pauseTransactions')).toBeVisible();
-  await page.locator('#pauseTransactions').click();
+  await page.locator('#pauseTransactions').check();
   await page.getByRole('tab', {name:'Backup',exact:true}).click();
   await expect(page.locator('#backupLoginPassword')).toBeVisible();
   await expect(page.locator('#backupPassword')).toBeVisible();
+  const download=page.locator('#createBackup'),manual=page.locator('#settingsWithdraw');
+  expect((await rect(download)).height).toBe(44);
+  await expect(download).toHaveCSS('border-top-color','rgba(0, 0, 0, 0)');
+  await expect(page.locator('#restoreBackup')).toHaveCSS('border-top-color','rgba(0, 0, 0, 0)');
+  const backupGroups=page.locator('.backup-groups>.settings-group');
+  const first=await rect(backupGroups.nth(0)),second=await rect(backupGroups.nth(1));
+  if(page.viewportSize().width>=900)expect(Math.round(first.y)).toBe(Math.round(second.y));
+  else expect(second.y-first.y-first.height).toBeGreaterThanOrEqual(24);
   await page.locator('#restoreFile').setInputFiles({name:'example.dcabackup',mimeType:'application/octet-stream',buffer:Buffer.from('encrypted fixture')});
   await page.locator('#restoreBackup').click();
   await expect(page.locator('#backupReview')).toBeVisible();
@@ -187,12 +197,16 @@ test('operational controls, backup review and Activity filters remain usable', a
   await page.locator('#cancelBackupRestore').click();
   await expect(page.locator('#backupReview')).not.toBeVisible();
   await noPageOverflow(page);
+  await page.screenshot({path:test.info().outputPath('backup-settings.png')});
   await page.goto('/');
   await page.locator('#activityHeading').click();
-  const response=page.waitForRequest(request=>request.url().includes('/api/analytics')&&request.url().includes('type=Buy'));
-  await page.locator('#activityType').selectOption('Buy');
+  const response=page.waitForRequest(request=>request.url().includes('/api/analytics')&&request.url().includes('q=Kraken')&&new URL(request.url()).searchParams.has('tz'));
+  await page.locator('#activitySearch').click();
+  await page.locator('#activitySearch').pressSequentially('Kraken');
+  await expect(page.locator('#activitySearch')).toHaveValue('Kraken');
   await response;
-  await expect(page.locator('#activityStatusFilter')).toBeVisible();
+  await expect(page.locator('#activityType')).toHaveCount(0);
+  await expect(page.locator('#activityStatusFilter')).toHaveCount(0);
   await expect(page.getByText('Why this next purchase?',{exact:true})).toBeVisible();
   await noPageOverflow(page);
   await page.evaluate(()=>window.scrollTo(0,0));
@@ -202,8 +216,23 @@ test('operational controls, backup review and Activity filters remain usable', a
   await frame.getByRole('tab',{name:'Bot Configuration',exact:true}).click();
   await frame.locator('#buy_amount').fill('0.001');
   const scheduleRequest=page.waitForRequest(request=>new URL(request.url()).pathname==='/api/schedule');
-  await frame.locator('#pauseTransactions').click();
+  await frame.locator('#pauseTransactions').uncheck();
   await scheduleRequest;
   await expect(frame.locator('#buy_amount')).toHaveValue('0.001');
   await expect(page.locator('#settingsDialog')).toBeVisible();
+});
+
+test('Activity dates are unboxed links and details use responsive columns', async ({page,isMobile})=>{
+ await page.route('**/api/analytics?**',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({...analytics,activities:[{activityId:'example',datetime:'2026-10-29T12:00:00Z',type:'Buy',shares:.001,price:81000,amount:81,fee:.2,currency:'EUR',status:'confirmed'}],pagination:{total:1,pages:1,page:1}})}));
+ await page.route('**/api/activity/detail?**',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({id:'example',exchange:'KRAKEN',row:{datetime:'2026-10-29T12:00:00Z',type:'Buy',shares:'.001',price:'81000',amount:'81',fee:'.2',currency:'EUR'}})}));
+ await page.goto('/');await page.locator('#activityHeading').click();
+ const date=page.locator('.activity-date-link');await expect(date).toBeVisible();
+ await expect(date).toHaveCSS('border-top-width','0px');await expect(date).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
+ await date.click();await expect(page.locator('#activityDetail')).toBeVisible();
+ await noPageOverflow(page);
+ const fields=page.locator('.activity-detail-field');await expect(fields.first()).toBeVisible();
+ const first=await rect(fields.nth(0)),second=await rect(fields.nth(1));
+ if(isMobile)expect(second.y).toBeGreaterThan(first.y);else{await expect.poll(async()=>{const a=await rect(fields.nth(0)),b=await rect(fields.nth(1));return Math.abs(a.y-b.y)}).toBeLessThan(1);expect((await rect(page.locator('#activityDetail'))).width).toBeGreaterThan(700)}
+ await expect(page.locator('#activityDetail')).toHaveCSS('opacity','1');
+ await page.screenshot({path:test.info().outputPath('activity-details.png')});
 });
