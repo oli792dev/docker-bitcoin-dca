@@ -72,7 +72,7 @@ async function refreshPurchaseSchedule(){
   const detail=schedule.forecastDetails;
   $('forecastProgress').textContent=detail?t('About {btc} BTC · {buys} purchases remaining'.replace('{btc}',Number(detail.remainingBtc).toLocaleString(locale,{maximumFractionDigits:8})).replace('{buys}',detail.remainingPurchases)):'';
   $('forecastAssumptions').hidden=!detail;
-  if(detail)$('forecastAssumptionsText').textContent=t('BTC price: {price}. BTC per purchase: {quantity}. Threshold: {threshold}. Assumes unchanged price and fees. Monthly deposit: {amount}. Deposit: day {day}, {time} ({zone}).'.replace('{price}',money(detail.price,detail.quote)).replace('{quantity}',btc(detail.quantity)).replace('{threshold}',money(detail.threshold,detail.quote)).replace('{amount}',detail.monthlyDeposit?money(detail.monthlyDeposit,detail.quote):t('Not configured')).replace('{day}',detail.depositDay).replace('{time}',detail.depositTime).replace('{zone}',detail.timezone));
+  if(detail)$('forecastAssumptionsText').textContent=t('Price: {price}/BTC · Buy: {quantity} · Threshold: {threshold} · Monthly deposit: {amount} · Day {day}, {time} ({zone}).'.replace('{price}',money(detail.price,detail.quote)).replace('{quantity}',btc(detail.quantity)).replace('{threshold}',money(detail.threshold,detail.quote)).replace('{amount}',detail.monthlyDeposit?money(detail.monthlyDeposit,detail.quote):t('Not configured')).replace('{day}',detail.depositDay).replace('{time}',detail.depositTime).replace('{zone}',detail.timezone));
   const depositDate=Date.parse(schedule.nextDepositAt);
   $('nextDepositAt').textContent=Number.isFinite(depositDate)?t('Next deposit: {date}').replace('{date}',dateLabel(depositDate,schedule.timezone||'UTC')):'';
   if(schedule.configuredBuyAmount!==undefined){
