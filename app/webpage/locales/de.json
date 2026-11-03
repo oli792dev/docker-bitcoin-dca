@@ -647,7 +647,7 @@
   "Enable live trading to pause transactions.": "Aktiviere Live-Trading, um Transaktionen zu pausieren.",
   "Restore information": "Hinweise zur Wiederherstellung",
   "Choose file": "Datei auswählen",
-  "Pause is applied when settings are saved. Account checks continue.": "Die Pause wird mit den Einstellungen gespeichert. Kontoprüfungen laufen weiter.",
+  "Exchange transactions are paused. Account checks continue.": "Börsentransaktionen sind pausiert. Kontoprüfungen laufen weiter.",
   "Create encrypted backup": "Verschlüsseltes Backup erstellen",
   "Backup password must be different from the dashboard password.": "Das Backup-Passwort muss sich vom Dashboard-Passwort unterscheiden.",
   "Enter your current dashboard password.": "Gib dein aktuelles Dashboard-Passwort ein.",

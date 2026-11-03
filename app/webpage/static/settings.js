@@ -184,7 +184,7 @@ function updatePauseDependency(){
  const live=$('live').checked;
  $('pauseTransactions').disabled=!live||!pauseState.known||pauseState.recovery;
  $('pauseCard').classList.toggle('setting-inactive',!live);
- $('pauseHint').textContent=t(live?'Pause is applied when settings are saved. Account checks continue.':'Enable live trading to pause transactions.');
+ $('pauseHint').textContent=t(live?'Exchange transactions are paused. Account checks continue.':'Enable live trading to pause transactions.');
  $('pauseStatus').textContent=t(pauseState.recovery?'Restore recovery required; restart container':!pauseState.known?'Connection unavailable':'');
 }
 function updateDependencies(){
