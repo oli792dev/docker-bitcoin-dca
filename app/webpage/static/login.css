@@ -23,4 +23,7 @@ input{font-size:16px;}
 @media (max-width:600px){
 .card{border-radius:var(--corner-radius);}
 }
+.restore-notice{margin:18px 0;font-size:14px;overflow-wrap:anywhere;}
+.restore-notice strong{display:block;color:var(--green);}
+.restore-notice span{display:block;margin-top:4px;color:var(--muted);font-size:13px;}
 __DESIGN_CSS__

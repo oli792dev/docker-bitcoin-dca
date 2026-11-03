@@ -15,6 +15,8 @@ __WEB_APP_HEAD__
 
 <div class="login-brand"><img src="/bitcoin-dca-icon-v4.png" width="48" height="48" alt=""><h1>Bitcoin DCA Dashboard</h1></div>
 
+<p id="restoreSuccess" class="restore-notice" role="status" hidden><strong>Backup restored successfully.</strong><span id="restoredBackupName"></span></p>
+
 <form method="post" action="/login">
 <label for="username">Username</label>
 <input id="username" name="username" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" required autofocus>
@@ -25,4 +27,4 @@ __WEB_APP_HEAD__
 <p class="error" role="alert">{{ERROR}}</p>
 <p class="login-support"><span aria-hidden="true">♥</span> If you want to support the creator of this application, buy him a BTC coffee: <code>bc1qg7crlvea9rsacfgnujhrjy6judvjnkjz9crvvq</code></p>
 
-</main></body></html>
+</main><script>__STATIC_login.js__</script></body></html>

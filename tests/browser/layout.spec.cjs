@@ -286,3 +286,20 @@ test('purchase explanation uses compact responsive field columns',async({page,is
  if(isMobile)expect(b.y).toBeGreaterThan(a.y);else expect(Math.abs(b.y-a.y)).toBeLessThan(1);
  await noPageOverflow(page);
 });
+
+test('successful restore reloads login with a one-time safe backup filename',async({page})=>{
+ let restored=false;
+ await page.route('**/api/settings/restore',route=>{restored=true;return route.fulfill({contentType:'application/json',body:JSON.stringify({restored:true,signInRequired:true})})});
+ await page.route('https://dca.test/',route=>restored?route.fulfill({contentType:'text/html',body:pages['/login']}):route.fallback());
+ await page.goto('/');await page.locator('#openSettings').click();
+ const frame=page.frameLocator('#settingsFrame');await frame.getByRole('tab',{name:'Backup',exact:true}).click();
+ await frame.locator('#restoreFile').setInputFiles({name:'<b>my-backup</b>.dcabackup',mimeType:'application/octet-stream',buffer:Buffer.from('fixture')});
+ await frame.locator('#restoreBackup').click();await frame.locator('#confirmBackupRestore').click();
+ await expect(page.locator('#restoreSuccess')).toBeVisible();
+ await expect(page.locator('#restoreSuccess')).toContainText('Backup restored successfully.');
+ await expect(page.locator('#restoredBackupName')).toHaveText('<b>my-backup</b>.dcabackup');
+ await expect(page.locator('#restoreSuccess b')).toHaveCount(0);
+ await expect(page.locator('form[action="/login"]')).toBeVisible();
+ await noPageOverflow(page);
+ await page.reload();await expect(page.locator('#restoreSuccess')).toBeHidden();
+});

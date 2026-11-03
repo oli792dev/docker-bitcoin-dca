@@ -251,6 +251,7 @@ if(initial.complete&&initial.embedded){
 
 
 let restorePayload=null;
+let restoreFilename='';
 function backupFieldError(field,text){
  if(!['backupPassword','backupLoginPassword','restoreFile'].includes(field))field='restoreFile';
  const output=$(field+'Error');output.textContent=t(text);output.hidden=!text;$(field).setAttribute('aria-invalid',text?'true':'false');
@@ -277,9 +278,9 @@ $('restoreFile')?.addEventListener('change',()=>{
 $('restoreBackup')?.addEventListener('click',async()=>{
  clearBackupErrors();const file=$('restoreFile').files[0];if(!file)return;
  if(file.size>32*1024*1024+128){backupFieldError('restoreFile','Backup file is too large.');return}
- try{const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));restorePayload={...backupCredentials(),archive:btoa(binary)};$('backupReview').showModal()}
+ try{const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));restorePayload={...backupCredentials(),archive:btoa(binary)};restoreFilename=file.name;$('backupReview').showModal()}
  catch(error){backupFieldError('restoreFile',error.message)}
 });
-$('cancelBackupRestore')?.addEventListener('click',()=>{restorePayload=null;$('backupReview').close()});
-$('backupReview')?.addEventListener('cancel',()=>{restorePayload=null});
-$('confirmBackupRestore')?.addEventListener('click',async()=>{if(!restorePayload)return;const button=$('confirmBackupRestore');button.disabled=true;try{await request('/api/settings/restore',restorePayload);restorePayload=null;if(initial.embedded){window.parent.postMessage({type:'dca-settings-auth-required'},location.origin)}else{location.href='/'}}catch(error){backupFieldError(error.field||'restoreFile',error.message)}finally{button.disabled=false;$('backupReview').close();$('backupLoginPassword').value='';$('backupPassword').value='';restorePayload=null}});
+$('cancelBackupRestore')?.addEventListener('click',()=>{restorePayload=null;restoreFilename='';$('backupReview').close()});
+$('backupReview')?.addEventListener('cancel',()=>{restorePayload=null;restoreFilename=''});
+$('confirmBackupRestore')?.addEventListener('click',async()=>{if(!restorePayload)return;const button=$('confirmBackupRestore'),filename=restoreFilename;button.disabled=true;try{await request('/api/settings/restore',restorePayload);try{sessionStorage.setItem('bitcoinDcaRestoredBackup',filename)}catch{}restorePayload=null;if(initial.embedded){window.parent.postMessage({type:'dca-settings-auth-required'},location.origin)}else{location.href='/'}}catch(error){backupFieldError(error.field||'restoreFile',error.message)}finally{button.disabled=false;$('backupReview').close();$('backupLoginPassword').value='';$('backupPassword').value='';restorePayload=null;restoreFilename=''}});

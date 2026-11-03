@@ -656,5 +656,6 @@
   "Create encrypted backup": "Verschlüsseltes Backup erstellen",
   "Backup password must be different from the dashboard password.": "Das Backup-Passwort muss sich vom Dashboard-Passwort unterscheiden.",
   "Enter your current dashboard password.": "Gib dein aktuelles Dashboard-Passwort ein.",
-  "Backup file is too large.": "Die Backup-Datei ist zu groß."
+  "Backup file is too large.": "Die Backup-Datei ist zu groß.",
+  "Backup restored successfully.": "Backup erfolgreich wiederhergestellt."
 }
