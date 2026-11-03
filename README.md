@@ -2,11 +2,10 @@
 
 A self-hosted Bitcoin DCA bot for Kraken and Bitvavo, managed through an HTTPS dashboard.
 
-- Automated purchases spread the available fiat budget until the next monthly deposit, with exchange-verified deposit detection.
-- Simulation, live trading and a transaction pause, with automatic reconciliation of open purchases and withdrawals.
-- Optional automatic withdrawals at a configured threshold, manual withdrawals and an estimated withdrawal date.
-- Responsive English/German dashboard with balances, schedules, period analysis, searchable activity and Parqet CSV export.
-- Setup wizard and editable settings, persistent volume storage, and encrypted Full, Activities or Config backups with restore.
+- Automatic purchases spread your fiat budget until the next monthly deposit.
+- Simulation, live trading, transaction pause and optional automatic/manual Bitcoin withdrawals.
+- Responsive English/German dashboard with balances, schedules, withdrawal forecasts and activity analysis.
+- Parqet CSV export and encrypted Full, Activities or Config backups.
 
 <details>
 <summary>Dashboard preview</summary>
@@ -25,10 +24,10 @@ cd docker-bitcoin-dca
 cp .env.example .env
 ```
 
-1. Set `WEB_UI_TLS_HOSTS` in `.env` to the Docker host IP or hostname you will use. Separate multiple addresses with commas.
+1. Set `WEB_UI_TLS_HOSTS` in `.env` to your Docker host IP or hostname; separate multiple addresses with commas.
 2. Run `docker compose up -d --build`.
 3. Open `https://<docker-host>:6890` and [trust the local certificate authority](docs/architecture.md#https-and-session-security).
-4. Create login credentials (password: at least 12 characters), then configure the exchange and bot in the setup wizard.
+4. Create a login (password: at least 12 characters). Use the setup wizard to enter your API credentials, test the connection and configure purchases.
 
 Grant these API permissions:
 
@@ -37,43 +36,36 @@ Grant these API permissions:
 | Kraken | Query Funds; Query Open/Closed Orders & Trades; Query ledger entries | Modify Orders | Withdraw Funds |
 | Bitvavo | Read-only / View | Trade digital assets | Withdraw digital assets |
 
-Test connection reports funds, orders, history, trade and withdrawal access separately as proven, denied or unknown. It uses only reads; Kraken key metadata can confirm write scopes, while Bitvavo write scopes remain unknown. Enter credentials only in the web settings; never commit credentials or `.env`.
+Enter credentials in the web settings; never commit credentials or `.env`.
 
 ## Usage
 
-- Settings controls the exchange, purchase amount, deposit day/time, timezone and dashboard preferences. New installations use Simulation; enable live trading to place real orders. Amounts below the exchange minimum, including `0`, use that minimum.
-- Account checks normally run every five minutes. Purchases use the available fiat budget, estimated fees and time from the last purchase to the next deposit. The final purchase uses remaining funds where exchange limits allow.
-- Deposits are verified through the exchange API. Early confirmed deposits advance planning; delayed or unverified funding can pause purchases. The bot does not transfer monthly deposits itself.
-- Automatic withdrawals use all available exchange BTC, including BTC acquired outside the bot. Set a threshold and target: a saved withdrawal-method label for Kraken, or a verified address/network for Bitvavo.
-- Manual withdrawal and Parqet export are in the Settings footer. Withdrawals require live trading and send available BTC minus fees; manual withdrawals require confirmation and bypass the automatic threshold.
+- Start in Simulation. Enable live trading in Settings for real purchases. Amounts below the exchange minimum, including `0`, use that minimum.
+- Configure the monthly deposit day/time and fund the exchange yourself. The bot verifies deposits and adjusts purchases to your available balance. Expected monthly deposit affects only the withdrawal forecast.
+- Optional automatic withdrawals use all available exchange BTC, including BTC bought outside the bot. Configure a threshold and target: a saved withdrawal-method label for Kraken, or an address/network for Bitvavo.
+- Settings also provides Pause transactions, manual withdrawal and Parqet export. Pausing stops new transactions while account checks continue; manual withdrawals require confirmation and bypass the automatic threshold.
 
-The Pause transactions switch follows live trading and is saved with the other settings. Disabling live trading clears the pause. Account checks and reconciliation continue; new purchases and withdrawals (including Simulation and manual requests) stop. Resume retains the existing schedule. “Why this next purchase?” shows the actual plan inputs. Activity has a server-side text search across saved attributes and read-only entry details; filters do not change period totals or Parqet export.
+Parqet export consolidates purchases between confirmed withdrawals into one Buy row, using EUR costs including trading fees and net withdrawn BTC. Deposits, later purchases and Simulation are excluded. Check the CSV before importing; repeated imports can create duplicates.
 
-Expected monthly deposit affects only the withdrawal forecast. Browser refresh and exchange account checks have separate settings.
+## Backups and updates
 
-## Parqet export
+Keep the `bitcoin-dca-webui-data` volume: it holds your settings, credentials and history. Protect access to it; API secrets are stored unencrypted.
 
-Choose a confirmed withdrawal interval in the export dialog. The CSV consolidates its complete cycle into one Buy row: purchases since the previous confirmed withdrawal, EUR costs including trading fees, and net withdrawn BTC. Deposits, later purchases and Simulation are excluded. Review before importing; repeated imports can create duplicates.
+Settings → Backup offers Full (configuration and activities), Activities only, and Config only backups. Enter your current dashboard password and a separate backup password of at least 12 characters. Download the encrypted file and keep its password safely.
 
-## Data and updates
+On a fresh installation, create a login before restoring. Full and Config restore the saved settings and login; Activities adds history while keeping current settings. Sign in again after restore, using the archived login for Full/Config.
 
-Reuse and back up `bitcoin-dca-webui-data`; it contains settings, credentials, history and scheduling state. Passwords are hashed; API secrets remain readable to anyone with volume access.
-
-Use Settings → Backup to create a password-protected full backup (settings, login, state and Activity), Activities-only backup, or Config-only backup (settings and login, without history or financial state). File names end in `-full`, `-activities` or `-config`. All require your current dashboard password and a backup password of at least 12 characters that differs from the dashboard password. Encrypted backups are downloaded directly; no archive is retained in the volume. Keep an off-host copy and its password separately; the password cannot be recovered.
-
-Restore can be opened after creating a login on a fresh installation. Full and Config restores replace login credentials; sign in with the archived login afterward. Config restore preserves current history and financial state. Activities-only restore adds history without deleting or overwriting entries. Conflicts, unresolved transactions and full restores that would remove history or rewind financial state are rejected. Full and Config restore the saved transaction pause; Activities keeps the current pause setting. Older Config archives without a pause setting keep the current value. An automatic exchange check precedes new transactions. TLS certificates, derived caches and previously saved backup files are excluded. Backups are limited to 32 MiB.
-
-To update a source-based installation:
+To update:
 
 ```sh
 git pull
 docker compose up -d --build
 ```
 
-Never run `docker compose down -v`: it deletes the data volume. See [Architecture and operation](docs/architecture.md) for storage, security, logs and development checks.
+Never run `docker compose down -v`: it deletes the data volume. See [Architecture and operation](docs/architecture.md) for technical details, backup rules, security and troubleshooting.
 
 ## Limitations and disclaimer
 
-Bitcoin spot purchases only. Execution prices, fees and timing can differ from estimates; small fiat remnants may remain. API outages and unresolved transactions can delay operation. Forecasts are assumptions, and activity is not a complete exchange statement.
+Bitcoin spot purchases only. Prices, fees and timing may differ from estimates; small fiat remnants can remain. API outages can delay operation. Forecasts are estimates, and activity is not a complete exchange statement.
 
-Provided “as is”, without warranty or investment, tax or legal advice. You are responsible for configuration, credentials, transactions, backups and exports. To the extent permitted by law, the maintainer accepts no liability for losses or service failures.
+Provided “as is”, without warranty or investment, tax or legal advice. You are responsible for settings, credentials, transactions, backups and exports. To the extent permitted by law, the maintainer accepts no liability for losses or service failures.
