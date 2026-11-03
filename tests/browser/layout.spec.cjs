@@ -282,7 +282,7 @@ test('purchase explanation uses compact responsive field columns',async({page,is
  await page.goto('/');
  await page.locator('.purchase-explanation>summary').click();
  const fields=page.locator('#purchaseExplanation>.purchase-explanation-field');
- await expect(fields).toHaveCount(12);
+ await expect(fields).toHaveCount(11);
  const a=await rect(fields.nth(0)),b=await rect(fields.nth(1));
  if(isMobile)expect(b.y).toBeGreaterThan(a.y);else expect(Math.abs(b.y-a.y)).toBeLessThan(1);
  await noPageOverflow(page);
