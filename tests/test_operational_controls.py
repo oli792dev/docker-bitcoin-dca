@@ -144,6 +144,92 @@ class BackupIntegrationTests(unittest.TestCase):
         self.assertTrue(json.loads((self.root/'controls.json').read_text())['paused'])
         self.assertFalse((self.root/'.restore-journal').exists())
 
+    def test_backup_scopes_have_exact_contents_and_filename_suffixes(self):
+        from app.data.backup import Backups, FILES, decrypt, unpack
+        manager=Backups(self.root)
+        for scope,suffix,expected in [('full','full',FILES),('activity','activities',{'activity.sqlite3'}),('config','config',{'config.json','report-preferences.json'})]:
+            with self.subTest(scope=scope):
+                filename,raw=manager.create(scope,'long backup password')
+                manifest,data=unpack(decrypt(raw,'long backup password'))
+                self.assertEqual(manifest['scope'],scope)
+                self.assertEqual(set(data),set(expected))
+                self.assertTrue(filename.endswith('-'+suffix+'.dcabackup'),filename)
+
+    def test_config_restore_keeps_current_history_state_and_installation(self):
+        from app.data.backup import Backups
+        manager=Backups(self.root)
+        self.store.save_report_from('2025-03-01T00:00:00Z')
+        archived_config=json.loads((self.root/'config.json').read_text())
+        _,raw=manager.create('config','long backup password')
+        changed=self.store.snapshot();changed['account']['username']='new-operator'
+        self.store._write(changed)
+        self.store.save_report_from('2026-06-01T00:00:00Z')
+        self.activity.append_activity_records([self.record('later')])
+        state={'last_order_at':'2026-10-01T12:00:00Z','funding':'current'}
+        (self.root/'state.json').write_text(json.dumps(state))
+        installation=(self.root/'installation.json').read_bytes()
+        history=self.activity.read_activity_records()
+        manager.restore(raw,'long backup password','config')
+        self.assertEqual(json.loads((self.root/'config.json').read_text()),archived_config)
+        self.assertEqual(self.store.report_from(),'2025-03-01T00:00:00+00:00')
+        self.assertEqual(self.activity.read_activity_records(),history)
+        self.assertEqual(json.loads((self.root/'state.json').read_text()),state)
+        self.assertEqual((self.root/'installation.json').read_bytes(),installation)
+        self.assertTrue(json.loads((self.root/'controls.json').read_text())['paused'])
+
+    def test_restore_scope_must_be_available_and_full_can_restore_config_only(self):
+        from app.data.backup import Backups
+        manager=Backups(self.root)
+        _,config=manager.create('config','long backup password')
+        _,activities=manager.create('activity','long backup password')
+        for raw,scope in [(config,'full'),(config,'activity'),(activities,'config')]:
+            with self.subTest(scope=scope):
+                with self.assertRaises(ValueError):manager.restore(raw,'long backup password',scope)
+        _,full=manager.create('full','long backup password')
+        self.activity.append_activity_records([self.record('later')])
+        manager.restore(full,'long backup password','config')
+        self.assertEqual(len(self.activity.read_activity_records()),2)
+
+    def test_config_restore_failure_rolls_back_without_changing_financial_state(self):
+        from app.data import backup
+        manager=backup.Backups(self.root)
+        _,raw=manager.create('config','long backup password')
+        changed=self.store.snapshot();changed['account']['username']='keep-current-login'
+        self.store._write(changed)
+        state={'last_order_at':'2026-10-01T12:00:00Z'}
+        (self.root/'state.json').write_text(json.dumps(state))
+        real_write=backup.write_json_atomic
+        failed=False
+        def fail_once(path,data):
+            nonlocal failed
+            if Path(path)==self.root/'report-preferences.json' and not failed:
+                failed=True
+                raise OSError('injected config failure')
+            return real_write(path,data)
+        with patch.object(backup,'write_json_atomic',side_effect=fail_once):
+            with self.assertRaisesRegex(OSError,'injected config failure'):
+                manager.restore(raw,'long backup password','config')
+        self.assertEqual(json.loads((self.root/'config.json').read_text()),changed)
+        self.assertEqual(json.loads((self.root/'state.json').read_text()),state)
+        self.assertEqual([r['id'] for r in self.activity.read_activity_records()],['first'])
+        self.assertTrue(json.loads((self.root/'controls.json').read_text())['paused'])
+        self.assertFalse((self.root/'.restore-journal').exists())
+
+    def test_runtime_config_restore_reloads_settings_login_and_exchange_gate(self):
+        from app.trading.runtime import Runtime
+        account=Runtime(self.store,self.root/'state.json')
+        account.invalidate_sessions=Mock()
+        payload={'scope':'config','password':'long backup password','current_password':'long dashboard password'}
+        archive=account.backup(payload)
+        changed=self.store.snapshot();changed['settings']['expected_monthly_deposit']='123'
+        self.store._write(changed);self.store.data=changed
+        result=account.backup({**payload,'archive':archive['archive']},restore=True)
+        self.assertTrue(result['signInRequired'])
+        self.assertEqual(account.store.snapshot()['settings']['expected_monthly_deposit'],'')
+        self.assertTrue(account.controls.snapshot()['paused'])
+        self.assertTrue(account.exchange_check_pending)
+        self.assertTrue(account.invalidate_sessions.called)
+
     def test_repeated_full_restore_does_not_duplicate_activity(self):
         from app.data.backup import Backups
         manager=Backups(self.root)

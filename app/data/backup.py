@@ -28,6 +28,11 @@ MAGIC = b"DCA-BACKUP-1\0"
 FILES = frozenset(
     {"config.json", "state.json", "controls.json", "installation.json", "report-preferences.json", "activity.sqlite3"}
 )
+SCOPES = {
+    "full": FILES,
+    "activity": frozenset({"activity.sqlite3"}),
+    "config": frozenset({"config.json", "report-preferences.json"}),
+}
 JOURNAL = ".restore-journal"
 
 
@@ -90,13 +95,13 @@ def unpack(payload):
                 not isinstance(manifest, dict)
                 or set(manifest) != {"version", "scope", "createdAt", "files"}
                 or manifest["version"] != 1
-                or manifest["scope"] not in ("full", "activity")
+                or manifest["scope"] not in SCOPES
             ):
                 raise ValueError("Unsupported backup manifest.")
             created = datetime.fromisoformat(manifest["createdAt"])
             if created.tzinfo is None:
                 raise ValueError("Invalid backup timestamp.")
-            expected = FILES if manifest["scope"] == "full" else {"activity.sqlite3"}
+            expected = SCOPES[manifest["scope"]]
             if set(data) != expected or manifest["files"] != {
                 name: hashlib.sha256(value).hexdigest() for name, value in data.items()
             }:
@@ -254,16 +259,18 @@ class Backups:
         self.directory = Path(directory)
 
     def create(self, scope, password):
-        if scope not in ("full", "activity"):
+        if not isinstance(scope, str) or scope not in SCOPES:
             raise ValueError("Invalid backup scope.")
         with activity._ACTIVITY_LOCK, tempfile.TemporaryDirectory(dir=self.directory, prefix=".backup-") as tmp:
-            with activity._db():
-                pass
-            database = Path(tmp) / "activity.sqlite3"
-            sqlite_snapshot(self.directory / "activity.sqlite3", database)
-            data = {"activity.sqlite3": database.read_bytes()}
-            if scope == "full":
-                for name in FILES - {"activity.sqlite3"}:
+            data = {}
+            if "activity.sqlite3" in SCOPES[scope]:
+                with activity._db():
+                    pass
+                database = Path(tmp) / "activity.sqlite3"
+                sqlite_snapshot(self.directory / "activity.sqlite3", database)
+                data["activity.sqlite3"] = database.read_bytes()
+            if scope != "activity":
+                for name in SCOPES[scope] - {"activity.sqlite3"}:
                     path = self.directory / name
                     data[name] = (
                         path.read_bytes()
@@ -290,21 +297,24 @@ class Backups:
                 for name, value in data.items():
                     archive.writestr(name, value)
             encrypted = encrypt(output.getvalue(), password)
-            filename = "bitcoin-dca-" + scope + "-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ") + ".dcabackup"
+            suffix = "activities" if scope == "activity" else scope
+            filename = "bitcoin-dca-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ") + "-" + suffix + ".dcabackup"
             return filename, encrypted
 
     def restore(self, encrypted, password, scope, unresolved=False):
-        if scope not in ("full", "activity") or unresolved:
+        if not isinstance(scope, str) or scope not in SCOPES or unresolved:
             raise ValueError("Resolve pending financial work before restoring a backup.")
         manifest, data = unpack(decrypt(encrypted, password))
-        if scope == "full" and manifest["scope"] != "full":
-            raise ValueError("A full backup is required for a full restore.")
+        if not SCOPES[scope] <= SCOPES[manifest["scope"]]:
+            raise ValueError("Backup does not contain the selected restore scope.")
         with activity._ACTIVITY_LOCK, tempfile.TemporaryDirectory(dir=self.directory, prefix=".restore-") as tmp:
-            incoming = Path(tmp) / "activity.sqlite3"
-            incoming.write_bytes(data["activity.sqlite3"])
-            os.chmod(incoming, 0o600)
-            records = _records(incoming)
-            metadata = _metadata(incoming)
+            records, metadata = {}, {}
+            if scope != "config":
+                incoming = Path(tmp) / "activity.sqlite3"
+                incoming.write_bytes(data["activity.sqlite3"])
+                os.chmod(incoming, 0o600)
+                records = _records(incoming)
+                metadata = _metadata(incoming)
             if _unresolved(records):
                 raise ValueError("Backup contains unresolved withdrawals; restore is blocked.")
             with activity._db():
@@ -318,15 +328,17 @@ class Backups:
                 raise ValueError("Resolve pending withdrawals before restoring a backup.")
             if any(key in records and records[key] != value for key, value in current.items()):
                 raise ValueError("Backup conflicts with existing Activity; no records were changed.")
-            if scope == "full":
+            if scope != "activity":
                 from app.core.configuration import ConfigStore
 
-                for name in FILES - {"activity.sqlite3"}:
+                for name in SCOPES[scope] - {"activity.sqlite3"}:
                     value = json.loads(data[name])
                     if not isinstance(value, dict):
                         raise ValueError("Invalid backup JSON file.")
                     (Path(tmp) / name).write_bytes(data[name])
                 for name, key in (("installation.json", "firstStartedAt"), ("report-preferences.json", "from")):
+                    if name not in SCOPES[scope]:
+                        continue
                     value = json.loads(data[name])
                     if (
                         set(value) != {key}
@@ -337,6 +349,7 @@ class Backups:
                 config = ConfigStore._read(Path(tmp) / "config.json")
                 if config.get("version") != 1 or not isinstance(config.get("account"), dict):
                     raise ValueError("Invalid backup configuration.")
+            if scope == "full":
                 state = json.loads(data["state.json"])
                 if (
                     state.get("pending_order")
@@ -366,14 +379,15 @@ class Backups:
             write_json_atomic(journal / "manifest.json", existed)
             _sync_directory(self.directory)
             try:
-                if scope == "full":
-                    for name in FILES - {"activity.sqlite3", "controls.json"}:
+                if scope != "activity":
+                    for name in SCOPES[scope] - {"activity.sqlite3", "controls.json"}:
                         write_json_atomic(self.directory / name, json.loads(data[name]))
                 # Import validated records into the application's own schema;
                 # archived SQL, caches and indexes are never installed.
-                with activity._db() as db:
-                    db.executemany(activity._INSERT, [activity._values(row) for row in records.values()])
-                    db.executemany("INSERT OR IGNORE INTO metadata VALUES(?,?)", metadata.items())
+                if scope != "config":
+                    with activity._db() as db:
+                        db.executemany(activity._INSERT, [activity._values(row) for row in records.values()])
+                        db.executemany("INSERT OR IGNORE INTO metadata VALUES(?,?)", metadata.items())
                 # Every successful restore is deliberately paused, including timed
                 # or unpaused archives. Resume is explicit after exchange recheck.
                 write_json_atomic(self.directory / "controls.json", {"paused": True, "until": None})
