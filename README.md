@@ -1,6 +1,12 @@
 # Bitcoin DCA Bot
 
-A Docker bot for Bitcoin purchases on Kraken or Bitvavo, with optional automatic and manual withdrawals. It spreads purchases across the time until your next monthly deposit. The responsive dashboard supports English and German.
+A self-hosted Bitcoin DCA bot for Kraken and Bitvavo, managed through an HTTPS dashboard.
+
+- Automated purchases spread the available fiat budget until the next monthly deposit, with exchange-verified deposit detection.
+- Simulation, live trading and a transaction pause, with automatic reconciliation of open purchases and withdrawals.
+- Optional automatic withdrawals at a configured threshold, manual withdrawals and an estimated withdrawal date.
+- Responsive English/German dashboard with balances, schedules, period analysis, searchable activity and Parqet CSV export.
+- Setup wizard and editable settings, persistent volume storage, and encrypted Full, Activities or Config backups with restore.
 
 <details>
 <summary>Dashboard preview</summary>
