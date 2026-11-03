@@ -323,3 +323,20 @@ test('successful restore reloads login with a one-time safe backup filename',asy
  await noPageOverflow(page);
  await page.reload();await expect(page.locator('#restoreSuccess')).toBeHidden();
 });
+
+test('settings switches change only when their control is pressed',async({page,isMobile})=>{
+ await page.goto('/settings-live');
+ const press=locator=>isMobile?locator.tap():locator.click();
+ for(const [tab,ids] of [['Bot Configuration',['live','withdrawals_enabled','pauseTransactions']],['Dashboard',['manual_withdrawal_enabled','parqet_enabled']]]){
+  await page.getByRole('tab',{name:tab,exact:true}).click();
+  for(const id of ids){
+   const input=page.locator('#'+id),row=input.locator('..'),before=await input.isChecked();
+   await press(row.locator('strong'));expect(await input.isChecked()).toBe(before);
+   await press(row.locator('small').first());expect(await input.isChecked()).toBe(before);
+   await expect(input).toHaveAccessibleName(/\S/);
+   await press(input);expect(await input.isChecked()).toBe(!before);
+   await press(input);expect(await input.isChecked()).toBe(before);
+  }
+ }
+ await noPageOverflow(page);
+});

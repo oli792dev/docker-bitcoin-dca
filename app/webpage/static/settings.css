@@ -225,7 +225,7 @@ __DESIGN_CSS__
 .settings-page .setting-pair>.setting-row>input,.settings-page .setting-pair>.setting-row>select{grid-column:1;grid-row:2;}
 .settings-page .setting-pair>.setting-row>.hint{grid-column:1;grid-row:3;align-self:start;}
 }
-.settings-page .setting-switch{padding:var(--space-sm) 0;min-height:64px;border:0;background:transparent;gap:20px;align-items:center;}
+.settings-page .setting-switch{cursor:default;padding:var(--space-sm) 0;min-height:64px;border:0;background:transparent;gap:20px;align-items:center;}
 .settings-page .setting-switch>span{flex:1;min-width:0;}
 .settings-page .setting-switch strong{line-height:1.4;}
 .settings-page .setting-switch small{margin-top:var(--space-xs);line-height:1.45;}
