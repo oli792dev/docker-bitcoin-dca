@@ -146,7 +146,7 @@ class ScheduleBalanceTests(unittest.TestCase):
         from types import SimpleNamespace
         handler=object.__new__(web_ui.Handler)
         handler.path='/api/schedule';handler._require_authentication=lambda:True;handler._json=Mock()
-        handler.runtime=SimpleNamespace(exchange_check_pending=True,ready_at=200,store=SimpleNamespace(snapshot=lambda:{'settings':DEFAULTS}))
+        handler.runtime=SimpleNamespace(controls=SimpleNamespace(snapshot=lambda:{"paused":False,"until":None}),exchange_check_pending=True,ready_at=200,store=SimpleNamespace(snapshot=lambda:{'settings':DEFAULTS}))
         with patch.object(web_ui,'read_dashboard_snapshot',return_value={}),patch.object(web_ui.time,'monotonic',return_value=100):
             handler.do_GET()
         self.assertEqual(handler._json.call_args.args[1]['nextPurchaseStatus'],'Waiting for startup delay')

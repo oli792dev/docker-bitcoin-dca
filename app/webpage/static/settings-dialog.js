@@ -15,6 +15,7 @@
   if(event.data?.type==='dca-settings-ready'&&dialog.open)frame.style.visibility='visible';
   if(event.data?.type==='dca-settings-dirty')dirty=event.data.dirty===true;
   if(event.data?.type==='dca-settings-close')dialog.close();
+  if(event.data?.type==='dca-transactions-updated')window.DCA_DASHBOARD_ACTIONS?.refreshSchedule?.();
   if(event.data?.type==='dca-settings-saved')window.location.reload();
   if(event.data?.type==='dca-settings-auth-required')window.location.href='/';
  });

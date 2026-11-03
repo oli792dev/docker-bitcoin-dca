@@ -22,16 +22,21 @@ The named volume `bitcoin-dca-webui-data` mounts at `/webui-data`:
 
 - `config.json`: settings, API credentials and hashed login password.
 - `state.json`: schedule, funding checkpoints and pending transactions.
+- `controls.json`: durable pause and optional UTC expiry, independent of monthly scheduling.
+- `backups/`: encrypted downloadable archives; `.restore-journal/`: temporary durable rollback copies during restore.
 - `activity.sqlite3`: activity and historical FX cache.
-- Other files: dashboard snapshot, reporting preferences, first-start timestamp, heartbeat and `tls/` certificates/keys.
+- Other files: dashboard snapshot, `report-preferences.json`, first-start timestamp, heartbeat and `tls/` certificates/keys.
 
-JSON writes use private temporary files, atomic replacement and filesystem synchronization. SQLite writes are transactional. Stop the container for a consistent full-volume backup, or use a SQLite-aware backup. Restore the complete volume; missing transaction identifiers cannot always be reconstructed.
+JSON writes use private temporary files, atomic replacement and filesystem synchronization. SQLite writes are transactional. Full backups include the saved report start preference and installation timestamp; restore reloads the in-memory installation default too. The Backup tab holds the account and ledger locks while SQLite's backup API captures committed WAL data. A versioned ZIP_STORED archive uses an exact file allowlist, SHA-256 manifest and bounded payloads; scrypt derives an AES-256-GCM key from the backup password. Only encrypted archives are retained in `backups/`. Private plaintext staging directories can remain in the volume after an abrupt process kill; protect the volume like its existing plaintext configuration.
+
+Restore requires current-password reauthentication and rejects queued/unresolved financial work, conflicting Activity/account bindings and archived pending requests. Full restore requires the archived ledger to contain all existing records unchanged and rejects a rewind of the last order timestamp. Activity-only restore merges validated records and legacy account metadata into the application's existing schema; archived SQL and caches are never installed. A durable rollback journal precedes multi-file changes. Failure rolls back; startup rolls back an interrupted restore before loading settings. An unreadable journal prevents startup. Successful restore forces persistent pause, invalidates sessions and requires the normal read-only exchange gate before future transactions. Local TLS certificates remain unchanged. Stop the container when making an independent full-volume filesystem backup.
 
 Exchange, currency and active API-key fingerprints separate scheduling/account state and export cycles. Changing the active key is treated as a new account, even for a key rotation; historical activity remains. Secret-only rotation preserves the binding. Unresolved transactions block account changes.
 
 ## Execution and recovery
 
 - After startup delay, verify open orders and BTC withdrawals before new transactions. Saved pending requests are reconciled; uncertain non-idempotent submissions are not blindly repeated.
+- An explicit pause gates all new buys and withdrawals, including simulation, manual confirmation and retries. Read-only account checks and order/withdrawal reconciliation continue. Timed pauses expire on the server; pausing does not reset purchase deadlines.
 - Purchase interval = UTC time from the last purchase to the active deposit deadline ÷ `(affordable purchases + 1)`, minimum 60 seconds. Fees and exchange limits apply; the final purchase can use the remaining budget.
 - Deposit dates use the configured timezone and local time. Short months use their last day; daylight-saving gaps move forward and repeated times use the first occurrence.
 - Booked fiat increases trigger bounded API verification. Released order holds are not deposits. Confirmed early deposits advance the deadline; overdue deposits remain pending. Sale proceeds require matching account-history evidence. Unknown credits or incomplete history keep automatic transactions paused; a timeout never confirms funding.
@@ -67,7 +72,7 @@ Heartbeat and Docker health checks run every five minutes. A supervisor exits af
 Python 3.12+ and Node 22+:
 
 ```sh
-python -m pip install requests==2.34.2 -r requirements-dev.txt
+python -m pip install requests==2.34.2 cryptography==50.0.2 -r requirements-dev.txt
 ruff check app
 ruff format --check app
 mypy

@@ -29,7 +29,7 @@ class ReportService:
     interval_records: Callable[[int, int], list[Activity]]
     aggregate_rows: Callable[[list[Activity], str], list[dict[str, str]]]
     format_csv: Callable[[list[dict[str, str]]], str]
-    read_report: Callable[[int, int, int, int], ReportRead]
+    read_report: Callable[..., ReportRead]
     read_snapshot: Callable[[], dict[str, Any]]
     build_report: Callable[[Mapping[str, Any], list[dict[str, Any]], dict[str, Any], list[Activity]], dict[str, Any]]
 
@@ -57,8 +57,14 @@ class ReportService:
             )
         return self.format_csv(rows), len(rows)
 
-    def analytics(self, start: int, end: int, page: int, limit: int, settings: Mapping[str, Any]) -> dict[str, Any]:
-        records, total, page, totals, balance = self.read_report(start, end, page, limit)
+    def analytics(
+        self, start: int, end: int, page: int, limit: int, settings: Mapping[str, Any], kind: str = "", status: str = ""
+    ) -> dict[str, Any]:
+        records, total, page, totals, balance = (
+            self.read_report(start, end, page, limit, kind=kind, status=status)
+            if kind or status
+            else self.read_report(start, end, page, limit)
+        )
         snapshot = self.read_snapshot()
         snapshot["trackedBtc"] = str(balance)
         if snapshot.get("quote") not in (None, settings["quote"]):

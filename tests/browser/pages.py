@@ -15,5 +15,6 @@ with tempfile.TemporaryDirectory() as directory:
     print(json.dumps({
         '/': dashboard_page().replace('__REPORT_FROM__', '2026-01-01T00:00:00Z').replace('__WITHDRAW_DESTINATION__', 'Fixture destination'),
         '/settings': settings_page(store),
+        '/settings?embedded=1': settings_page(store,embedded=True),
         '/login': load_page('login').replace('__DESIGN_CSS__', DESIGN_CSS).replace('{{ERROR}}', ''),
     }))

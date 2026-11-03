@@ -24,11 +24,11 @@ async function event(id,name='click'){if(id==='confirm'&&!elements.passwordConfi
 (async()=>{
  assert.equal(elements.dashboard_refresh_seconds.value,30);elements.dashboard_refresh_seconds.value='75';assert.equal(vm.runInContext('values().dashboard_refresh_seconds',context),75);
  assert.equal(elements.check_interval_seconds.value,5);assert.equal(vm.runInContext('values().check_interval_seconds',context),300);elements.check_interval_seconds.value='2.5';assert.equal(vm.runInContext('values().check_interval_seconds',context),150);elements.check_interval_seconds.value='5';
- assert.equal(elements.settingsTabs.children.length,3);assert.deepEqual(elements.settingsTabs.children.map(x=>x.textContent),['Bot Configuration','Exchange','Dashboard']);assert.equal(elements.liveTradingCard.parentElement,elements.purchaseGroupFields);assert.equal(elements.automaticWithdrawalsCard.parentElement,elements.withdrawalGroupFields);assert.equal(elements.botConfiguration.hidden,false);assert.equal(elements.dashboardOptions.hidden,true);
+ assert.equal(elements.settingsTabs.children.length,4);assert.deepEqual(elements.settingsTabs.children.map(x=>x.textContent),['Bot Configuration','Exchange','Dashboard','Backup']);assert.equal(elements.liveTradingCard.parentElement,elements.purchaseGroupFields);assert.equal(elements.automaticWithdrawalsCard.parentElement,elements.withdrawalGroupFields);assert.equal(elements.botConfiguration.hidden,false);assert.equal(elements.dashboardOptions.hidden,true);
  const rememberedTabs=new Map();context.localStorage={getItem:key=>rememberedTabs.get(key),setItem:(key,value)=>rememberedTabs.set(key,value)};
  elements.buy_amount.value='.001';await event('dashboardOptionsTab');assert.equal(rememberedTabs.get('bitcoinDcaSettingsTab'),'dashboardOptions');assert.equal(elements.botConfiguration.hidden,true);assert.equal(elements.dashboardOptions.hidden,false);assert.equal(elements.buy_amount.value,'.001');
  elements.botConfigurationTab.listeners.keydown({key:'ArrowRight',preventDefault(){}});assert.equal(elements.exchangeConnection.hidden,false);assert.equal(elements.exchangeConnectionTab.focused,true);
- elements.exchangeConnectionTab.listeners.keydown({key:'End',preventDefault(){}});assert.equal(elements.dashboardOptions.hidden,false);
+ elements.exchangeConnectionTab.listeners.keydown({key:'End',preventDefault(){}});assert.equal(elements.backupOptions.hidden,false);
  elements.dashboardOptionsTab.listeners.keydown({key:'Home',preventDefault(){}});assert.equal(elements.botConfiguration.hidden,false);
  elements.botConfiguration.contains=target=>target===elements.deposit_time;await event('dashboardOptionsTab');elements.settingsForm.listeners.invalid({target:elements.deposit_time});assert.equal(elements.botConfiguration.hidden,false);
  elements.buy_amount.value='0';assert.equal(elements.deposit_time.type,'time');assert.equal(elements.deposit_time.value,'00:00');elements.deposit_time.value='09:30';
@@ -72,7 +72,7 @@ class SetupElement extends Element{append(...children){for(const child of childr
 for(const match of setupPage.matchAll(/<(\w+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)){const el=new SetupElement(match[1]);el.id=match[3];el.type=(match[2].match(/type="([^"]+)"/)||[])[1]||'';if(match[2].includes('data-setting'))el.dataset.setting='';setupElements[el.id]=el}
 const setupRequests=[];vm.runInNewContext(setupPage.match(/<script>([\s\S]*?)<\/script>/)[1],{document:{getElementById:id=>setupElements[id],createElement:tag=>new SetupElement(tag),querySelectorAll:()=>Object.values(setupElements).filter(el=>'setting'in el.dataset)},location:{href:''},fetch:async(url,options)=>{setupRequests.push({url,body:JSON.parse(options.body)});return {ok:true,json:async()=>({})}}});
 assert.equal(setupElements.timezone.value,'Pacific/Chatham');assert.equal(setupElements.timezone.children.at(-1).value,'Pacific/Chatham');
-assert.equal(setupElements.settingsTabs.children.length,3);assert.equal(setupElements.exchangeConnection.hidden,false);assert.equal(setupElements.botConfiguration.hidden,true);assert.equal(setupElements.dashboardCredentials,undefined);assert.equal(setupElements.username,undefined);
+assert.equal(setupElements.settingsTabs.children.length,4);assert.equal(setupElements.exchangeConnection.hidden,false);assert.equal(setupElements.botConfiguration.hidden,true);assert.equal(setupElements.dashboardCredentials,undefined);assert.equal(setupElements.username,undefined);
 setupElements.settingsForm.listeners.submit({preventDefault(){}});assert.equal(setupElements.review.open,true);assert.match(setupElements.reviewDescription.textContent,/New configuration/);assert(!allText(setupElements.reviewValues).includes('Before'));
 assert.equal(setupRequests.length,0,'Step two reviews settings without editing account credentials');
 console.log('First-run step two passed without credential fields');
@@ -83,10 +83,11 @@ const modalScript=dashboard.match(/<script data-ui-settings>([\s\S]*?)<\/script>
 const modalElements=Object.fromEntries(['settingsDialog','settingsFrame','openSettings','closeSettings'].map(id=>[id,new Element()]));
 const frameWindow={},events={};let footerActions=0;modalElements.settingsFrame.contentWindow=frameWindow;let reloads=0;
 const modalWindow={location:{origin:'http://dashboard.test',href:'',reload(){reloads++}},addEventListener(name,fn){events[name]=fn}};
-modalWindow.DCA_DASHBOARD_ACTIONS={withdraw(){footerActions++},export(){footerActions++}};
+let scheduleRefreshes=0;modalWindow.DCA_DASHBOARD_ACTIONS={refreshSchedule(){scheduleRefreshes++},withdraw(){footerActions++},export(){footerActions++}};
 vm.runInNewContext(modalScript,{fetch:async()=>({ok:true}),document:{getElementById:id=>modalElements[id]},window:modalWindow});
 modalElements.openSettings.listeners.click();assert.equal(modalElements.settingsDialog.open,true);assert.equal(modalElements.settingsFrame.src,'/settings?embedded=1');
 events.message({origin:'http://untrusted.test',source:frameWindow,data:{type:'dca-settings-action',action:'withdraw'}});assert.equal(footerActions,0);events.message({origin:'http://dashboard.test',source:frameWindow,data:{type:'dca-settings-action',action:'withdraw'}});assert.equal(footerActions,1);
+events.message({origin:'http://untrusted.test',source:frameWindow,data:{type:'dca-transactions-updated'}});assert.equal(scheduleRefreshes,0);events.message({origin:'http://dashboard.test',source:frameWindow,data:{type:'dca-transactions-updated'}});assert.equal(scheduleRefreshes,1);assert.equal(reloads,0,'Pause refresh must retain the settings draft');
 assert.equal(modalElements.settingsFrame.style.visibility,'hidden');
 events.message({origin:'http://untrusted.test',source:frameWindow,data:{type:'dca-settings-ready'}});assert.equal(modalElements.settingsFrame.style.visibility,'hidden');
 events.message({origin:'http://dashboard.test',source:frameWindow,data:{type:'dca-settings-ready'}});assert.equal(modalElements.settingsFrame.style.visibility,'visible');
@@ -142,7 +143,7 @@ assert.equal(germanContext.DCA_I18N.t('Available EUR balance on exchange'),'Verf
 assert.equal(germanContext.DCA_I18N.t('BTC is sent to the address saved in Kraken under “Before”.'),'BTC werden an die bei Kraken unter „Before“ gespeicherte Adresse gesendet.');
 assert.equal(germanContext.DCA_I18N.t(123.45),123.45);
 vm.runInContext(script.replace('"language": "en"','"language": "de"'),germanContext);
-assert.deepEqual(germanElements.settingsTabs.children.map(x=>x.textContent),['Bot-Konfiguration','Börse','Dashboard']);
+assert.deepEqual(germanElements.settingsTabs.children.map(x=>x.textContent),['Bot-Konfiguration','Börse','Dashboard','Backup']);
 assert.equal(germanElements.withdraw_thresholdLabel.textContent,'Automatische Auszahlungsschwelle (EUR)');
 assert.equal(germanElements.language.value,'de');assert.equal(germanElements.quote.value,'EUR');
 germanElements.username.value='Before';germanElements.settingsForm.listeners.submit({preventDefault(){}});

@@ -235,17 +235,42 @@ def ledger_balance():
     return _balance(activity_totals())
 
 
-def read_report(start, end, page=1, limit=20):
+def read_report(start, end, page=1, limit=20, kind="", status=""):
     """Rows, totals and global balance from one consistent SQLite read transaction."""
+    if kind not in ("", "Buy", "TransferOut", "Deposit") or status not in (
+        "",
+        "real",
+        "simulation",
+        "confirmed",
+        "submitted",
+        "completed",
+        "failed",
+        "canceled",
+        "cancelled",
+        "legacy_unverified",
+    ):
+        raise ValueError("Invalid Activity filter.")
     limit = max(1, min(1000, int(limit)))
     with _db() as db:
         db.execute("BEGIN")
         where = "(asset='BTC' OR kind='Deposit') AND timestamp>? AND timestamp<=?"
-        total = db.execute("SELECT count(*) FROM activity WHERE " + where, (start, end)).fetchone()[0]
+        args = [start, end]
+        if kind:
+            where += " AND kind=?"
+            args.append(kind)
+        if status in ("real", "simulation"):
+            where += " AND simulated=?"
+            args.append(int(status == "simulation"))
+        elif status == "confirmed":
+            where += " AND ((kind='Buy' AND simulated=0 AND coalesce(json_extract(payload,'$.purchaseStatus'),'confirmed')='confirmed') OR (kind='Deposit' AND json_extract(payload,'$.depositStatus')='confirmed') OR (kind='TransferOut' AND simulated=0 AND status='completed'))"
+        elif status:
+            where += " AND CASE WHEN kind='Deposit' THEN json_extract(payload,'$.depositStatus') WHEN kind='Buy' AND simulated=0 THEN coalesce(json_extract(payload,'$.purchaseStatus'),'confirmed') WHEN status='cancelled' THEN 'canceled' ELSE status END=?"
+            args.append(status)
+        total = db.execute("SELECT count(*) FROM activity WHERE " + where, args).fetchone()[0]
         page = max(1, min(int(page), max(1, (total + limit - 1) // limit)))
         rows = db.execute(
             "SELECT payload FROM activity WHERE " + where + " ORDER BY timestamp DESC,id DESC LIMIT ? OFFSET ?",
-            (start, end, limit, (page - 1) * limit),
+            (*args, limit, (page - 1) * limit),
         ).fetchall()
         return (
             [json.loads(r[0]) for r in rows],

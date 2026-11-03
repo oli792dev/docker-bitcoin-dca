@@ -532,3 +532,5 @@ __DESIGN_CSS__
 .redesigned .pagination :is(#previousPage,#nextPage,#goToPage){border-color:transparent;background:var(--surface);color:var(--accent)}
 
 .controls>button,.report-controls .controls button.report-control{height:auto;min-height:var(--button-height);max-height:none}
+
+#activityDetailValues dd,#purchaseExplanation dd{overflow-wrap:anywhere;white-space:pre-wrap;}

@@ -103,6 +103,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.settings.get("expected_monthly_deposit") or "0",
                 datetime.now(UTC),
             )
+        pause = self.runtime.controls.snapshot() if self.runtime else {"paused": False, "until": None}
+        if pause["paused"]:
+            forecast_at, forecast_status = None, "Transactions paused"
+        recovery_required = bool(getattr(self.runtime, "recovery_required", False))
         checked_at = snapshot.get("updatedAt") if balance_matches else None
         status = dashboard_status(
             balance_matches=balance_matches,
@@ -126,9 +130,20 @@ class Handler(BaseHTTPRequestHandler):
             200,
             {
                 "accountMarketPrice": account_price,
-                "botStatusLabel": status.label,
+                "pause": pause,
+                "purchaseExplanation": snapshot.get("withdrawalForecastPlan") if balance_matches else None,
+                "recoveryRequired": recovery_required,
+                "botStatusLabel": "Restore recovery required; restart container"
+                if recovery_required
+                else "Transactions paused"
+                if pause["paused"] and status.tone != "error"
+                else status.label,
                 "dashboardRefreshSeconds": self.settings.get("dashboard_refresh_seconds", 30),
-                "botStatusTone": status.tone,
+                "botStatusTone": "error"
+                if recovery_required
+                else "waiting"
+                if pause["paused"] and status.tone != "error"
+                else status.tone,
                 "botStatusWarning": status.warning,
                 "startupDelayActive": bool(
                     startup_delay or snapshot.get("nextPurchaseStatus") == "Waiting for startup delay"
@@ -161,7 +176,9 @@ class Handler(BaseHTTPRequestHandler):
                 "estimatedWithdrawalStatus": forecast_status,
                 "balanceUpdatedAt": snapshot.get("updatedAt") if balance_matches else None,
                 "nextPurchaseAt": snapshot.get("nextPurchaseAt"),
-                "nextPurchaseStatus": snapshot.get("nextPurchaseStatus", "Schedule pending"),
+                "nextPurchaseStatus": "Transactions paused"
+                if pause["paused"]
+                else snapshot.get("nextPurchaseStatus", "Schedule pending"),
                 "timezone": self.settings["timezone"],
                 "serverTime": datetime.now(UTC).isoformat(),
             },
@@ -242,6 +259,8 @@ class Handler(BaseHTTPRequestHandler):
             if self.runtime and urlparse(self.path).path not in (
                 "/api/settings",
                 "/api/settings/test",
+                "/api/settings/backup",
+                "/api/settings/restore",
                 "/settings",
                 "/logout",
                 "/",
@@ -322,7 +341,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get("X-DCA-Action") != "settings" or self.headers.get("Content-Type") != "application/json":
             raise ValueError("Invalid settings request.")
         length = int(self.headers.get("Content-Length", "0"))
-        if not 0 < length <= 32768:
+        maximum = 46 * 1024 * 1024 if urlparse(self.path).path == "/api/settings/restore" else 32768
+        if not 0 < length <= maximum:
             raise ValueError("Invalid settings request size.")
         data = json.loads(self.rfile.read(length).decode("utf-8"))
         if not isinstance(data, dict):
@@ -339,6 +359,9 @@ class Handler(BaseHTTPRequestHandler):
             "/api/settings": "Settings update",
             "/api/settings/forecast": "Forecast settings update",
             "/api/settings/report-period": "Period Analysis preferences update",
+            "/api/settings/pause": "Transaction pause update",
+            "/api/settings/backup": "Encrypted backup creation",
+            "/api/settings/restore": "Encrypted backup restore",
         }[path]
         if path != "/api/setup/account" and not self._require_authentication():
             LOG.info("%s rejected: authentication required", operation)
@@ -360,6 +383,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(b"{}")
+            elif path == "/api/settings/pause":
+                self._json(200, self.runtime.set_pause(payload))
+            elif path in ("/api/settings/backup", "/api/settings/restore"):
+                self._json(200, self.runtime.backup(payload, restore=path.endswith("restore")))
             elif path == "/api/settings/forecast":
                 self._json(200, self.runtime.save_forecast_deposit(payload))
             elif path == "/api/settings/report-period":
@@ -451,6 +478,9 @@ class Handler(BaseHTTPRequestHandler):
             "/api/settings/test",
             "/api/settings/forecast",
             "/api/settings/report-period",
+            "/api/settings/pause",
+            "/api/settings/backup",
+            "/api/settings/restore",
         ):
             self._settings_post(parsed.path)
             return
@@ -693,6 +723,20 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(502, {"error": "Could not read the current BTC price from the last account check."})
             return
         try:
+            if parsed.path == "/api/activity/detail":
+                from app.data.activity import get_activity_record
+
+                identifier = query.get("id", [""])[0]
+                if not identifier or len(identifier) > 512:
+                    raise ValueError("Invalid Activity identifier.")
+                record = get_activity_record(identifier)
+                self._json(200 if record else 404, record or {"error": "Activity record not found."})
+                return
+            if parsed.path == "/api/controls":
+                self._json(
+                    200, {**self.runtime.controls.snapshot(), "recoveryRequired": self.runtime.recovery_required}
+                )
+                return
             if parsed.path == "/api/schedule":
                 self._handle_schedule()
                 return
@@ -734,7 +778,18 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     page = int(query.get("page", ["1"])[0])
                     limit = int(query.get("limit", ["10"])[0])
-                    self._json(200, reports.analytics(start_ms, end_ms, page, limit, self.settings))
+                    self._json(
+                        200,
+                        reports.analytics(
+                            start_ms,
+                            end_ms,
+                            page,
+                            limit,
+                            self.settings,
+                            query.get("type", [""])[0],
+                            query.get("status", [""])[0],
+                        ),
+                    )
                 return
             self._json(404, {"error": "Not found"})
         except ValueError as exc:

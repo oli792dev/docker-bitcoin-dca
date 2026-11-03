@@ -469,3 +469,26 @@ class FinalPurchaseBudgetTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+class PausedCycleTests(unittest.TestCase):
+    setUp=ReviewTests.setUp
+    cycle_api=ReviewTests.cycle_api
+    def test_paused_live_and_simulation_keep_reading_without_submitting_or_spending(self):
+        for live in (True,False):
+            with self.subTest(live=live):
+                state={};api=self.cycle_api()
+                settings={**self.settings,'live':live,'transaction_gate':lambda:True,'withdrawals_enabled':True}
+                with patch.object(bot,'read_state',return_value=state),patch.object(bot,'save_state'),patch.object(bot,'update_dashboard_snapshot') as snapshot,patch.object(bot,'update_dashboard_schedule'):
+                    bot.run_once(api,settings,300)
+                api.buy_btc.assert_not_called();api.withdraw_btc.assert_not_called()
+                self.assertEqual(state.get('spent','0'),'0')
+                self.assertIn('schedule',state)
+                snapshot.assert_called()
+
+    def test_paused_unknown_withdrawal_is_never_retried_even_with_idempotency(self):
+        api=self.cycle_api();api.supports_withdrawal_idempotency=True
+        settings={**self.settings,'transaction_gate':lambda:True}
+        state={'pending_withdrawal':{'idempotencyKey':'old','amount':'.001','symbol':'BTC'},'pending_withdrawal_context':{'exchange':'KRAKEN'}}
+        with patch.object(bot,'reconcile_withdrawals') as reconcile:
+            bot.maybe_withdraw_btc(api,state,settings)
+        api.withdraw_btc.assert_not_called();reconcile.assert_called()

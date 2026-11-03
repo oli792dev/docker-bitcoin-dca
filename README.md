@@ -31,7 +31,7 @@ Grant these API permissions:
 | Kraken | Query Funds; Query Open/Closed Orders & Trades; Query ledger entries | Modify Orders | Withdraw Funds |
 | Bitvavo | Read-only / View | Trade digital assets | Withdraw digital assets |
 
-Use Test connection to check balances and deposit-history access. It does not prove trading or withdrawal permissions. Enter credentials only in the web settings; never commit credentials or `.env`.
+Test connection reports funds, orders, history, trade and withdrawal access separately as proven, denied or unknown. It uses only reads; Kraken key metadata can confirm write scopes, while Bitvavo write scopes remain unknown. Enter credentials only in the web settings; never commit credentials or `.env`.
 
 ## Usage
 
@@ -40,6 +40,8 @@ Use Test connection to check balances and deposit-history access. It does not pr
 - Deposits are verified through the exchange API. Early confirmed deposits advance planning; delayed or unverified funding can pause purchases. The bot does not transfer monthly deposits itself.
 - Automatic withdrawals use all available exchange BTC, including BTC acquired outside the bot. Set a threshold and target: a saved withdrawal-method label for Kraken, or a verified address/network for Bitvavo.
 - Manual withdrawal and Parqet export are in the Settings footer. Withdrawals require live trading and send available BTC minus fees; manual withdrawals require confirmation and bypass the automatic threshold.
+
+Pause transactions in Bot Configuration indefinitely or until a local date/time. Account checks and reconciliation continue; new purchases and withdrawals (including Simulation and manual requests) stop. Resume retains the existing schedule. “Why this next purchase?” shows the actual plan inputs. Activity has server-side type/status filters and read-only entry details; filters do not change period totals or Parqet export.
 
 Expected monthly deposit affects only the withdrawal forecast. Browser refresh and exchange account checks have separate settings.
 
@@ -50,6 +52,10 @@ Choose a confirmed withdrawal interval in the export dialog. The CSV consolidate
 ## Data and updates
 
 Reuse and back up `bitcoin-dca-webui-data`; it contains settings, credentials, history and scheduling state. Passwords are hashed; API secrets remain readable to anyone with volume access.
+
+Use Settings → Backup to create a password-protected full backup (settings, login, state and Activity) or Activity-only backup. Both require your current dashboard password and a separate backup password of at least 12 characters. Encrypted copies are saved under `backups/` in the volume and downloaded. Keep an off-host copy and its password separately; the password cannot be recovered.
+
+Restore can be opened after creating a login on a fresh installation. Full restore replaces login credentials; sign in with the archived login afterward. Activity-only restore adds history without deleting or overwriting entries. Conflicts, unresolved transactions and full restores that would remove history or rewind financial state are rejected. Every successful restore leaves transactions paused and requests an automatic exchange check; resume explicitly afterward. TLS certificates, derived caches and previously saved backup files are excluded. Backups are limited to 32 MiB.
 
 To update a source-based installation:
 

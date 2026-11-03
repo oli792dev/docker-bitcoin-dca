@@ -44,6 +44,16 @@ class KrakenTransportTests(unittest.TestCase):
         self.assertIn('ZEUR', result)
         self.assertEqual(self.sessions[1].post.call_args.kwargs['timeout'], (10, 30))
 
+    def test_key_metadata_timeout_retries_read_on_fresh_connection(self):
+        failed = self.api.session
+        failed.post.side_effect = requests.ReadTimeout('simulated metadata timeout')
+        with patch.object(kraken.time, 'sleep'):
+            result = self.api.private('GetApiKeyInfo')
+        self.assertIn('ZEUR', result)
+        self.assertEqual(failed.post.call_count, 1)
+        self.assertEqual(self.sessions[1].post.call_count, 1)
+        failed.close.assert_called_once()
+
     def test_recent_connection_is_reused(self):
         current = self.api.session
         self.api._last_http_activity = 50

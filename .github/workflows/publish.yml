@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: '22'
       - name: Install test dependency
-        run: python -m pip install requests==2.34.2 -r requirements-dev.txt
+        run: python -m pip install requests==2.34.2 cryptography==50.0.2 -r requirements-dev.txt
       - name: Check Python style and typed planning contracts
         run: |
           ruff check app

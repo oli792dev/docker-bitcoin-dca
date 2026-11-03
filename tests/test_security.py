@@ -208,6 +208,8 @@ class ConnectionLimitTests(unittest.TestCase):
 
     def test_queued_withdrawal_rechecks_session_before_accessing_exchange(self):
         app=object.__new__(runtime.Runtime)
+        app.state_path=Path("/tmp/no-restore-test/state.json")
+        app.controls=Mock();app.controls.snapshot.return_value={"paused":False}
         import threading
         app.lock=threading.RLock();app.api=Mock();app.settings={'manual_withdrawal_enabled':True}
         app.worker=Mock();app.worker.stop.is_set.return_value=False;app._configuration_uncertain=False

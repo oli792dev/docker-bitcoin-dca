@@ -13,7 +13,8 @@ test.beforeEach(async ({page}) => {
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     if (url.origin !== 'https://dca.test') throw new Error(`Unexpected external request: ${url.origin}`);
-    if (pages[url.pathname]) return route.fulfill({contentType: 'text/html', body: pages[url.pathname]});
+    const rendered=pages[url.pathname+url.search]||pages[url.pathname];
+    if (rendered) return route.fulfill({contentType: 'text/html', body: rendered});
     const data = url.pathname === '/api/analytics' ? analytics
       : url.pathname === '/api/market-price' ? {price: 60000, conversionRate: 1, conversionRates: {EUR: 1}}
       : url.pathname === '/api/schedule' ? {botStatusLabel: 'Fixture ready', dashboardRefreshSeconds: 3600, quote: 'EUR', quoteBalance: 600}
@@ -89,7 +90,7 @@ test('dashboard controls, analysis spacing and modal scroll restoration', async 
 
 });
 
-test('settings tabs stay single line and fields scroll within the content', async ({page}) => {
+test('settings tabs stay single line and fields scroll within the content', async ({page,isMobile}) => {
   await page.goto('/settings');
   await expect(page.locator('#settingsForm')).toBeVisible();
   await noPageOverflow(page);
@@ -102,14 +103,24 @@ test('settings tabs stay single line and fields scroll within the content', asyn
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(0, 0, 0)');
   await expect(page.locator('.settings-footer')).toHaveCSS('background-color', 'rgb(0, 0, 0)');
   await expect(page.locator('.settings-tabs')).toHaveCSS('background-color', 'rgb(28, 28, 30)');
+  // Pointer-capable projects test hover. Touch projects use taps and verify
+  // selection because emulated hover is not a stable touch interaction.
+  await page.mouse.move(0,0);
   const selectedTab = page.locator('#botConfigurationTab');
   const hoverTab = page.locator('#exchangeConnectionTab');
   await expect(selectedTab).toHaveCSS('background-color', 'rgb(86, 86, 90)');
   const selectedBackground = await selectedTab.evaluate(el => getComputedStyle(el).backgroundColor);
-  await hoverTab.hover();
-  await expect(hoverTab).toHaveCSS('background-color', 'rgb(58, 58, 60)');
-  expect(await hoverTab.evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe(selectedBackground);
-  expect(await selectedTab.evaluate(el => getComputedStyle(el).backgroundColor)).toBe(selectedBackground);
+  if(isMobile){
+    await hoverTab.tap();
+    await expect(hoverTab).toHaveAttribute('aria-selected','true');
+    await selectedTab.tap();
+    await expect(selectedTab).toHaveAttribute('aria-selected','true');
+  }else{
+    await hoverTab.hover();
+    await expect(hoverTab).toHaveCSS('background-color', 'rgb(58, 58, 60)');
+    expect(await hoverTab.evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe(selectedBackground);
+    expect(await selectedTab.evaluate(el => getComputedStyle(el).backgroundColor)).toBe(selectedBackground);
+  }
   const time = page.locator('#deposit_time');
   const pair = await rect(page.locator('#depositDateFields'));
   const timeBox = await rect(time);
@@ -159,4 +170,40 @@ test('all dialog surfaces and action bars match the page background', async ({pa
       }
     }
   }
+});
+
+test('operational controls, backup review and Activity filters remain usable', async ({page}) => {
+  await page.goto('/settings');
+  await page.getByRole('tab', {name:'Bot Configuration',exact:true}).click();
+  await expect(page.locator('#pauseTransactions')).toBeVisible();
+  await page.locator('#pauseTransactions').click();
+  await page.getByRole('tab', {name:'Backup',exact:true}).click();
+  await expect(page.locator('#backupLoginPassword')).toBeVisible();
+  await expect(page.locator('#backupPassword')).toBeVisible();
+  await page.locator('#restoreFile').setInputFiles({name:'example.dcabackup',mimeType:'application/octet-stream',buffer:Buffer.from('encrypted fixture')});
+  await page.locator('#restoreBackup').click();
+  await expect(page.locator('#backupReview')).toBeVisible();
+  await expect(page.locator('#backupReview')).toContainText('login credentials');
+  await page.locator('#cancelBackupRestore').click();
+  await expect(page.locator('#backupReview')).not.toBeVisible();
+  await noPageOverflow(page);
+  await page.goto('/');
+  await page.locator('#activityHeading').click();
+  const response=page.waitForRequest(request=>request.url().includes('/api/analytics')&&request.url().includes('type=Buy'));
+  await page.locator('#activityType').selectOption('Buy');
+  await response;
+  await expect(page.locator('#activityStatusFilter')).toBeVisible();
+  await expect(page.getByText('Why this next purchase?',{exact:true})).toBeVisible();
+  await noPageOverflow(page);
+  await page.evaluate(()=>window.scrollTo(0,0));
+  await expect(page.locator('#openSettings')).toBeVisible();
+  await page.locator('#openSettings').click();
+  const frame=page.frameLocator('#settingsFrame');
+  await frame.getByRole('tab',{name:'Bot Configuration',exact:true}).click();
+  await frame.locator('#buy_amount').fill('0.001');
+  const scheduleRequest=page.waitForRequest(request=>new URL(request.url()).pathname==='/api/schedule');
+  await frame.locator('#pauseTransactions').click();
+  await scheduleRequest;
+  await expect(frame.locator('#buy_amount')).toHaveValue('0.001');
+  await expect(page.locator('#settingsDialog')).toBeVisible();
 });

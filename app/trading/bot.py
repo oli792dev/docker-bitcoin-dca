@@ -253,6 +253,10 @@ def persist_simulated_buy(api, settings, amount, price, quote_amount, estimated_
     return append_activity_records([record])
 
 
+def transactions_paused(settings):
+    return bool(settings.get("transaction_gate", lambda: False)())
+
+
 def maybe_withdraw_btc(api, state, settings, manual_request=None):
     if manual_request is None and settings["live"]:
         reconcile_withdrawals(api, settings)
@@ -280,6 +284,10 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
         return
 
     pending = state.get("pending_withdrawal")
+    if transactions_paused(settings) and (
+        not pending or state.get("pending_withdrawal_context", {}).get("result") is None
+    ):
+        return
     if pending:
         bitcoin_request = (
             pending.get("symbol") == "BTC" if settings["exchange"] == "BITVAVO" else pending.get("asset") == "XBT"
@@ -293,6 +301,8 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
             raise ValueError("Saved withdrawal belongs to another exchange; resolve it before switching exchanges")
         result = context.get("result")
         if result is None:
+            if transactions_paused(settings):
+                return
             if not getattr(api, "supports_withdrawal_idempotency", False):
                 log_transition(
                     LOG,
@@ -720,7 +730,19 @@ def _run_once(
     state["schedule"] = {"fingerprint": fingerprint, "dueAt": due.isoformat()}
     save_state(state_path, state)
     remaining = max(0, int((due.astimezone(UTC) - now.astimezone(UTC)).total_seconds()))
-    forecast_plan.update(intervalSeconds=interval_seconds, nextDepositAt=next_deposit.isoformat())
+    forecast_plan.update(
+        intervalSeconds=interval_seconds,
+        nextDepositAt=next_deposit.isoformat(),
+        availableBalance=str(balance),
+        spendableBalance=str(affordable_budget),
+        price=str(price),
+        feeRate=str(cycle_data["fee_rate"]),
+        plannedCost=str(planned_cost),
+        plannedQuantity=str(order_amount),
+        possibleBuys=possible_buys,
+        lastPurchaseAt=last_buy.isoformat() if last_buy else None,
+        dueAt=due.isoformat(),
+    )
     update_dashboard_schedule(due, "Scheduled" if remaining else "Due now", forecast_plan)
     startup_alignment = settings.pop("startup_schedule_log_pending", False)
     log_label = "Restart alignment" if startup_alignment else "Purchase schedule"
@@ -751,6 +773,10 @@ def _run_once(
         )
     if remaining:
         return remaining
+
+    if transactions_paused(settings):
+        update_dashboard_schedule(due, "Transactions paused", forecast_plan)
+        return check_interval
 
     if schedule_only:
         # If the computed time has already arrived while recording the last order,
@@ -846,6 +872,8 @@ def manual_withdrawal_service(api, settings):
 
     @serialized
     def handle(action, session, token=None):
+        if transactions_paused(settings):
+            raise ValueError("Transactions are paused. Resume in Settings first.")
         if action not in ("preview", "confirm"):
             raise ValueError("Unknown withdrawal action.")
         if not settings["live"]:
@@ -929,6 +957,9 @@ def withdrawal_destination(settings):
 def main():
     os.umask(0o077)
     logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper(), format="%(asctime)s %(levelname)s %(message)s")
+    from app.data.backup import recover_restore
+
+    recover_restore(STATE_PATH.parent)
     prepare_storage()
     from app.trading.runtime import Runtime
     from app.trading.worker import supervise

@@ -21,10 +21,19 @@ class Runtime:
         from app.trading.worker import Worker
 
         self.lock = ACCOUNT_LOCK
+        from app.data.backup import recover_restore
+
+        recover_restore(Path(state_path).parent if state_path is not None else STATE_PATH.parent)
         self.store = store or ConfigStore()
         self.state_path = Path(state_path) if state_path is not None else STATE_PATH
         self.settings = runtime_settings(self.store.snapshot()["settings"])
         self.settings["account_identity"] = account_identity(self.settings)
+        from app.trading.controls import PauseControl
+
+        self.controls = PauseControl(self.state_path.with_name("controls.json"))
+        self.settings["transaction_gate"] = (
+            lambda: self.controls.snapshot()["paused"] or self.state_path.with_name(".restore-journal").exists()
+        )
         self.api = None
         self.service = None
         self.session_validator = lambda token: False
@@ -43,6 +52,11 @@ class Runtime:
             if self.api
             else "Waiting for first-run configuration; purchases are paused"
         )
+
+    @property
+    def recovery_required(self):
+        """A durable unfinished restore blocks financial work until restart recovery."""
+        return self.state_path.with_name(".restore-journal").exists()
 
     def shutdown(self):
         finished = self.worker.shutdown()
@@ -79,6 +93,9 @@ class Runtime:
             values["account_identity"] = account_identity(values)
             adapter = create_exchange(values) if data["complete"] else None
             old_api = self.api
+            from app.data.storage import installation_started_at
+
+            self.store.first_started_at = installation_started_at(self.store.path.parent)
             self.store.data = data
             self.settings.update(values)
             self.api = adapter
@@ -138,7 +155,11 @@ class Runtime:
 
         state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
         return bool(
-            state.get("pending_order") or state.get("pending_withdrawal") or withdrawal_records(unresolved=True)
+            state.get("pending_order")
+            or state.get("pending_withdrawal")
+            or state.get("pending_withdrawal_context")
+            or state.get("fiat_observation", {}).get("pending")
+            or withdrawal_records(unresolved=True)
         )
 
     def _synchronize_state(self):
@@ -209,6 +230,8 @@ class Runtime:
                 raise ValueError("Container is stopping; request was not executed.")
             if self._configuration_uncertain:
                 raise ValueError("Settings storage is being verified; transactions remain paused.")
+            if self.controls.snapshot()["paused"] or self.state_path.with_name(".restore-journal").exists():
+                raise ValueError("Transactions are paused. Resume in Settings first.")
             if not self.api or not self.settings["manual_withdrawal_enabled"]:
                 raise ValueError("Manual withdrawals are disabled in Settings.")
             if self.exchange_check_pending:
@@ -417,18 +440,88 @@ class Runtime:
             started = time.monotonic()
             api = create_exchange(runtime_settings(values))
             try:
-                api.balance(values["quote"])
-                api.balance("BTC")
-                end_ms = int(time.time() * 1000)
-                api.fiat_deposits(values["quote"], end_ms - 86400000, end_ms)
+                from app.exchanges.permissions import check_permissions
+
+                permissions = check_permissions(api, values["quote"])
                 LOG.info(
-                    "Exchange connection test succeeded: exchange=%s; duration=%.2fs; no orders or withdrawals submitted",
+                    "Exchange connection test succeeded; read-only permission check completed: exchange=%s; duration=%.2fs",
                     values["exchange"],
                     time.monotonic() - started,
                 )
                 return {
-                    "message": "Connection successful. Account balances and deposit history are accessible; no order or withdrawal was submitted."
+                    "message": "Read-only permission check completed. No order or withdrawal was submitted.",
+                    "permissions": permissions,
                 }
             finally:
                 if hasattr(api, "session"):
                     api.session.close()
+
+    def set_pause(self, payload):
+        """Serialize pause changes with financial actions, retaining the schedule."""
+        if not isinstance(payload, dict) or set(payload) - {"paused", "until"}:
+            raise ValueError("Invalid pause request.")
+        with self.lock:
+            if self.state_path.with_name(".restore-journal").exists():
+                raise ValueError("Restore recovery is required; restart the container before resuming.")
+            result = self.controls.set(payload.get("paused"), payload.get("until"))
+            self.service = None
+            self.worker.reconfigure.set()
+            LOG.info("Transaction pause updated: paused=%s; until=%s", result["paused"], result["until"])
+            return result
+
+    def backup(self, payload, restore=False):
+        """Require current login reauthentication before handling private archives."""
+        import base64
+
+        from app.data.backup import MAX_BYTES, Backups
+
+        allowed = (
+            {"scope", "password", "current_password", "archive"}
+            if restore
+            else {"scope", "password", "current_password"}
+        )
+        if not isinstance(payload, dict) or set(payload) != allowed:
+            raise ValueError("Invalid backup request.")
+        with self.lock, self.store.lock:
+            account = self.store.snapshot()["account"]
+            if not account or account.get("password_change_required"):
+                raise ValueError("Complete dashboard account setup first.")
+            retry = self.password_attempts.consume(account["username"])
+            if retry:
+                raise PasswordConfirmationError("Too many password confirmation attempts. Try again later.", retry)
+            if not self.store.authenticate(account["username"], payload["current_password"]):
+                raise PasswordConfirmationError("Your current password is incorrect.")
+            self.password_attempts.clear(account["username"])
+            if self.worker.stop.is_set() or self._configuration_uncertain:
+                raise ValueError("Settings are being verified or the container is stopping; try again later.")
+            manager = Backups(self.state_path.parent)
+            if not restore:
+                filename, encrypted = manager.create(payload["scope"], payload["password"])
+                LOG.info("Encrypted backup created: scope=%s", payload["scope"])
+                return {"filename": filename, "archive": base64.b64encode(encrypted).decode()}
+            if not isinstance(payload["archive"], str) or len(payload["archive"]) > (MAX_BYTES + 128) * 4 // 3 + 4:
+                raise ValueError("Backup exceeds the 32 MiB limit.")
+            try:
+                encrypted = base64.b64decode(payload["archive"], validate=True)
+            except ValueError:
+                raise ValueError("Invalid backup encoding.") from None
+            if self.unresolved() or self.worker.queue.unfinished_tasks:
+                raise ValueError("Resolve pending transactions and queued requests before restoring a backup.")
+            try:
+                result = manager.restore(encrypted, payload["password"], payload["scope"])
+            except BaseException:
+                self.exchange_check_pending = True
+                self.service = None
+                if self.recovery_required:
+                    LOG.error("Restore recovery required; restart the container. New transactions remain blocked.")
+                    self.controls.set(True)
+                raise
+            self._configuration_uncertain = True
+            self._recover_configuration()
+            self.invalidate_sessions()
+            self.worker.reconfigure.set()
+            LOG.info(
+                "Encrypted backup restored: scope=%s; transactions paused; automatic exchange check required",
+                payload["scope"],
+            )
+            return {**result, "signInRequired": True}

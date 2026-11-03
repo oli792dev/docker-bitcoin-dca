@@ -24,6 +24,7 @@ _HTTP_IDLE_RESET_SECONDS = 60
 _BALANCE_SNAPSHOT_MAX_AGE_SECONDS = 5
 _READ_ONLY_PRIVATE_METHODS = frozenset(
     {
+        "GetApiKeyInfo",
         "Balance",
         "BalanceEx",
         "TradeVolume",
@@ -520,6 +521,20 @@ class Kraken:
         )
         ids = result.get("txid", [])
         return {"status": "submitted", "orderId": ids[0] if ids else None, "userref": userref}
+
+    def permission_scopes(self):
+        """Read key metadata without attempting a financial request."""
+        result = self.private("GetApiKeyInfo")
+        permissions = result.get("permissions")
+        if not isinstance(permissions, list) or not all(isinstance(item, str) for item in permissions):
+            raise ValueError("API key permissions could not be verified.")
+        return {
+            "funds": "query-funds" in permissions,
+            "orders": {"query-open-trades", "query-closed-trades"}.issubset(permissions),
+            "history": "query-ledger" in permissions,
+            "trade": "modify-trades" in permissions,
+            "withdraw": "withdraw-funds" in permissions,
+        }
 
     def open_orders(self):
         result = self.private("OpenOrders", {})

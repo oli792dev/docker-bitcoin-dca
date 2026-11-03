@@ -63,6 +63,12 @@ async function refreshPurchaseSchedule(){
     activityRates=rates;renderActivities();
    }
   }
+  if($('purchaseExplanation')){
+   const output=$('purchaseExplanation');output.replaceChildren();const plan=schedule.purchaseExplanation||{};
+   const planMoney=value=>value==null?null:money(value,schedule.quote),planBtc=value=>value==null?null:btc(value),planDate=value=>Number.isFinite(Date.parse(value))?dateLabel(Date.parse(value),schedule.timezone||'UTC'):null;
+   const fields=[['Available balance',planMoney(plan.availableBalance)],['Spendable balance',planMoney(plan.spendableBalance)],['BTC price',plan.price==null?null:money(plan.price,schedule.quote)+'/BTC'],['Planned BTC',planBtc(plan.plannedQuantity)],['Planned cost including fee',planMoney(plan.plannedCost)],['Fee rate',plan.feeRate==null?null:(Number(plan.feeRate)*100).toLocaleString(locale,{maximumFractionDigits:4})+'%'],['Possible purchases',plan.possibleBuys],['Purchase interval (minutes)',plan.intervalSeconds!=null?(plan.intervalSeconds/60).toLocaleString(locale,{maximumFractionDigits:1}):null],['Last purchase',planDate(plan.lastPurchaseAt)],['Next deposit',planDate(plan.nextDepositAt)],['Saved due time',planDate(plan.dueAt)],['Transaction pause',schedule.pause?.paused?'Transactions paused':'Transactions active']];
+   for(const [label,value] of fields){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=t(label);dd.textContent=value==null?'—':t(String(value));output.append(dt,dd)}
+  }
   const detail=schedule.forecastDetails;
   $('forecastProgress').textContent=detail?t('About {btc} BTC · {buys} purchases remaining'.replace('{btc}',Number(detail.remainingBtc).toLocaleString(locale,{maximumFractionDigits:8})).replace('{buys}',detail.remainingPurchases)):'';
   $('forecastAssumptions').hidden=!detail;
@@ -220,6 +226,7 @@ function renderActivities(){
   const status=activityStatus(row);
   const tr=document.createElement("tr"),type=row.simulated?"Buy (Simulation)":(row.type==="TransferOut"?"Withdrawal":row.type),vals=[Number.isFinite(Date.parse(row.datetime))?dateLabel(Date.parse(row.datetime)):"—",t(type||"—"),row.type==="Deposit"?"—":activityBtc(row.shares),row.type==="Deposit"?"—":activityMoney(row.price,rate,currency,"/BTC"),activityMoney(row.amount,rate,currency),(row.type==="Deposit"&&!row.depositStatus)?"—":(row.simulated&&knownNumber(row.fee)?"~":"")+activityMoney(row.fee,rate,currency),t(status.label)];
   vals.forEach((v,i)=>{const td=document.createElement("td");td.textContent=v;if(i>=2&&i<=5)td.className="num";if(i===6)td.className="activity-status status-"+status.tone;tr.appendChild(td)});
+  const dateCell=tr.children[0];if(dateCell){const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent=vals[0];button.addEventListener('click',()=>showActivityDetail(row.activityId));dateCell.textContent='';dateCell.append(button)}
   body.appendChild(tr)
  }
  if(!total){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=7;td.textContent=t("No activity in this period.");td.className="notice";tr.appendChild(td);body.appendChild(tr)}
@@ -238,7 +245,7 @@ $("pageJump").addEventListener("submit",event=>{
 });
 async function loadAnalytics(){
  const request=++reportRequest;$("periodReport").ariaBusy="true";saveReportView();sectionFeedback("reportFeedback","");
- try{showError("");const p=selectedPeriod();const response=await fetch("/api/analytics?start="+p.start+"&end="+p.end+"&page="+currentPage+"&limit="+$("pageSize").value);const d=await response.json();if(!response.ok)throw new Error(d.error||"Could not load the report.");if(request!==reportRequest)return;quote=d.quote;$('selectedPeriodLabel').textContent=dateLabel(p.start)+' – '+dateLabel(p.end);
+ try{showError("");const p=selectedPeriod();const response=await fetch("/api/analytics?start="+p.start+"&end="+p.end+"&page="+currentPage+"&limit="+$("pageSize").value+"&type="+encodeURIComponent($("activityType")?.value||"")+"&status="+encodeURIComponent($("activityStatusFilter")?.value||""));const d=await response.json();if(!response.ok)throw new Error(d.error||"Could not load the report.");if(request!==reportRequest)return;quote=d.quote;$('selectedPeriodLabel').textContent=dateLabel(p.start)+' – '+dateLabel(p.end);
  displayCurrency=["EUR","USD"].includes(d.configuration.displayCurrency)?d.configuration.displayCurrency:(["EUR","USD"].includes(quote)?quote:"EUR");
  document.title="Bitcoin DCA Dashboard";
  let livePrice=Number((d.snapshot||{}).price||0),currencyRates={[quote]:1},marketUpdatedAt=Date.parse((d.snapshot||{}).updatedAt)/1000||0;
@@ -390,7 +397,7 @@ async function requestManualWithdrawal(){
  }catch(e){showWithdrawalMessage(e.message)}
  finally{actionFeedback("withdraw",null,false,false)}
 }
-window.DCA_DASHBOARD_ACTIONS={withdraw:requestManualWithdrawal,export:requestParqetExport};
+window.DCA_DASHBOARD_ACTIONS={refreshSchedule:refreshPurchaseSchedule,withdraw:requestManualWithdrawal,export:requestParqetExport};
 refreshPurchaseSchedule();
 
 (async()=>{
@@ -417,3 +424,14 @@ refreshPurchaseSchedule();
   update();new MutationObserver(update).observe(element,{childList:true,characterData:true,subtree:true});
  }
 })();
+
+for(const id of ['activityType','activityStatusFilter'])$(id)?.addEventListener('change',()=>{currentPage=1;loadAnalytics()});
+async function showActivityDetail(identifier){
+ const output=$('activityDetailValues');output.replaceChildren();$('activityDetail').showModal();
+ try{const response=await fetch('/api/activity/detail?id='+encodeURIComponent(identifier));const data=await response.json();if(!response.ok)throw Error(data.error||'Activity record not found.');
+ const row=data.row||{},feeEquivalent=data.networkFeeBtc==null&&Number(row.price)>0&&knownNumber(row.fee)?btc(Number(row.fee)/Number(row.price)):null;
+ const fields=[...(feeEquivalent==null?[]:[['Fee equivalent (BTC at execution price)',feeEquivalent]]),['Activity ID',data.id],['Exchange',data.exchange],['Account identity',data.accountIdentity],...Object.entries(data.row||{}),...Object.entries(data).filter(([key])=>!['id','exchange','accountIdentity','row'].includes(key))];
+ for(const [key,value] of fields){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=t(({datetime:'Execution time',type:'Type',identifier:'Asset',shares:'Executed BTC',amount:'Value',fee:'Fee (fiat)',price:'Execution price',currency:'Currency',networkFeeBtc:'Network fee (BTC)',grossWithdrawalAmountBtc:'Gross BTC debit',withdrawalId:'Withdrawal ID',withdrawalStatus:'Withdrawal status',depositStatus:'Deposit status',accountIdentity:'Account identity',simulated:'Simulation',manual:'Manual',purchaseStatus:'Purchase status',withdrawalAddress:'Destination',withdrawalNetwork:'Network'})[key]||key);dd.textContent=value==null?'—':typeof value==='object'?JSON.stringify(value):String(value);output.append(dt,dd)}
+ }catch(error){output.textContent=t(error.message)}
+}
+$('closeActivityDetail')?.addEventListener('click',()=>$('activityDetail').close());
