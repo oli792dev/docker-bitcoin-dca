@@ -293,3 +293,5 @@ __DESIGN_CSS__
 .settings-page .backup-file-picker>button{flex:0 0 auto;font-size:.82rem;}
 .settings-page #restoreFileName{flex:1 1 140px;min-width:0;font-size:.72rem;line-height:1.45;overflow-wrap:anywhere;}
 @media(max-width:600px){.settings-page .backup-file-picker>button{font-size:.76rem;}}
+
+#backupReview .hint{overflow-wrap:anywhere;}

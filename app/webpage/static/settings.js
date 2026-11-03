@@ -278,7 +278,7 @@ $('restoreFile')?.addEventListener('change',()=>{
 $('restoreBackup')?.addEventListener('click',async()=>{
  clearBackupErrors();const file=$('restoreFile').files[0];if(!file)return;
  if(file.size>32*1024*1024+128){backupFieldError('restoreFile','Backup file is too large.');return}
- try{const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));restorePayload={...backupCredentials(),archive:btoa(binary)};restoreFilename=file.name;$('restoreScopeName').textContent=$('backupScope').selectedOptions[0].textContent;$('backupReview').showModal()}
+ try{const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));restorePayload={...backupCredentials(),archive:btoa(binary)};restoreFilename=file.name;$('restoreScopeName').textContent=t({full:'Full',activity:'Activities only',config:'Config only'}[restorePayload.scope]);$('restoreReviewFilename').textContent=file.name;$('backupReview').showModal()}
  catch(error){backupFieldError('restoreFile',error.message)}
 });
 $('cancelBackupRestore')?.addEventListener('click',()=>{restorePayload=null;restoreFilename='';$('backupReview').close()});

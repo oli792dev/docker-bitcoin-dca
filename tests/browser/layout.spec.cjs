@@ -231,7 +231,10 @@ test('operational controls, backup review and Activity filters remain usable', a
   await expect(page.locator('#restoreFileName')).toHaveText('example.dcabackup');
   await page.locator('#restoreBackup').click();
   await expect(page.locator('#backupReview')).toBeVisible();
-  await expect(page.locator('#backupReview')).toContainText('login credentials');
+  await expect(page.locator('#restoreScopeName')).toHaveText('Config only');
+  await expect(page.locator('#restoreReviewFilename')).toHaveText('example.dcabackup');
+  await expect(page.locator('#backupReview>p')).toHaveCount(2);
+  expect(await page.locator('#restoreScopeName').evaluate(el=>getComputedStyle(el).font)).toBe(await page.locator('#restoreReviewFilename').evaluate(el=>getComputedStyle(el).font));
   await page.locator('#cancelBackupRestore').click();
   await expect(page.locator('#backupReview')).not.toBeVisible();
   await noPageOverflow(page);
