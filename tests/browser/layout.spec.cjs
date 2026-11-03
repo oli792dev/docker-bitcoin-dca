@@ -202,7 +202,13 @@ test('operational controls, backup review and Activity filters remain usable', a
   const first=await rect(backupGroups.nth(0)),second=await rect(backupGroups.nth(1));
   if(page.viewportSize().width>=900)expect(Math.round(first.y)).toBe(Math.round(second.y));
   else expect(second.y-first.y-first.height).toBeGreaterThanOrEqual(24);
-  await page.locator('#restoreFile').setInputFiles({name:'example.dcabackup',mimeType:'application/octet-stream',buffer:Buffer.from('encrypted fixture')});
+  await expect(page.locator('#chooseRestoreFile')).toHaveText('Choose file');
+  await expect(page.locator('#restoreFile')).toBeHidden();
+  await expect(page.locator('#restoreFileName')).toBeHidden();
+  const fileChooser=page.waitForEvent('filechooser');
+  await page.locator('#chooseRestoreFile').click();
+  await (await fileChooser).setFiles({name:'example.dcabackup',mimeType:'application/octet-stream',buffer:Buffer.from('encrypted fixture')});
+  await expect(page.locator('#restoreFileName')).toHaveText('example.dcabackup');
   await page.locator('#restoreBackup').click();
   await expect(page.locator('#backupReview')).toBeVisible();
   await expect(page.locator('#backupReview')).toContainText('login credentials');
