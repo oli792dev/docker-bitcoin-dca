@@ -141,13 +141,68 @@ class BackupIntegrationTests(unittest.TestCase):
         manager.restore(raw,'long backup password','activity')
         self.assertEqual(len(self.activity.read_activity_records()),2)
         self.assertEqual({r['id'] for r in self.activity.read_activity_records()},{'first','later'})
-        self.assertTrue(json.loads((self.root/'controls.json').read_text())['paused'])
+        self.assertFalse((self.root/'controls.json').exists())
         self.assertFalse((self.root/'.restore-journal').exists())
+
+    def rewrite_backup(self,raw,change):
+        import hashlib,io,zipfile
+        from app.data.backup import decrypt,encrypt,unpack
+        password='long backup password'
+        manifest,data=unpack(decrypt(raw,password));change(data)
+        manifest['files']={name:hashlib.sha256(value).hexdigest() for name,value in data.items()}
+        output=io.BytesIO()
+        with zipfile.ZipFile(output,'w',compression=zipfile.ZIP_STORED) as archive:
+            archive.writestr('manifest.json',json.dumps(manifest))
+            for name,value in data.items():archive.writestr(name,value)
+        return encrypt(output.getvalue(),password)
+
+    def test_earlier_config_backup_keeps_current_pause(self):
+        from app.data.backup import Backups
+        manager=Backups(self.root)
+        _,raw=manager.create('config','long backup password')
+        raw=self.rewrite_backup(raw,lambda data:data.pop('controls.json'))
+        for controls in [{'paused':False,'until':None},{'paused':True,'until':'2099-01-01T00:00:00Z'}]:
+            with self.subTest(controls=controls):
+                (self.root/'controls.json').write_text(json.dumps(controls))
+                manager.restore(raw,'long backup password','config')
+                self.assertEqual(json.loads((self.root/'controls.json').read_text()),controls)
+
+    def test_invalid_archived_pause_is_rejected_before_restoring_settings(self):
+        from app.data.backup import Backups
+        manager=Backups(self.root)
+        path=self.root/'controls.json'
+        path.write_text('{"paused":false,"until":null}')
+        for scope in ('full','config'):
+            _,raw=manager.create(scope,'long backup password')
+            for controls in [{'paused':'false','until':None},{'paused':True,'until':'invalid'},{'paused':True,'until':'2099-01-01'}]:
+                with self.subTest(scope=scope,controls=controls):
+                    changed=self.rewrite_backup(raw,lambda data:data.update({'controls.json':json.dumps(controls).encode()}))
+                    previous={name:(self.root/name).read_bytes() for name in ['config.json','state.json','controls.json']}
+                    with self.assertRaises(ValueError):manager.restore(changed,'long backup password',scope)
+                    self.assertEqual({name:(self.root/name).read_bytes() for name in previous},previous)
+                    self.assertFalse((self.root/'.restore-journal').exists())
+
+    def test_restore_preserves_archived_or_current_pause_for_each_scope(self):
+        from app.data.backup import Backups
+        manager=Backups(self.root)
+        path=self.root/'controls.json'
+        states=[{'paused':False,'until':None},{'paused':True,'until':None},{'paused':True,'until':'2099-01-01T00:00:00Z'}]
+        for scope in ('full','config','activity'):
+            for archived in states:
+                with self.subTest(scope=scope,archived=archived):
+                    path.write_text(json.dumps(archived))
+                    _,raw=manager.create(scope,'long backup password')
+                    current={'paused':not archived['paused'],'until':None}
+                    path.write_text(json.dumps(current))
+                    result=manager.restore(raw,'long backup password',scope)
+                    expected=current if scope=='activity' else archived
+                    self.assertEqual(json.loads(path.read_text()),expected)
+                    self.assertEqual(result['paused'],expected['paused'])
 
     def test_backup_scopes_have_exact_contents_and_filename_suffixes(self):
         from app.data.backup import Backups, FILES, decrypt, unpack
         manager=Backups(self.root)
-        for scope,suffix,expected in [('full','full',FILES),('activity','activities',{'activity.sqlite3'}),('config','config',{'config.json','report-preferences.json'})]:
+        for scope,suffix,expected in [('full','full',FILES),('activity','activities',{'activity.sqlite3'}),('config','config',{'config.json','report-preferences.json','controls.json'})]:
             with self.subTest(scope=scope):
                 filename,raw=manager.create(scope,'long backup password')
                 manifest,data=unpack(decrypt(raw,'long backup password'))
@@ -175,7 +230,7 @@ class BackupIntegrationTests(unittest.TestCase):
         self.assertEqual(self.activity.read_activity_records(),history)
         self.assertEqual(json.loads((self.root/'state.json').read_text()),state)
         self.assertEqual((self.root/'installation.json').read_bytes(),installation)
-        self.assertTrue(json.loads((self.root/'controls.json').read_text())['paused'])
+        self.assertFalse(json.loads((self.root/'controls.json').read_text())['paused'])
 
     def test_restore_scope_must_be_available_and_full_can_restore_config_only(self):
         from app.data.backup import Backups
@@ -226,7 +281,7 @@ class BackupIntegrationTests(unittest.TestCase):
         result=account.backup({**payload,'archive':archive['archive']},restore=True)
         self.assertTrue(result['signInRequired'])
         self.assertEqual(account.store.snapshot()['settings']['expected_monthly_deposit'],'')
-        self.assertTrue(account.controls.snapshot()['paused'])
+        self.assertFalse(account.controls.snapshot()['paused'])
         self.assertTrue(account.exchange_check_pending)
         self.assertTrue(account.invalidate_sessions.called)
 
@@ -312,7 +367,7 @@ class BackupIntegrationTests(unittest.TestCase):
         self.assertTrue(base64.b64decode(archive['archive']).startswith(b'DCA-BACKUP-1'))
         result=account.backup({**payload,'archive':archive['archive']},restore=True)
         self.assertTrue(result['signInRequired'])
-        self.assertTrue(account.controls.snapshot()['paused'])
+        self.assertFalse(account.controls.snapshot()['paused'])
         self.assertTrue(account.exchange_check_pending)
         self.assertTrue(account.startup_pending)
         self.assertTrue(account.worker.reconfigure.is_set())

@@ -554,7 +554,8 @@ class Runtime:
             self.invalidate_sessions()
             self.worker.reconfigure.set()
             LOG.info(
-                "Encrypted backup restored: scope=%s; transactions paused; automatic exchange check required",
+                "Encrypted backup restored: scope=%s; transactions paused=%s; automatic exchange check required",
                 payload["scope"],
+                result["paused"],
             )
             return {**result, "signInRequired": True}

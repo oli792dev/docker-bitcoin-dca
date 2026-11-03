@@ -31,7 +31,7 @@ FILES = frozenset(
 SCOPES = {
     "full": FILES,
     "activity": frozenset({"activity.sqlite3"}),
-    "config": frozenset({"config.json", "report-preferences.json"}),
+    "config": frozenset({"config.json", "report-preferences.json", "controls.json"}),
 }
 JOURNAL = ".restore-journal"
 
@@ -102,6 +102,10 @@ def unpack(payload):
             if created.tzinfo is None:
                 raise ValueError("Invalid backup timestamp.")
             expected = SCOPES[manifest["scope"]]
+            # Earlier Config archives predate saved pause controls. Keep the
+            # current controls when restoring one of those archives.
+            if manifest["scope"] == "config" and "controls.json" not in data:
+                expected = expected - {"controls.json"}
             if set(data) != expected or manifest["files"] != {
                 name: hashlib.sha256(value).hexdigest() for name, value in data.items()
             }:
@@ -305,8 +309,10 @@ class Backups:
         if not isinstance(scope, str) or scope not in SCOPES or unresolved:
             raise ValueError("Resolve pending financial work before restoring a backup.")
         manifest, data = unpack(decrypt(encrypted, password))
-        if not SCOPES[scope] <= SCOPES[manifest["scope"]]:
+        required = SCOPES[scope] - {"controls.json"} if scope == "config" else SCOPES[scope]
+        if not required <= data.keys():
             raise ValueError("Backup does not contain the selected restore scope.")
+        restore_files = SCOPES[scope] & data.keys()
         with activity._ACTIVITY_LOCK, tempfile.TemporaryDirectory(dir=self.directory, prefix=".restore-") as tmp:
             records, metadata = {}, {}
             if scope != "config":
@@ -331,7 +337,7 @@ class Backups:
             if scope != "activity":
                 from app.core.configuration import ConfigStore
 
-                for name in SCOPES[scope] - {"activity.sqlite3"}:
+                for name in restore_files - {"activity.sqlite3"}:
                     value = json.loads(data[name])
                     if not isinstance(value, dict):
                         raise ValueError("Invalid backup JSON file.")
@@ -367,6 +373,11 @@ class Backups:
                     < datetime.fromisoformat(old_state["last_order_at"])
                 ):
                     raise ValueError("Full restore would rewind financial state. Use Activity-only restore.")
+            from app.trading.controls import PauseControl
+
+            controls = PauseControl(
+                Path(tmp) / "controls.json" if "controls.json" in restore_files else self.directory / "controls.json"
+            ).snapshot()
             journal = self.directory / JOURNAL
             journal.mkdir(mode=0o700)
             existed = {name: (self.directory / name).exists() for name in FILES}
@@ -380,7 +391,7 @@ class Backups:
             _sync_directory(self.directory)
             try:
                 if scope != "activity":
-                    for name in SCOPES[scope] - {"activity.sqlite3", "controls.json"}:
+                    for name in restore_files - {"activity.sqlite3"}:
                         write_json_atomic(self.directory / name, json.loads(data[name]))
                 # Import validated records into the application's own schema;
                 # archived SQL, caches and indexes are never installed.
@@ -388,13 +399,10 @@ class Backups:
                     with activity._db() as db:
                         db.executemany(activity._INSERT, [activity._values(row) for row in records.values()])
                         db.executemany("INSERT OR IGNORE INTO metadata VALUES(?,?)", metadata.items())
-                # Every successful restore is deliberately paused, including timed
-                # or unpaused archives. Resume is explicit after exchange recheck.
-                write_json_atomic(self.directory / "controls.json", {"paused": True, "until": None})
                 (self.directory / "dashboard.json").unlink(missing_ok=True)
                 shutil.rmtree(journal)
                 _sync_directory(self.directory)
             except BaseException:
                 recover_restore(self.directory)
                 raise
-        return {"restored": True, "paused": True, "scope": scope}
+        return {"restored": True, "paused": controls["paused"], "scope": scope}
