@@ -401,17 +401,20 @@ class Handler(BaseHTTPRequestHandler):
                     LOG.info("Dashboard account credentials updated; all dashboard sessions invalidated")
                 self._json(200, {"saved": True, "signInRequired": changed})
         except PasswordConfirmationError as exc:
+            error = {"error": str(exc)}
+            if path in ("/api/settings/backup", "/api/settings/restore"):
+                error["field"] = "backupLoginPassword"
             if exc.retry_after:
                 self.send_response(429)
                 self.send_header("Retry-After", str(exc.retry_after))
-                body = json.dumps({"error": str(exc)}).encode()
+                body = json.dumps(error).encode()
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(body)
             else:
-                self._json(400, {"error": str(exc)})
+                self._json(400, error)
         except (ValueError, UnicodeDecodeError) as exc:
             LOG.info("%s rejected: invalid request, configuration or account verification", operation)
             self._json(400, {"error": str(exc), **({"field": exc.field} if hasattr(exc, "field") else {})})

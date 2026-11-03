@@ -196,6 +196,22 @@ test('operational controls, backup review and Activity filters remain usable', a
   await page.getByRole('tab', {name:'Backup',exact:true}).click();
   await expect(page.locator('#backupLoginPassword')).toBeVisible();
   await expect(page.locator('#backupPassword')).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Create encrypted backup',exact:true})).toBeVisible();
+  await expect(page.locator('#backupStatus')).toHaveCount(0);
+  await expect(page.locator('#restoreBackup')).toBeDisabled();
+  let backupRequests=0;
+  await page.route('**/api/settings/backup',route=>{backupRequests++;return route.fulfill({contentType:'application/json',body:JSON.stringify({filename:'example.dcabackup',archive:Buffer.from('encrypted fixture').toString('base64')})})});
+  await page.locator('#backupLoginPassword').fill('same-dashboard-password');
+  await page.locator('#backupPassword').fill('same-dashboard-password');
+  await page.locator('#createBackup').click();
+  await expect(page.locator('#backupPasswordError')).toContainText('must be different');
+  expect(backupRequests).toBe(0);
+  await page.locator('#backupPassword').fill('different-backup-password');
+  const downloaded=page.waitForEvent('download');
+  await page.locator('#createBackup').click();await downloaded;
+  await expect(page.locator('#backupPasswordError')).toBeHidden();
+  await expect(page.locator('#backupStatus')).toHaveCount(0);
+
   await expect(page.locator('#restoreFileHint')).toContainText('Activity only or the full configuration');
   const download=page.locator('#createBackup'),manual=page.locator('#settingsWithdraw');
   expect((await rect(download)).height).toBe(44);

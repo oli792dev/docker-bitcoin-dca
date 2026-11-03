@@ -193,6 +193,25 @@ class BackupIntegrationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'pending financial'):
             manager.restore(raw,'long backup password','full')
 
+    def test_backup_password_must_differ_from_dashboard_password(self):
+        from app.trading.runtime import Runtime
+        account=Runtime(self.store,self.root/'state.json')
+        payload={'scope':'full','password':'long dashboard password','current_password':'long dashboard password'}
+        with patch('app.data.backup.Backups.create',return_value=('test.dcabackup',b'test')) as create:
+            with self.assertRaisesRegex(ValueError,'different') as error:account.backup(payload)
+            self.assertEqual(error.exception.field,'backupPassword')
+            create.assert_not_called()
+
+    def test_old_backup_can_be_restored_even_if_password_matches_current_login(self):
+        import base64
+        from app.data.backup import Backups
+        from app.trading.runtime import Runtime
+        password='long dashboard password'
+        _,raw=Backups(self.root).create('full',password)
+        account=Runtime(self.store,self.root/'state.json')
+        result=account.backup({'scope':'full','password':password,'current_password':password,'archive':base64.b64encode(raw).decode()},restore=True)
+        self.assertTrue(result['restored'])
+
     def test_runtime_restore_reauthenticates_invalidates_sessions_and_requires_recheck(self):
         import base64
         from app.trading.runtime import Runtime

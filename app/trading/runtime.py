@@ -1,11 +1,12 @@
 """Serialize configuration changes with the single exchange account worker."""
 
+import hmac
 import json
 import logging
 import time
 from pathlib import Path
 
-from app.core.configuration import ConfigStore, account_values, runtime_settings, validate
+from app.core.configuration import ConfigStore, ConfigurationError, account_values, runtime_settings, validate
 from app.core.security import AttemptLimiter, PasswordConfirmationError
 from app.data.storage import STATE_PATH
 from app.exchanges.exchange import create_exchange
@@ -522,6 +523,12 @@ class Runtime:
                 raise ValueError("Settings are being verified or the container is stopping; try again later.")
             manager = Backups(self.state_path.parent)
             if not restore:
+                if isinstance(payload["password"], str) and hmac.compare_digest(
+                    payload["password"].encode("utf-8"), payload["current_password"].encode("utf-8")
+                ):
+                    raise ConfigurationError(
+                        "Backup password must be different from the dashboard password.", "backupPassword"
+                    )
                 filename, encrypted = manager.create(payload["scope"], payload["password"])
                 LOG.info("Encrypted backup created: scope=%s", payload["scope"])
                 return {"filename": filename, "archive": base64.b64encode(encrypted).decode()}

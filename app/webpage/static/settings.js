@@ -251,12 +251,35 @@ if(initial.complete&&initial.embedded){
 
 
 let restorePayload=null;
-function backupMessage(text){$('backupStatus').textContent=t(text)}
+function backupFieldError(field,text){
+ if(!['backupPassword','backupLoginPassword','restoreFile'].includes(field))field='restoreFile';
+ const output=$(field+'Error');output.textContent=t(text);output.hidden=!text;$(field).setAttribute('aria-invalid',text?'true':'false');
+}
+function clearBackupErrors(){for(const field of ['backupPassword','backupLoginPassword','restoreFile'])backupFieldError(field,'')}
+for(const field of ['backupPassword','backupLoginPassword'])$(field)?.addEventListener('input',()=>backupFieldError(field,''));
 function backupCredentials(){return {scope:$('backupScope').value,password:$('backupPassword').value,current_password:$('backupLoginPassword').value}}
-$('createBackup')?.addEventListener('click',async()=>{const button=$('createBackup');button.disabled=true;backupMessage('Creating encrypted backup…');try{const data=await request('/api/settings/backup',backupCredentials());const bytes=Uint8Array.from(atob(data.archive),character=>character.charCodeAt(0)),url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'}));const link=document.createElement('a');link.href=url;link.download=data.filename;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);backupMessage('Encrypted backup downloaded.')}catch(error){backupMessage(error.message)}finally{button.disabled=false;$('backupLoginPassword').value='';$('backupPassword').value=''}});
+$('createBackup')?.addEventListener('click',async()=>{
+ clearBackupErrors();const credentials=backupCredentials();
+ if(!credentials.current_password){backupFieldError('backupLoginPassword','Enter your current dashboard password.');return}
+ if(credentials.password.length<12){backupFieldError('backupPassword','Backup password must contain 12–1024 characters.');return}
+ if(credentials.password===credentials.current_password){backupFieldError('backupPassword','Backup password must be different from the dashboard password.');return}
+ const button=$('createBackup');button.disabled=true;button.setAttribute('aria-busy','true');
+ try{const data=await request('/api/settings/backup',credentials);const bytes=Uint8Array.from(atob(data.archive),character=>character.charCodeAt(0)),url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'}));const link=document.createElement('a');link.href=url;link.download=data.filename;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+ catch(error){backupFieldError(error.field||'backupPassword',error.message)}
+ finally{button.disabled=false;button.setAttribute('aria-busy','false');$('backupLoginPassword').value='';$('backupPassword').value=''}
+});
 $('chooseRestoreFile')?.addEventListener('click',()=>$('restoreFile').click());
-$('restoreFile')?.addEventListener('change',()=>{const name=$('restoreFile').files?.[0]?.name||'';$('restoreFileName').textContent=name;$('restoreFileName').hidden=!name});
-$('restoreBackup')?.addEventListener('click',async()=>{try{const file=$('restoreFile').files[0];if(!file||file.size>32*1024*1024+128)throw Error('Select an encrypted backup up to 32 MiB.');const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));restorePayload={...backupCredentials(),archive:btoa(binary)};$('backupReview').showModal()}catch(error){backupMessage(error.message)}});
+$('restoreFile')?.addEventListener('change',()=>{
+ const file=$('restoreFile').files?.[0],name=file?.name||'';$('restoreFileName').textContent=name;$('restoreFileName').hidden=!name;
+ const tooLarge=!!file&&file.size>32*1024*1024+128;
+ $('restoreBackup').disabled=!file||tooLarge;backupFieldError('restoreFile',tooLarge?'Backup file is too large.':'');
+});
+$('restoreBackup')?.addEventListener('click',async()=>{
+ clearBackupErrors();const file=$('restoreFile').files[0];if(!file)return;
+ if(file.size>32*1024*1024+128){backupFieldError('restoreFile','Backup file is too large.');return}
+ try{const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));restorePayload={...backupCredentials(),archive:btoa(binary)};$('backupReview').showModal()}
+ catch(error){backupFieldError('restoreFile',error.message)}
+});
 $('cancelBackupRestore')?.addEventListener('click',()=>{restorePayload=null;$('backupReview').close()});
 $('backupReview')?.addEventListener('cancel',()=>{restorePayload=null});
-$('confirmBackupRestore')?.addEventListener('click',async()=>{if(!restorePayload)return;const button=$('confirmBackupRestore');button.disabled=true;try{await request('/api/settings/restore',restorePayload);restorePayload=null;if(initial.embedded){window.parent.postMessage({type:'dca-settings-auth-required'},location.origin)}else{location.href='/'}}catch(error){backupMessage(error.message)}finally{button.disabled=false;$('backupReview').close();$('backupLoginPassword').value='';$('backupPassword').value='';restorePayload=null}});
+$('confirmBackupRestore')?.addEventListener('click',async()=>{if(!restorePayload)return;const button=$('confirmBackupRestore');button.disabled=true;try{await request('/api/settings/restore',restorePayload);restorePayload=null;if(initial.embedded){window.parent.postMessage({type:'dca-settings-auth-required'},location.origin)}else{location.href='/'}}catch(error){backupFieldError(error.field||'restoreFile',error.message)}finally{button.disabled=false;$('backupReview').close();$('backupLoginPassword').value='';$('backupPassword').value='';restorePayload=null}});

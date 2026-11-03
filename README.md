@@ -53,7 +53,7 @@ Choose a confirmed withdrawal interval in the export dialog. The CSV consolidate
 
 Reuse and back up `bitcoin-dca-webui-data`; it contains settings, credentials, history and scheduling state. Passwords are hashed; API secrets remain readable to anyone with volume access.
 
-Use Settings → Backup to create a password-protected full backup (settings, login, state and Activity) or Activity-only backup. Both require your current dashboard password and a separate backup password of at least 12 characters. Encrypted backups are downloaded directly; no archive is retained in the volume. Keep an off-host copy and its password separately; the password cannot be recovered.
+Use Settings → Backup to create a password-protected full backup (settings, login, state and Activity) or Activity-only backup. Both require your current dashboard password and a backup password of at least 12 characters that differs from the dashboard password. Encrypted backups are downloaded directly; no archive is retained in the volume. Keep an off-host copy and its password separately; the password cannot be recovered.
 
 Restore can be opened after creating a login on a fresh installation. Full restore replaces login credentials; sign in with the archived login afterward. Activity-only restore adds history without deleting or overwriting entries. Conflicts, unresolved transactions and full restores that would remove history or rewind financial state are rejected. Every successful restore leaves transactions paused and requests an automatic exchange check; resume explicitly afterward. TLS certificates, derived caches and previously saved backup files are excluded. Backups are limited to 32 MiB.
 

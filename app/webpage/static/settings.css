@@ -283,13 +283,11 @@ __DESIGN_CSS__
 .settings-page .backup-groups>.settings-group{display:flex;flex-direction:column;gap:var(--space-sm);}
 .settings-page .backup-groups>.settings-group>button{align-self:flex-start;margin-top:var(--space-sm);min-height:var(--button-height);font-size:.82rem;}
 .settings-page .backup-groups label{margin-bottom:0;}
-.settings-page .backup-status{grid-column:1/-1;}
 .settings-page #pauseStatus:empty{display:none;}
 @media(min-width:900px){.settings-page .backup-groups{grid-template-columns:repeat(2,minmax(0,1fr));}}
 
 @media(max-width:600px){.settings-page .backup-groups>.settings-group>button{font-size:.76rem;}}
 
-.settings-page .backup-status:empty{display:none;}
 
 .settings-page .backup-file-picker{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-md);min-width:0;}
 .settings-page .backup-file-picker>button{flex:0 0 auto;font-size:.82rem;}
