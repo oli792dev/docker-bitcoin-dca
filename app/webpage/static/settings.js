@@ -1,7 +1,8 @@
 const {t,locale}=typeof DCA_I18N!=="undefined"?DCA_I18N:{t:value=>value,locale:"en-GB"};
 
 const initial=__INITIAL__, $=id=>document.getElementById(id);let pending=null;
-const pauseState={known:false,busy:false,recovery:false};
+const pauseState={known:!initial.pauseUnavailable,recovery:!!initial.recoveryRequired,initial:!!initial.pause?.paused};
+$('pauseTransactions').checked=pauseState.initial;
 function connectionMessage(text,error=false){$('connectionStatus').textContent=t(text);$('connectionStatus').classList.toggle('is-error',error)}
 const fieldErrors=new Map();
 function clearFieldError(input){
@@ -147,6 +148,7 @@ function renderReview(){
   add(label,format(before),format(after));
  }
  add('Live trading',before.live?'Live':'Simulation',after.live?'Live':'Simulation');
+ add('Pause transactions',enabled(pauseState.initial),enabled('pause'in pending?pending.pause:pauseState.initial));
  for(const [key,label] of [['withdrawals_enabled','Automatic withdrawals'],['manual_withdrawal_enabled','Manual withdrawals'],['parqet_enabled','Parqet CSV']])add(label,enabled(before[key]),enabled(after[key]));
  const appearanceLabel=value=>({system:'Automatic / System',light:'Light',dark:'Dark'}[value]||'Automatic / System');
  add('Appearance',appearanceLabel(before.appearance),appearanceLabel(after.appearance));
@@ -172,17 +174,18 @@ function renderReview(){
   $(row.changed?'reviewValues':'unchangedReviewValues').append(dt,dd);
  }
 }
-$('settingsForm').addEventListener('submit',e=>{e.preventDefault();if(!exchangeCredentialsReady())return;const editingCredentials=showCredentials;if(editingCredentials&&$('password').value!==$('passwordConfirm').value){message('New passwords do not match.',true,'passwordConfirm');return}pending={settings:values()};if(editingCredentials)Object.assign(pending,{username:$('username').value.trim(),password:$('password').value,current_password:$('current_password').value});renderReview();$('review').showModal()});
+$('settingsForm').addEventListener('submit',e=>{e.preventDefault();if(!exchangeCredentialsReady())return;const editingCredentials=showCredentials;if(editingCredentials&&$('password').value!==$('passwordConfirm').value){message('New passwords do not match.',true,'passwordConfirm');return}pending={settings:values()};if(pauseState.known&&$('pauseTransactions').checked!==pauseState.initial)pending.pause=$('pauseTransactions').checked;if(editingCredentials)Object.assign(pending,{username:$('username').value.trim(),password:$('password').value,current_password:$('current_password').value});renderReview();$('review').showModal()});
 
 function logSettingsCancellation(){fetch('/api/ui-events',{method:'POST',headers:{'Content-Type':'application/json','X-DCA-Action':'ui-event'},body:JSON.stringify({event:'settings_save_cancelled'}),keepalive:true}).catch(()=>{})}
 $('cancel').addEventListener('click',()=>{$('review').close();pending=null;$('sensitivePassword').value='';logSettingsCancellation()});$('review').addEventListener('cancel',()=>{pending=null;$('sensitivePassword').value='';logSettingsCancellation()});
 $('confirm').addEventListener('click',async()=>{if(!pending)return;if(needsPassword()&&!pending.current_password){if(!$('sensitivePassword').value){$('passwordConfirmationError').textContent=t('Enter your current login password to confirm these changes.');return}pending.current_password=$('sensitivePassword').value}const b=$('confirm');b.disabled=true;try{const d=await request('/api/settings',pending);pending=null;savedDraft=draftSignature();updateDirty();if(initial.embedded){window.parent.postMessage({type:'dca-settings-saved'},location.origin)}else{location.href='/'}}catch(err){if(pending)delete pending.current_password;$('review').close();message(err.message,true,err.field)}finally{$('sensitivePassword').value='';b.disabled=false}});
 
 function updatePauseDependency(){
- const live=$('live').checked,savedLive=!!initial.settings.live;
- $('pauseTransactions').disabled=!live||!savedLive||!pauseState.known||pauseState.busy||pauseState.recovery;
- $('pauseCard').classList.toggle('setting-inactive',!live||!savedLive);
- $('pauseHint').textContent=t(!live?'Enable live trading to pause transactions.':!savedLive?'Save live trading settings before pausing transactions.':'Account checks continue. New purchases and withdrawals stop. Applies immediately.');
+ const live=$('live').checked;
+ $('pauseTransactions').disabled=!live||!pauseState.known||pauseState.recovery;
+ $('pauseCard').classList.toggle('setting-inactive',!live);
+ $('pauseHint').textContent=t(live?'Pause is applied when settings are saved. Account checks continue.':'Enable live trading to pause transactions.');
+ $('pauseStatus').textContent=t(pauseState.recovery?'Restore recovery required; restart container':!pauseState.known?'Connection unavailable':'');
 }
 function updateDependencies(){
  updatePauseDependency();
@@ -195,11 +198,12 @@ function updateDependencies(){
  $('withdraw_threshold').parentElement.classList.toggle('setting-inactive',!automatic);
 }
 updateDependencies();
-for(const id of ['live','withdrawals_enabled'])$(id).addEventListener('change',updateDependencies);
+$('live').addEventListener('change',()=>{if(!$('live').checked)$('pauseTransactions').checked=false;updateDependencies();updateDirty()});
+$('withdrawals_enabled').addEventListener('change',updateDependencies);
 function draftSignature(){
  const settings=[...document.querySelectorAll('[data-setting]')].map(input=>[input.id,input.type==='checkbox'?input.checked:input.value]);
  const account=showCredentials?['username','current_password','password','passwordConfirm'].map(id=>$(id).value):[];
- return JSON.stringify([settings,account]);
+ return JSON.stringify([settings,account,$('pauseTransactions').checked]);
 }
 let savedDraft=draftSignature(),settingsDirty=false;
 function updateDirty(){
@@ -246,9 +250,6 @@ if(initial.complete&&initial.embedded){
 }
 
 
-async function refreshPause(){if(!$('pauseTransactions'))return;try{const response=await fetch('/api/controls');if(!response.ok)throw Error('Connection unavailable');const data=await response.json();pauseState.known=true;pauseState.recovery=!!data.recoveryRequired;$('pauseTransactions').checked=!!data.paused;$('pauseStatus').textContent=t(data.recoveryRequired?'Restore recovery required; restart container':'')}catch(error){pauseState.known=false;$('pauseStatus').textContent=t('Connection unavailable')}finally{updatePauseDependency()}}
-$('pauseTransactions')?.addEventListener('change',async()=>{const input=$('pauseTransactions');if(!initial.settings.live||!$('live').checked){await refreshPause();return}pauseState.busy=true;updatePauseDependency();try{await request('/api/settings/pause',{paused:input.checked,until:null});if(initial.embedded)window.parent.postMessage({type:'dca-transactions-updated'},location.origin)}catch(error){$('pauseStatus').textContent=t(error.message);input.checked=!input.checked;return}finally{pauseState.busy=false;updatePauseDependency()}await refreshPause()});
-if(!initial.createAccount)refreshPause();
 let restorePayload=null;
 function backupMessage(text){$('backupStatus').textContent=t(text)}
 function backupCredentials(){return {scope:$('backupScope').value,password:$('backupPassword').value,current_password:$('backupLoginPassword').value}}

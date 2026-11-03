@@ -651,11 +651,10 @@
   "Encrypted backup downloaded.": "Verschlüsseltes Backup heruntergeladen.",
   "Download backup": "Backup herunterladen",
   "Backups are password-protected and downloaded directly. Keep the file and its password separately.": "Backups sind passwortgeschützt und werden direkt heruntergeladen. Bewahre Datei und Passwort getrennt auf.",
-  "Account checks continue. New purchases and withdrawals stop. Applies immediately.": "Kontoprüfungen laufen weiter. Neue Käufe und Auszahlungen stoppen. Gilt sofort.",
   "Invalid Activity search timezone.": "Ungültige Zeitzone für den Aktivitätsfilter.",
   "Enable and save live trading before pausing transactions.": "Aktiviere und speichere zuerst Live-Trading, bevor du Transaktionen pausierst.",
   "Enable live trading to pause transactions.": "Aktiviere Live-Trading, um Transaktionen zu pausieren.",
-  "Save live trading settings before pausing transactions.": "Speichere zuerst die Live-Trading-Einstellung, bevor du Transaktionen pausierst.",
   "Restore information": "Hinweise zur Wiederherstellung",
-  "Choose file": "Datei auswählen"
+  "Choose file": "Datei auswählen",
+  "Pause is applied when settings are saved. Account checks continue.": "Die Pause wird mit den Einstellungen gespeichert. Kontoprüfungen laufen weiter."
 }

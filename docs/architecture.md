@@ -36,7 +36,7 @@ Exchange, currency and active API-key fingerprints separate scheduling/account s
 ## Execution and recovery
 
 - After startup delay, verify open orders and BTC withdrawals before new transactions. Saved pending requests are reconciled; uncertain non-idempotent submissions are not blindly repeated.
-- An explicit pause gates all new buys and withdrawals, including simulation, manual confirmation and retries. Read-only account checks and order/withdrawal reconciliation continue. The pause switch applies immediately and does not reset purchase deadlines.
+- An explicit pause gates all new buys and withdrawals, including simulation, manual confirmation and retries. Read-only account checks and order/withdrawal reconciliation continue. Live trading and pause are saved together; disabling live trading clears pause. The restrictive pause is persisted before live activation, and pause is cleared only after the configuration is durable. Purchase deadlines are retained.
 - Purchase interval = UTC time from the last purchase to the active deposit deadline ÷ `(affordable purchases + 1)`, minimum 60 seconds. Fees and exchange limits apply; the final purchase can use the remaining budget.
 - Deposit dates use the configured timezone and local time. Short months use their last day; daylight-saving gaps move forward and repeated times use the first occurrence.
 - Booked fiat increases trigger bounded API verification. Released order holds are not deposits. Confirmed early deposits advance the deadline; overdue deposits remain pending. Sale proceeds require matching account-history evidence. Unknown credits or incomplete history keep automatic transactions paused; a timeout never confirms funding.

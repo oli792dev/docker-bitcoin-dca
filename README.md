@@ -41,7 +41,7 @@ Test connection reports funds, orders, history, trade and withdrawal access sepa
 - Automatic withdrawals use all available exchange BTC, including BTC acquired outside the bot. Set a threshold and target: a saved withdrawal-method label for Kraken, or a verified address/network for Bitvavo.
 - Manual withdrawal and Parqet export are in the Settings footer. Withdrawals require live trading and send available BTC minus fees; manual withdrawals require confirmation and bypass the automatic threshold.
 
-Use the Pause transactions switch below live trading in Bot Configuration; saved live trading must be enabled. Account checks and reconciliation continue; new purchases and withdrawals (including Simulation and manual requests) stop. Resume retains the existing schedule. “Why this next purchase?” shows the actual plan inputs. Activity has a server-side text search across saved attributes and read-only entry details; filters do not change period totals or Parqet export.
+The Pause transactions switch follows live trading and is saved with the other settings. Disabling live trading clears the pause. Account checks and reconciliation continue; new purchases and withdrawals (including Simulation and manual requests) stop. Resume retains the existing schedule. “Why this next purchase?” shows the actual plan inputs. Activity has a server-side text search across saved attributes and read-only entry details; filters do not change period totals or Parqet export.
 
 Expected monthly deposit affects only the withdrawal forecast. Browser refresh and exchange account checks have separate settings.
 

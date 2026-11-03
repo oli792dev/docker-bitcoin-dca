@@ -714,4 +714,35 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn('Sign in', request('/')[1])
 
 
+
+    def test_live_and_pause_are_saved_together_and_disabling_live_clears_pause(self):
+        self.ready()
+        self.app.save({'settings':{'live':True},'pause':True,'current_password':PASSWORD})
+        self.assertTrue(self.store.snapshot()['settings']['live'])
+        self.assertTrue(self.app.controls.snapshot()['paused'])
+        self.app.save({'settings':{'live':False}})
+        self.assertFalse(self.store.snapshot()['settings']['live'])
+        self.assertFalse(self.app.controls.snapshot()['paused'])
+
+    def test_pause_is_durable_before_a_failed_live_activation_commit(self):
+        self.ready()
+        with patch.object(self.store,'commit',side_effect=OSError('disk failure')):
+            with self.assertRaises(OSError):
+                self.app.save({'settings':{'live':True},'pause':True,'current_password':PASSWORD})
+        self.assertFalse(self.store.snapshot()['settings']['live'])
+        self.assertTrue(self.app.controls.snapshot()['paused'])
+        self.assertTrue(self.app._configuration_uncertain)
+
+    def test_pause_is_not_cleared_before_live_deactivation_is_durable(self):
+        self.ready(live=True)
+        self.app.set_pause({'paused':True})
+        def fail_clear(paused, until=None):
+            self.assertFalse(paused)
+            self.assertFalse(self.store.snapshot()['settings']['live'])
+            raise OSError('failed pause write')
+        with patch.object(self.app.controls,'set',side_effect=fail_clear):
+            with self.assertRaises(OSError):self.app.save({'settings':{'live':False}})
+        self.assertTrue(self.app.controls.snapshot()['paused'])
+        self.assertTrue(self.app._configuration_uncertain)
+
 if __name__ == '__main__': unittest.main()

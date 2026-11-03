@@ -251,10 +251,25 @@ class Runtime:
             if self.worker.stop.is_set():
                 raise ValueError("Container is stopping; settings were not changed.")
             self._recover_configuration()
-            if not isinstance(payload, dict) or set(payload) - {"settings", "username", "password", "current_password"}:
+            if not isinstance(payload, dict) or set(payload) - {
+                "settings",
+                "username",
+                "password",
+                "current_password",
+                "pause",
+            }:
                 raise ValueError("Invalid settings request.")
             previous = self.store.snapshot()
             values = validate(payload.get("settings", {}), previous["settings"])
+            pause_requested = payload.get("pause")
+            if "pause" in payload and type(pause_requested) is not bool:
+                raise ValueError("Invalid pause request.")
+            if pause_requested and not values["live"]:
+                raise ValueError("Enable live trading to pause transactions.")
+            if previous["settings"]["live"] and not values["live"]:
+                pause_requested = False
+            if pause_requested is not None and self.recovery_required:
+                raise ValueError("Restore recovery is required; restart the container before resuming.")
             account = previous["account"]
             if not account:
                 raise ValueError("Create a dashboard account first.")
@@ -331,7 +346,13 @@ class Runtime:
                             "nextPurchaseStatus": "Waiting for account check",
                         }
                     )
+                # Persist the restrictive gate before activating live trading.
+                # Clearing pause comes only after the new configuration is durable.
+                if pause_requested is True:
+                    self.controls.set(True)
                 self.store.commit(values, account)
+                if pause_requested is False:
+                    self.controls.set(False)
             except Exception:
                 if adapter_changed:
                     self._close_adapter(adapter)
@@ -366,6 +387,9 @@ class Runtime:
                 previous_gate or not previous["complete"] or identity_changed or financial_mode_changed
             )
             self._configuration_uncertain = False
+            if pause_requested is not None:
+                self.worker.reconfigure.set()
+                LOG.info("Transaction pause saved with settings: paused=%s", pause_requested)
             if schedule_changed:
                 self.settings.pop("startup_last_buy_at", None)
                 self.startup_pending = True

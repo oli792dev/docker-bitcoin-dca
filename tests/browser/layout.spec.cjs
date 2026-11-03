@@ -125,9 +125,11 @@ test('settings tabs stay single line and fields scroll within the content', asyn
   }
   await expect(page.locator('#pauseTransactions')).toBeDisabled();
   await page.locator('#live').check();
-  await expect(page.locator('#pauseTransactions')).toBeDisabled();
-  await expect(page.locator('#pauseHint')).toContainText('Save live trading');
+  await expect(page.locator('#pauseTransactions')).toBeEnabled();
+  await page.locator('#pauseTransactions').check();
   await page.locator('#live').uncheck();
+  await expect(page.locator('#pauseTransactions')).not.toBeChecked();
+  await expect(page.locator('#pauseTransactions')).toBeDisabled();
   const time = page.locator('#deposit_time');
   const pair = await rect(page.locator('#depositDateFields'));
   const timeBox = await rect(time);
@@ -188,7 +190,7 @@ test('operational controls, backup review and Activity filters remain usable', a
   await page.locator('#pauseTransactions').check();
   await page.locator('#live').uncheck();
   await expect(page.locator('#pauseTransactions')).toBeDisabled();
-  await expect(page.locator('#pauseTransactions')).toBeChecked();
+  await expect(page.locator('#pauseTransactions')).not.toBeChecked();
   await page.locator('#live').check();
   await expect(page.locator('#pauseTransactions')).toBeEnabled();
   await page.getByRole('tab', {name:'Backup',exact:true}).click();
@@ -233,9 +235,12 @@ test('operational controls, backup review and Activity filters remain usable', a
   const frame=page.frameLocator('#settingsFrame');
   await frame.getByRole('tab',{name:'Bot Configuration',exact:true}).click();
   await frame.locator('#buy_amount').fill('0.001');
-  const scheduleRequest=page.waitForRequest(request=>new URL(request.url()).pathname==='/api/schedule');
-  await frame.locator('#pauseTransactions').uncheck();
-  await scheduleRequest;
+  await frame.locator('#pauseTransactions').check();
+  await frame.locator('#save').click();
+  await expect(frame.locator('#review')).toBeVisible();
+  await expect(frame.locator('#reviewValues')).toContainText('Pause transactions');
+  await frame.locator('#cancel').click();
+  await expect(frame.locator('#pauseTransactions')).toBeChecked();
   await expect(frame.locator('#buy_amount')).toHaveValue('0.001');
   await expect(page.locator('#settingsDialog')).toBeVisible();
 });
