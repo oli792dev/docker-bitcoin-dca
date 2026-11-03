@@ -252,13 +252,14 @@ if(initial.complete&&initial.embedded){
 
 let restorePayload=null;
 let restoreFilename='';
-function backupFieldError(field,text){
- if(!['backupPassword','backupLoginPassword','restoreFile'].includes(field))field='restoreFile';
+function backupFieldError(field,text,restore=false){
+ if(restore)field=({backupLoginPassword:'restoreLoginPassword',backupPassword:'restorePassword'})[field]||field;
+ if(!['backupPassword','backupLoginPassword','restorePassword','restoreLoginPassword','restoreFile'].includes(field))field='restoreFile';
  const output=$(field+'Error');output.textContent=t(text);output.hidden=!text;$(field).setAttribute('aria-invalid',text?'true':'false');
 }
-function clearBackupErrors(){for(const field of ['backupPassword','backupLoginPassword','restoreFile'])backupFieldError(field,'')}
-for(const field of ['backupPassword','backupLoginPassword'])$(field)?.addEventListener('input',()=>backupFieldError(field,''));
-function backupCredentials(){return {scope:$('backupScope').value,password:$('backupPassword').value,current_password:$('backupLoginPassword').value}}
+function clearBackupErrors(){for(const field of ['backupPassword','backupLoginPassword','restorePassword','restoreLoginPassword','restoreFile'])backupFieldError(field,'')}
+for(const field of ['backupPassword','backupLoginPassword','restorePassword','restoreLoginPassword'])$(field)?.addEventListener('input',()=>backupFieldError(field,''));
+function backupCredentials(restore=false){return {scope:$('backupScope').value,password:$(restore?'restorePassword':'backupPassword').value,current_password:$(restore?'restoreLoginPassword':'backupLoginPassword').value}}
 $('createBackup')?.addEventListener('click',async()=>{
  clearBackupErrors();const credentials=backupCredentials();
  if(!credentials.current_password){backupFieldError('backupLoginPassword','Enter your current dashboard password.');return}
@@ -277,10 +278,13 @@ $('restoreFile')?.addEventListener('change',()=>{
 });
 $('restoreBackup')?.addEventListener('click',async()=>{
  clearBackupErrors();const file=$('restoreFile').files[0];if(!file)return;
+ const credentials=backupCredentials(true);
+ if(!credentials.current_password){backupFieldError('restoreLoginPassword','Enter your current dashboard password.');$('restoreLoginPassword').focus();return}
+ if(credentials.password.length<12){backupFieldError('restorePassword','Backup password must contain 12–1024 characters.');$('restorePassword').focus();return}
  if(file.size>32*1024*1024+128){backupFieldError('restoreFile','Backup file is too large.');return}
- try{const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));restorePayload={...backupCredentials(),archive:btoa(binary)};restoreFilename=file.name;$('restoreScopeName').textContent=t({full:'Full',activity:'Activities only',config:'Config only'}[restorePayload.scope]);$('restoreReviewFilename').textContent=file.name;$('backupReview').showModal()}
+ try{const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));restorePayload={...credentials,archive:btoa(binary)};restoreFilename=file.name;$('restoreScopeName').textContent=t({full:'Full',activity:'Activities only',config:'Config only'}[restorePayload.scope]);$('restoreReviewFilename').textContent=file.name;$('backupReview').showModal()}
  catch(error){backupFieldError('restoreFile',error.message)}
 });
 $('cancelBackupRestore')?.addEventListener('click',()=>{restorePayload=null;restoreFilename='';$('backupReview').close()});
 $('backupReview')?.addEventListener('cancel',()=>{restorePayload=null;restoreFilename=''});
-$('confirmBackupRestore')?.addEventListener('click',async()=>{if(!restorePayload)return;const button=$('confirmBackupRestore'),filename=restoreFilename;button.disabled=true;try{await request('/api/settings/restore',restorePayload);try{sessionStorage.setItem('bitcoinDcaRestoredBackup',filename)}catch{}restorePayload=null;if(initial.embedded){window.parent.postMessage({type:'dca-settings-auth-required'},location.origin)}else{location.href='/'}}catch(error){backupFieldError(error.field||'restoreFile',error.message)}finally{button.disabled=false;$('backupReview').close();$('backupLoginPassword').value='';$('backupPassword').value='';restorePayload=null;restoreFilename=''}});
+$('confirmBackupRestore')?.addEventListener('click',async()=>{if(!restorePayload)return;const button=$('confirmBackupRestore'),filename=restoreFilename;button.disabled=true;try{await request('/api/settings/restore',restorePayload);try{sessionStorage.setItem('bitcoinDcaRestoredBackup',filename)}catch{}restorePayload=null;if(initial.embedded){window.parent.postMessage({type:'dca-settings-auth-required'},location.origin)}else{location.href='/'}}catch(error){backupFieldError(error.field||'restoreFile',error.message,true)}finally{button.disabled=false;$('backupReview').close();$('restoreLoginPassword').value='';$('restorePassword').value='';restorePayload=null;restoreFilename=''}});

@@ -230,6 +230,14 @@ test('operational controls, backup review and Activity filters remain usable', a
   await (await fileChooser).setFiles({name:'example.dcabackup',mimeType:'application/octet-stream',buffer:Buffer.from('encrypted fixture')});
   await expect(page.locator('#restoreFileName')).toHaveText('example.dcabackup');
   await page.locator('#restoreBackup').click();
+  await expect(page.locator('#backupReview')).not.toBeVisible();
+  await expect(page.locator('#restoreLoginPasswordError')).toContainText('Enter your current dashboard password.');
+  await page.locator('#restoreLoginPassword').fill('current-dashboard-password');
+  await page.locator('#restoreBackup').click();
+  await expect(page.locator('#backupReview')).not.toBeVisible();
+  await expect(page.locator('#restorePasswordError')).toContainText('Backup password must contain');
+  await page.locator('#restorePassword').fill('archive-backup-password');
+  await page.locator('#restoreBackup').click();
   await expect(page.locator('#backupReview')).toBeVisible();
   await expect(page.locator('#restoreScopeName')).toHaveText('Config only');
   await expect(page.locator('#restoreReviewFilename')).toHaveText('example.dcabackup');
@@ -293,11 +301,19 @@ test('purchase explanation uses compact responsive field columns',async({page,is
 
 test('successful restore reloads login with a one-time safe backup filename',async({page})=>{
  let restored=false;
- await page.route('**/api/settings/restore',route=>{restored=true;return route.fulfill({contentType:'application/json',body:JSON.stringify({restored:true,signInRequired:true})})});
+ await page.route('**/api/settings/restore',route=>{const payload=route.request().postDataJSON();expect(payload.password).toBe('archive-backup-password');if(payload.current_password!=='current-dashboard-password')return route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:'Your current password is incorrect.',field:'backupLoginPassword'})});restored=true;return route.fulfill({contentType:'application/json',body:JSON.stringify({restored:true,signInRequired:true})})});
  await page.route('https://dca.test/',route=>restored?route.fulfill({contentType:'text/html',body:pages['/login']}):route.fallback());
  await page.goto('/');await page.locator('#openSettings').click();
  const frame=page.frameLocator('#settingsFrame');await frame.getByRole('tab',{name:'Backup',exact:true}).click();
  await frame.locator('#restoreFile').setInputFiles({name:'<b>my-backup</b>.dcabackup',mimeType:'application/octet-stream',buffer:Buffer.from('fixture')});
+ await frame.locator('#restoreLoginPassword').fill('wrong-dashboard-password');
+ await frame.locator('#restorePassword').fill('archive-backup-password');
+ await frame.locator('#restoreBackup').click();await frame.locator('#confirmBackupRestore').click();
+ await expect(frame.locator('#restoreLoginPasswordError')).toHaveText('Your current password is incorrect.');
+ await expect(frame.locator('#backupLoginPasswordError')).toBeHidden();
+ await expect(frame.locator('#restoreLoginPassword')).toHaveValue('');
+ await frame.locator('#restoreLoginPassword').fill('current-dashboard-password');
+ await frame.locator('#restorePassword').fill('archive-backup-password');
  await frame.locator('#restoreBackup').click();await frame.locator('#confirmBackupRestore').click();
  await expect(page.locator('#restoreSuccess')).toBeVisible();
  await expect(page.locator('#restoreSuccess')).toContainText('Backup restored successfully.');
