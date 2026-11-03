@@ -278,11 +278,11 @@ $('restoreFile')?.addEventListener('change',()=>{
 });
 $('restoreBackup')?.addEventListener('click',async()=>{
  clearBackupErrors();const file=$('restoreFile').files[0];if(!file)return;
- const credentials=backupCredentials(true);
+ const credentials=backupCredentials(true),scopeLabel=$('backupScope').selectedOptions[0].textContent;
  if(!credentials.current_password){backupFieldError('restoreLoginPassword','Enter your current dashboard password.');$('restoreLoginPassword').focus();return}
  if(credentials.password.length<12){backupFieldError('restorePassword','Backup password must contain 12–1024 characters.');$('restorePassword').focus();return}
  if(file.size>32*1024*1024+128){backupFieldError('restoreFile','Backup file is too large.');return}
- try{const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));restorePayload={...credentials,archive:btoa(binary)};restoreFilename=file.name;$('restoreScopeName').textContent=t({full:'Full',activity:'Activities only',config:'Config only'}[restorePayload.scope]);$('restoreReviewFilename').textContent=file.name;$('backupReview').showModal()}
+ try{const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));restorePayload={...credentials,archive:btoa(binary)};restoreFilename=file.name;$('restoreScopeName').textContent=scopeLabel;$('restoreReviewFilename').textContent=file.name;$('backupReview').showModal()}
  catch(error){backupFieldError('restoreFile',error.message)}
 });
 $('cancelBackupRestore')?.addEventListener('click',()=>{restorePayload=null;restoreFilename='';$('backupReview').close()});

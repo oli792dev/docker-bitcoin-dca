@@ -239,12 +239,20 @@ test('operational controls, backup review and Activity filters remain usable', a
   await page.locator('#restorePassword').fill('archive-backup-password');
   await page.locator('#restoreBackup').click();
   await expect(page.locator('#backupReview')).toBeVisible();
-  await expect(page.locator('#restoreScopeName')).toHaveText('Config only');
+  await expect(page.locator('#restoreScopeName')).toHaveText('Config only: settings and login');
   await expect(page.locator('#restoreReviewFilename')).toHaveText('example.dcabackup');
   await expect(page.locator('#backupReview>p')).toHaveCount(2);
   expect(await page.locator('#restoreScopeName').evaluate(el=>getComputedStyle(el).font)).toBe(await page.locator('#restoreReviewFilename').evaluate(el=>getComputedStyle(el).font));
   await page.locator('#cancelBackupRestore').click();
   await expect(page.locator('#backupReview')).not.toBeVisible();
+  for(const scope of ['full','activity']){
+    await page.locator('#backupScope').selectOption(scope);
+    const label=await page.locator('#backupScope option:checked').textContent();
+    await page.locator('#restoreBackup').click();
+    await expect(page.locator('#restoreScopeName')).toHaveText(label);
+    await expect(page.locator('#restoreReviewFilename')).toHaveText('example.dcabackup');
+    await page.locator('#cancelBackupRestore').click();
+  }
   await noPageOverflow(page);
   await page.screenshot({path:test.info().outputPath('backup-settings.png')});
   await page.goto('/');
