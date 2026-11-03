@@ -272,6 +272,11 @@ test('operational controls, backup review and Activity filters remain usable', a
   const frame=page.frameLocator('#settingsFrame');
   await frame.getByRole('tab',{name:'Bot Configuration',exact:true}).click();
   await frame.locator('#buy_amount').fill('0.001');
+  await expect(frame.locator('#unsavedChanges')).toBeVisible();
+  const unsaved=await rect(frame.locator('#unsavedChanges')),save=await rect(frame.locator('#save'));
+  expect(unsaved.x+unsaved.width).toBeLessThanOrEqual(save.x-8);
+  expect(Math.abs(unsaved.y+unsaved.height/2-save.y-save.height/2)).toBeLessThan(2);
+  expect(await frame.locator('#unsavedChanges').evaluate(el=>getComputedStyle(el).color)).toBe(await frame.locator('#buy_amountHint').evaluate(el=>getComputedStyle(el).color));
   await frame.locator('#pauseTransactions').check();
   await frame.locator('#save').click();
   await expect(frame.locator('#review')).toBeVisible();

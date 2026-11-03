@@ -148,7 +148,7 @@ __DESIGN_CSS__
 .settings-footer{padding-top:var(--space-sm);}
 }
 .setting-inactive{opacity:1;}
-#unsavedChanges{color:var(--warning);margin:0;}
+#unsavedChanges{color:var(--muted);margin:0;min-width:0;overflow-wrap:anywhere;}
 /* All Settings fields reflow; only the content region scrolls vertically. */
 .settings-fields{min-width:0;max-width:100%;}
 .settings-page .settings-tabs{min-width:0;max-width:100%;}
@@ -173,7 +173,8 @@ __DESIGN_CSS__
 .settings-page .option-card small,.settings-page .field-description,.settings-page .hint{color:var(--muted);font-weight:400;}
 .settings-footer-actions{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;}
 .settings-quick-actions{display:flex;align-items:center;flex-wrap:wrap;}
-.settings-footer-actions>#save{margin-left:auto;}
+.settings-save-actions{display:flex;align-items:center;justify-content:flex-end;gap:var(--space-md);margin-left:auto;min-width:0;max-width:100%;}
+.settings-save-actions>#save{flex:0 0 auto;}
 .settings-action-feedback{display:flex;align-items:flex-start;margin-top:var(--space-sm);}
 .settings-action-feedback p{flex:1;min-width:0;max-height:96px;overflow:auto;margin:0;font-size:.82rem;overflow-wrap:anywhere;}
 .settings-action-feedback button{flex:0 0 44px;width:44px;min-height:var(--button-height);padding:0;font-size:1.18rem;}
@@ -182,7 +183,7 @@ __DESIGN_CSS__
 @media (max-width:600px){
 .settings-quick-actions{flex:1 0 100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
 .settings-quick-actions button{min-width:0;padding:8px 10px;font-size:.76rem;}
-.settings-footer-actions>#save{width:100%;margin:0;}
+.settings-save-actions{width:100%;margin:0;}
 }
 /* Uniform label/control/help spacing across all four Settings tabs. */
 .settings-page .settings-card-grid>div:not(.option-card){display:flex;flex-direction:column;gap:var(--space-xs);}
