@@ -123,6 +123,11 @@ test('settings tabs stay single line and fields scroll within the content', asyn
     expect(await hoverTab.evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe(selectedBackground);
     expect(await selectedTab.evaluate(el => getComputedStyle(el).backgroundColor)).toBe(selectedBackground);
   }
+  await expect(page.locator('#pauseTransactions')).toBeDisabled();
+  await page.locator('#live').check();
+  await expect(page.locator('#pauseTransactions')).toBeDisabled();
+  await expect(page.locator('#pauseHint')).toContainText('Save live trading');
+  await page.locator('#live').uncheck();
   const time = page.locator('#deposit_time');
   const pair = await rect(page.locator('#depositDateFields'));
   const timeBox = await rect(time);
@@ -175,10 +180,17 @@ test('all dialog surfaces and action bars match the page background', async ({pa
 });
 
 test('operational controls, backup review and Activity filters remain usable', async ({page}) => {
+  await page.route('**/settings*',route=>route.fulfill({contentType:'text/html',body:pages['/settings-live'+new URL(route.request().url()).search]}));
   await page.goto('/settings');
   await page.getByRole('tab', {name:'Bot Configuration',exact:true}).click();
   await expect(page.locator('#pauseTransactions')).toBeVisible();
+  await expect(page.locator('#pauseTransactions')).toBeEnabled();
   await page.locator('#pauseTransactions').check();
+  await page.locator('#live').uncheck();
+  await expect(page.locator('#pauseTransactions')).toBeDisabled();
+  await expect(page.locator('#pauseTransactions')).toBeChecked();
+  await page.locator('#live').check();
+  await expect(page.locator('#pauseTransactions')).toBeEnabled();
   await page.getByRole('tab', {name:'Backup',exact:true}).click();
   await expect(page.locator('#backupLoginPassword')).toBeVisible();
   await expect(page.locator('#backupPassword')).toBeVisible();

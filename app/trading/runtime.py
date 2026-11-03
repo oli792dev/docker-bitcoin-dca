@@ -463,6 +463,8 @@ class Runtime:
         with self.lock:
             if self.state_path.with_name(".restore-journal").exists():
                 raise ValueError("Restore recovery is required; restart the container before resuming.")
+            if payload.get("paused") is True and not self.settings.get("live", False):
+                raise ValueError("Enable and save live trading before pausing transactions.")
             result = self.controls.set(payload.get("paused"), payload.get("until"))
             self.service = None
             self.worker.reconfigure.set()

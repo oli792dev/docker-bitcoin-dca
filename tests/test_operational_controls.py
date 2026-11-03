@@ -43,6 +43,26 @@ class PauseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'paused'):
             account.action('confirm', 'session', 'token')
 
+    def test_pause_can_only_be_enabled_with_saved_live_trading(self):
+        import threading
+        account=object.__new__(runtime.Runtime)
+        account.lock=threading.RLock()
+        account.settings={'live':False}
+        account.controls=Mock()
+        account.controls.set.return_value={'paused':True,'until':None}
+        account.worker=Mock()
+        with tempfile.TemporaryDirectory() as tmp:
+            account.state_path=Path(tmp)/'state.json'
+            with self.assertRaisesRegex(ValueError,'live trading'):
+                account.set_pause({'paused':True,'until':None})
+            account.controls.set.assert_not_called()
+            account.settings['live']=True
+            account.set_pause({'paused':True,'until':None})
+            account.controls.set.assert_called_once_with(True,None)
+            account.settings['live']=False
+            account.set_pause({'paused':False,'until':None})
+            account.controls.set.assert_called_with(False,None)
+
 class ActivityFilterTests(unittest.TestCase):
     def test_filters_are_server_side_and_totals_remain_unfiltered(self):
         from app.data import activity
