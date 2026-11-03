@@ -547,3 +547,9 @@ __DESIGN_CSS__
 #activityDetailValues dt{color:var(--muted);font-size:.82rem;margin-bottom:var(--space-xs);}
 #activityDetailValues dd{margin:0;color:var(--text);}
 @media(max-width:600px){#activityDetailValues{grid-template-columns:minmax(0,1fr);}}
+
+#purchaseExplanation{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-md) var(--space-lg);margin:var(--space-md) 0 0;}
+#purchaseExplanation>.purchase-explanation-field{min-width:0;}
+#purchaseExplanation dt{font-size:.76rem;color:var(--muted);margin-bottom:var(--space-xs);}
+#purchaseExplanation dd{margin:0;color:var(--text);}
+@media(max-width:600px){#purchaseExplanation{grid-template-columns:minmax(0,1fr);}}

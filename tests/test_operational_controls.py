@@ -137,8 +137,29 @@ class BackupIntegrationTests(unittest.TestCase):
         self.assertEqual(manifest['scope'],'activity')
         self.activity.append_activity_records([self.record('later')])
         manager.restore(raw,'long backup password','activity')
+        manager.restore(raw,'long backup password','activity')
+        manager.restore(raw,'long backup password','activity')
+        self.assertEqual(len(self.activity.read_activity_records()),2)
         self.assertEqual({r['id'] for r in self.activity.read_activity_records()},{'first','later'})
         self.assertTrue(json.loads((self.root/'controls.json').read_text())['paused'])
+        self.assertFalse((self.root/'.restore-journal').exists())
+
+    def test_repeated_full_restore_does_not_duplicate_activity(self):
+        from app.data.backup import Backups
+        manager=Backups(self.root)
+        _,raw=manager.create('full','long backup password')
+        for _ in range(3):manager.restore(raw,'long backup password','full')
+        self.assertEqual([row['id'] for row in self.activity.read_activity_records()],['first'])
+
+    def test_restore_rejects_conflicting_duplicate_ids_without_changing_history(self):
+        from app.data.backup import Backups
+        manager=Backups(self.root)
+        _,raw=manager.create('activity','long backup password')
+        changed=self.record('first');changed['row']['amount']='11'
+        self.activity.update_activity_record(changed)
+        with self.assertRaisesRegex(ValueError,'conflicts with existing Activity'):
+            manager.restore(raw,'long backup password','activity')
+        self.assertEqual(self.activity.read_activity_records(),[changed])
         self.assertFalse((self.root/'.restore-journal').exists())
 
     def test_full_restore_rejects_history_loss_and_rolls_back_mid_commit_failure(self):

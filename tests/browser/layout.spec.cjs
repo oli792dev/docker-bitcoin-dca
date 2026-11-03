@@ -196,6 +196,7 @@ test('operational controls, backup review and Activity filters remain usable', a
   await page.getByRole('tab', {name:'Backup',exact:true}).click();
   await expect(page.locator('#backupLoginPassword')).toBeVisible();
   await expect(page.locator('#backupPassword')).toBeVisible();
+  await expect(page.locator('#restoreFileHint')).toContainText('Activity only or the full configuration');
   const download=page.locator('#createBackup'),manual=page.locator('#settingsWithdraw');
   expect((await rect(download)).height).toBe(44);
   await expect(download).toHaveCSS('border-top-color','rgba(0, 0, 0, 0)');
@@ -258,4 +259,14 @@ test('Activity dates are unboxed links and details use responsive columns', asyn
  if(isMobile)expect(second.y).toBeGreaterThan(first.y);else{await expect.poll(async()=>{const a=await rect(fields.nth(0)),b=await rect(fields.nth(1));return Math.abs(a.y-b.y)}).toBeLessThan(1);expect((await rect(page.locator('#activityDetail'))).width).toBeGreaterThan(700)}
  await expect(page.locator('#activityDetail')).toHaveCSS('opacity','1');
  await page.screenshot({path:test.info().outputPath('activity-details.png')});
+});
+
+test('purchase explanation uses compact responsive field columns',async({page,isMobile})=>{
+ await page.goto('/');
+ await page.locator('.purchase-explanation>summary').click();
+ const fields=page.locator('#purchaseExplanation>.purchase-explanation-field');
+ await expect(fields).toHaveCount(12);
+ const a=await rect(fields.nth(0)),b=await rect(fields.nth(1));
+ if(isMobile)expect(b.y).toBeGreaterThan(a.y);else expect(Math.abs(b.y-a.y)).toBeLessThan(1);
+ await noPageOverflow(page);
 });

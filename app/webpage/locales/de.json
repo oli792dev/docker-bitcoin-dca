@@ -656,5 +656,6 @@
   "Enable live trading to pause transactions.": "Aktiviere Live-Trading, um Transaktionen zu pausieren.",
   "Restore information": "Hinweise zur Wiederherstellung",
   "Choose file": "Datei auswählen",
-  "Pause is applied when settings are saved. Account checks continue.": "Die Pause wird mit den Einstellungen gespeichert. Kontoprüfungen laufen weiter."
+  "Pause is applied when settings are saved. Account checks continue.": "Die Pause wird mit den Einstellungen gespeichert. Kontoprüfungen laufen weiter.",
+  "Restore Activity only or the full configuration, including Activity.": "Stelle nur Aktivitäten oder die vollständige Konfiguration einschließlich der Aktivitäten wieder her."
 }
