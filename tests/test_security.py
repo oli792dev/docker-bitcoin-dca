@@ -6,6 +6,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import Mock, patch
+from urllib.parse import urlencode
 from app.data import activity
 from app.core import configuration
 from app.trading import runtime
@@ -32,11 +33,12 @@ class AttemptLimitTests(unittest.TestCase):
         self.assertEqual(len(limiter.attempts),1)
         self.assertNotIn('X-Forwarded-For',web_ui.Handler._handle_login.__code__.co_consts)
 
-    def login(self, valid=False):
+    def login(self, valid=False, credentials=None, store=None):
         handler=object.__new__(web_ui.Handler)
         handler.client_address=('192.0.2.5',1000)
         handler.runtime=Mock();handler.runtime.store.authenticate.return_value=valid
-        body=b'username=operator&password=private-password'
+        if store is not None:handler.runtime.store=store
+        body=urlencode(credentials or {'username':'operator','password':'private-password'}).encode()
         handler.headers={'Content-Length':str(len(body))}
         handler.rfile=io.BytesIO(body);handler.wfile=io.BytesIO()
         handler.statuses=[];handler.response_headers={}
@@ -45,6 +47,21 @@ class AttemptLimitTests(unittest.TestCase):
         handler.end_headers=lambda:None
         handler._handle_login()
         return handler
+
+    def test_login_accepts_the_maximum_allowed_unicode_credentials(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(web_ui,'_LOGIN_ATTEMPTS',security.AttemptLimiter()):
+            store=configuration.ConfigStore(Path(tmp)/'config.json')
+            credentials={'username':'ä'*64,'password':'🔒'*1024}
+            store.create_account(**credentials)
+            handler=self.login(credentials=credentials,store=store)
+            self.assertEqual(handler.statuses,[303])
+            self.assertIn('Set-Cookie',handler.response_headers)
+
+    def test_login_rejects_an_oversized_form_before_password_hashing(self):
+        with patch.object(web_ui,'_LOGIN_ATTEMPTS',security.AttemptLimiter()):
+            handler=self.login(credentials={'username':'operator','password':'a'*17000})
+        self.assertEqual(handler.statuses,[400])
+        handler.runtime.store.authenticate.assert_not_called()
 
     def test_login_lockout_does_not_hash_more_passwords(self):
         with patch.object(web_ui,'_LOGIN_ATTEMPTS',security.AttemptLimiter()):
@@ -66,7 +83,7 @@ class AttemptLimitTests(unittest.TestCase):
 class SensitiveSettingsTests(unittest.TestCase):
     def setUp(self):
         temp=tempfile.TemporaryDirectory();self.addCleanup(temp.cleanup);root=Path(temp.name)
-        for name,value in [('ACTIVITY_PATH',root/'activity.json'),('SNAPSHOT_PATH',root/'dashboard.json')]:
+        for name,value in [('ACTIVITY_PATH',root/'activity.sqlite3'),('SNAPSHOT_PATH',root/'dashboard.json')]:
             p=patch.object(activity,name,value);p.start();self.addCleanup(p.stop)
         factory=patch.object(runtime,'create_exchange',return_value=Mock());factory.start();self.addCleanup(factory.stop)
         self.store=configuration.ConfigStore(root/'config.json');self.store.create_account('operator',PASSWORD)

@@ -24,7 +24,6 @@ from app.data.activity import (
     get_activity_record,
     latest_real_buy,
     ledger_balance,
-    legacy_account_matches,
     read_dashboard_snapshot,
     withdrawal_records,
     write_dashboard_snapshot,
@@ -220,14 +219,7 @@ def persist_bot_buy(api, order, settings, event_id, fallback_timestamp_ms):
         identity = settings.get("account_identity")
         if identity:
             record["accountIdentity"] = identity
-            legacy = get_activity_record(record["id"])
-            same_legacy = (
-                legacy
-                and legacy.get("accountIdentity") is None
-                and legacy_account_matches(settings["exchange"], settings["quote"], identity)
-            )
-            if not legacy or not (legacy.get("accountIdentity") == identity or same_legacy):
-                record["id"] = "account:" + identity + ":" + record["id"]
+            record["id"] = "account:" + identity + ":" + record["id"]
     return records, append_activity_records(records)
 
 

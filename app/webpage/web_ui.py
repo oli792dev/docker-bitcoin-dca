@@ -266,8 +266,8 @@ class Handler(BaseHTTPRequestHandler):
                 "/",
             ):
                 data = self.runtime.store.snapshot()
-                if not data["complete"] or data["account"].get("password_change_required"):
-                    self._json(403, {"error": "Complete configuration and update your password in Settings first."})
+                if not data["complete"]:
+                    self._json(403, {"error": "Complete configuration in Settings first."})
                     return False
             return True
         self._json(401, {"error": "Authentication required"})
@@ -289,7 +289,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if length <= 0 or length > 4096:
+            if length <= 0 or length > 16384:
                 raise ValueError("Invalid login request")
             form = parse_qs(self.rfile.read(length).decode("utf-8"), keep_blank_values=True)
             username = form.get("username", [""])[0]
@@ -601,8 +601,6 @@ class Handler(BaseHTTPRequestHandler):
             "/bitcoin-dca-icon-v4.png": (APPLE_TOUCH_ICON_PNG, "image/png"),
             "/favicon-32-v4.png": (FAVICON_PNG, "image/png"),
             "/safari-pinned-tab-v4.svg": (FAVICON_MASK_SVG, "image/svg+xml; charset=utf-8"),
-            "/bitcoin-dca-icon-v3.png": (APPLE_TOUCH_ICON_PNG, "image/png"),
-            "/safari-pinned-tab-v3.svg": (FAVICON_MASK_SVG, "image/svg+xml; charset=utf-8"),
             "/apple-touch-icon-precomposed.png": (APPLE_TOUCH_ICON_PNG, "image/png"),
             "/favicon.ico": (FAVICON_ICO, "image/x-icon"),
             "/favicon-32.png": (FAVICON_PNG, "image/png"),
@@ -639,11 +637,7 @@ class Handler(BaseHTTPRequestHandler):
                 if parsed.path == "/api/settings":
                     self._json(200, self.runtime.store.public())
                     return
-                if (
-                    parsed.path in ("/configure", "/settings")
-                    or not data["complete"]
-                    or data["account"].get("password_change_required")
-                ):
+                if parsed.path in ("/configure", "/settings") or not data["complete"]:
                     LOG.info("Settings opened" if data["complete"] else "First-run bot configuration opened")
                     self._send(
                         200,

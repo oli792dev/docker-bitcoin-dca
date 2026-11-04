@@ -23,7 +23,7 @@ class SetupRestoreTests(unittest.TestCase):
         self.target = self.root / 'target'
         self.target.mkdir()
         for owner, name, value in (
-            (activity, 'ACTIVITY_PATH', self.target / 'activity.json'),
+            (activity, 'ACTIVITY_PATH', self.target / 'activity.sqlite3'),
             (activity, 'SNAPSHOT_PATH', self.target / 'dashboard.json'),
         ):
             replacement = patch.object(owner, name, value)
@@ -43,7 +43,7 @@ class SetupRestoreTests(unittest.TestCase):
         store.create_account('archived-user', 'archived-login-password')
         store.commit(validate({'kraken_api_key':'fixture-key', 'kraken_api_secret':'c2VjcmV0'}))
         (source / 'state.json').write_text('{}')
-        with patch.object(activity, 'ACTIVITY_PATH', source / 'activity.json'):
+        with patch.object(activity, 'ACTIVITY_PATH', source / 'activity.sqlite3'):
             activity.append_activity_records([{
                 'id':'archived-buy', 'exchange':'KRAKEN', 'row':{
                     'datetime':'2026-10-01T12:00:00Z', 'type':'Buy', 'identifier':'BTC',

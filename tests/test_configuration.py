@@ -27,7 +27,7 @@ class ConfigurationTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.store = config.ConfigStore(self.root / 'config.json')
-        for name, value in [('ACTIVITY_PATH', self.root / 'activity.json'),
+        for name, value in [('ACTIVITY_PATH', self.root / 'activity.sqlite3'),
                             ('SNAPSHOT_PATH', self.root / 'dashboard.json')]:
             p = patch.object(activity, name, value)
             p.start(); self.addCleanup(p.stop)
@@ -46,6 +46,13 @@ class ConfigurationTests(unittest.TestCase):
             with self.subTest(field=field),self.assertRaises(ValueError) as error:
                 config.validate({field:value},require_credentials=False)
             self.assertEqual(getattr(error.exception,'field',None),field)
+
+    def test_unknown_persisted_settings_are_rejected(self):
+        self.ready()
+        saved=json.loads(self.store.path.read_text())
+        saved['settings']['unsupported_setting']=True
+        self.store.path.write_text(json.dumps(saved))
+        with self.assertRaises(ValueError):config.ConfigStore(self.store.path)
 
     def test_missing_withdrawal_target_identifies_the_exchange_field(self):
         cases=[({'exchange':'KRAKEN'},'kraken_withdraw_key'),
@@ -136,19 +143,6 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIs(self.app.api,api);self.api_factory.assert_not_called()
         self.assertFalse(self.app.worker.reconfigure.is_set())
 
-    def test_retired_adaptive_settings_do_not_block_existing_volume_startup(self):
-        self.ready()
-        saved=json.loads(self.store.path.read_text())
-        saved['settings'].update(adaptive_dca_enabled=True,adaptive_dca_strength='1.5')
-        self.store.path.write_text(json.dumps(saved))
-        restored=config.ConfigStore(self.store.path)
-        self.assertTrue(restored.snapshot()['complete'])
-        self.assertTrue(restored.authenticate('operator',PASSWORD))
-        self.assertNotIn('adaptive_dca_enabled',restored.snapshot()['settings'])
-        self.assertNotIn('adaptive_dca_strength',restored.public()['settings'])
-        restarted=runtime.Runtime(restored,self.app.state_path)
-        self.assertEqual(restarted.settings['buy_amount'],self.app.settings['buy_amount'])
-        with self.assertRaises(ValueError):config.validate({'adaptive_dca_enabled':True},require_credentials=False)
 
     def test_cosmetic_save_reuses_adapter_and_validation_failure_closes_replacement(self):
         self.ready()
@@ -348,17 +342,6 @@ class ConfigurationTests(unittest.TestCase):
             self.app._synchronize_state()
         self.assertEqual(json.loads(self.app.state_path.read_text()),state)
 
-    def test_legacy_binding_preserves_pending_fiat_window(self):
-        self.ready(startup_delay_seconds=0)
-        pending={'start':'2026-10-30T10:00:00Z'}
-        state={'configuration_account':['KRAKEN','EUR'],'fiat_observation':{
-            'identity':['KRAKEN','EUR'],'balance':'200','pending':pending},'withdrawal_armed':True}
-        self.app.state_path.write_text(json.dumps(state))
-        self.app._synchronize_state()
-        state=json.loads(self.app.state_path.read_text())
-        self.assertEqual(state['fiat_observation']['pending'],pending)
-        self.assertEqual(state['fiat_observation']['identity'],state['configuration_account'])
-        self.assertTrue(state['withdrawal_armed'])
 
     def test_enabling_live_trading_does_not_reuse_simulated_execution_state(self):
         self.ready(startup_delay_seconds=0)
@@ -399,13 +382,6 @@ class ConfigurationTests(unittest.TestCase):
         self.assertTrue(self.store.authenticate('renamed', PASSWORD))
         self.assertFalse(self.store.authenticate('operator', PASSWORD))
 
-    def test_legacy_weak_password_cannot_complete_settings_without_upgrade(self):
-        self.ready()
-        with self.store.lock:
-            self.store.data['account']['password_change_required']=True
-        with self.assertRaises(ValueError): self.app.save({'current_password':PASSWORD,'settings': {'parqet_enabled': False}})
-        self.app.save({'current_password': PASSWORD,'password':'another-private-password'})
-        self.assertFalse(self.store.public()['passwordChangeRequired'])
 
 
     def test_deposit_time_persists_and_requests_a_schedule_refresh(self):
@@ -508,16 +484,6 @@ class ConfigurationTests(unittest.TestCase):
                 self.assertTrue(self.app.exchange_check_pending)
             run.assert_not_called()
 
-    def test_old_pause_flag_is_automatically_retired_without_losing_state(self):
-        self.automatic_check()
-        state={'recoveryRequired':True,'last_order_at':'2026-10-29T12:00:00+00:00','pending_order':{'id':'existing'}}
-        self.app.state_path.write_text(json.dumps(state))
-        with patch.object(bot,'run_once'):self.app.cycle()
-        saved=json.loads(self.app.state_path.read_text())
-        self.assertNotIn('recoveryRequired',saved)
-        self.assertEqual(saved['pending_order'],state['pending_order'])
-        self.assertEqual(saved['last_order_at'],state['last_order_at'])
-        self.assertNotIn('Account recovery',settings_ui.settings_page(self.store))
 
     def test_unchanged_account_binding_does_not_rewrite_scheduling_state(self):
         self.ready(startup_delay_seconds=0)

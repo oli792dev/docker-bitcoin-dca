@@ -24,7 +24,7 @@ class ActivityStatusTests(TestCase):
                  self.record('completed','TransferOut',withdrawalStatus='completed'),
                  self.record('pending','TransferOut',withdrawalStatus='submitted'),
                  self.record('failed','TransferOut',withdrawalStatus='failed'),
-                 self.record('legacy','TransferOut',withdrawalStatus='legacy_unverified')]
+                 self.record('unverified','TransferOut',withdrawalStatus='unverified')]
         settings=runtime_settings(DEFAULTS);settings['display_currency']='USD'
         report=analytics.report(settings,totals_from_records(records),{},records)
         self.assertEqual(report['configuration']['displayCurrency'],'USD')
@@ -33,7 +33,7 @@ class ActivityStatusTests(TestCase):
         self.assertIsNone(rows['simulation']['purchaseStatus'])
         self.assertEqual(rows['pending']['withdrawalStatus'],'submitted')
         self.assertEqual(rows['failed']['withdrawalStatus'],'failed')
-        self.assertEqual(rows['legacy']['withdrawalStatus'],'legacy_unverified')
+        self.assertEqual(rows['unverified']['withdrawalStatus'],'unverified')
 
     def test_failed_foreign_currency_withdrawal_does_not_hide_euro_totals(self):
         failed=self.record('failed','TransferOut',withdrawalStatus='failed')

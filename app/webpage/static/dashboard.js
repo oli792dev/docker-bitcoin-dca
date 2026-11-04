@@ -209,11 +209,11 @@ function activityStatus(row){
  if(row.simulated)return {label:"Simulation",tone:"muted"};
  if(row.type==="Buy")return row.purchaseStatus&&row.purchaseStatus!=="confirmed"?{label:"Unverified",tone:"muted"}:{label:"Confirmed ✓",tone:"confirmed"};
  if(row.type!=="TransferOut")return {label:"—",tone:"muted"};
- const status=String(row.withdrawalStatus||"legacy_unverified").toLowerCase();
+ const status=String(row.withdrawalStatus||"unverified").toLowerCase();
  if(status==="completed")return {label:"Confirmed ✓",tone:"confirmed"};
  if(["failed","failure"].includes(status))return {label:"Failed",tone:"failed"};
  if(["canceled","cancelled"].includes(status))return {label:"Cancelled",tone:"muted"};
- if(status==="legacy_unverified")return {label:"Unverified",tone:"muted"};
+ if(status==="unverified")return {label:"Unverified",tone:"muted"};
  return {label:"Pending",tone:"pending"};
 }
 function renderActivities(){

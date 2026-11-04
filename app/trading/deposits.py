@@ -28,7 +28,12 @@ def sync_deposits(
     if settings.get("account_identity"):
         identity.append(settings["account_identity"])
     previous = state.get("fiat_observation")
-    observation: FiatObservation = {"identity": identity, "checkedAt": now.isoformat(), "balance": str(balance)}
+    observation: FiatObservation = {
+        "identity": identity,
+        "checkedAt": now.isoformat(),
+        "balance": str(balance),
+        "historyStartAt": now.isoformat(),
+    }
     # Adapter methods read the same scoped snapshot as the available balance.
     # Unknown adapters retain the conservative available-balance behavior.
     booked_reader = getattr(type(api), "booked_balance", None)
@@ -38,7 +43,6 @@ def sync_deposits(
             raise ValueError("Booked fiat balance could not be verified")
         observation["booked"] = str(booked)
     if previous is None or previous.get("identity") != identity:
-        observation["historyStartAt"] = now.isoformat()
         state["fiat_observation"] = observation
         return [], 0
     pending = previous.get("pending")
@@ -51,7 +55,7 @@ def sync_deposits(
             pending["bookedBaseline"] = previous["booked"]
     confirmed = previous.get("confirmed", [])
     observation["confirmed"] = confirmed
-    observation["historyStartAt"] = previous.get("historyStartAt", previous["checkedAt"])
+    observation["historyStartAt"] = previous["historyStartAt"]
     if pending:
         observation["pending"] = pending
     state["fiat_observation"] = observation
@@ -76,10 +80,7 @@ def sync_deposits(
             raise ValueError("Invalid fiat deposit reference or timestamp")
         if not start <= timestamp <= int(now.timestamp() * 1000):
             continue
-        legacy_id = f"fiat-deposit:{settings['exchange']}:{settings['quote']}:{item['id']}"
         record_id = f"fiat-deposit:{settings['exchange']}:{settings['quote']}:{account_scope}{item['id']}"
-        if any(record["id"] == legacy_id for record in confirmed):
-            record_id = legacy_id
         record: DepositActivity = {
             "id": record_id,
             "exchange": settings["exchange"],
@@ -115,9 +116,7 @@ def sync_deposits(
         Decimal(0),
     )
     verified = False
-    if booked is not None and (
-        "bookedBaseline" in pending or getattr(type(api), "supports_unanchored_funding_verification", False) is True
-    ):
+    if booked is not None and "bookedBaseline" in pending:
         classifier = getattr(type(api), "non_deposit_balance_change", None)
         if (
             callable(classifier)

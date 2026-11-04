@@ -73,7 +73,7 @@ def prepare_storage(data_dir: StoragePath | None = None) -> None:
         return
     configuration = destination / "config.json"
     saved = _read(configuration) if configuration.exists() else {}
-    has_history = (destination / "activity.sqlite3").exists() or (destination / "activity.json").exists()
+    has_history = (destination / "activity.sqlite3").exists()
     if saved.get("complete") or has_history:
         write_json_atomic(state, {})
         LOG.warning(

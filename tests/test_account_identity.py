@@ -20,15 +20,13 @@ class AccountHistoryTests(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
-        for key, name in [('ACTIVITY_PATH', 'activity.json'), ('SNAPSHOT_PATH', 'dashboard.json')]:
+        for key, name in [('ACTIVITY_PATH', 'activity.sqlite3'), ('SNAPSHOT_PATH', 'dashboard.json')]:
             fixture = patch.object(activity, key, Path(directory.name) / name)
             fixture.start()
             self.addCleanup(fixture.stop)
 
-    def test_legacy_history_is_claimed_once_and_keys_have_independent_last_buys(self):
-        activity.append_activity_records([buy('legacy', '2026-10-01T12:00:00Z')])
-        activity.bind_legacy_account('KRAKEN', 'EUR', 'first-key')
-        activity.bind_legacy_account('KRAKEN', 'EUR', 'second-key')
+    def test_accounts_have_independent_last_buys(self):
+        activity.append_activity_records([buy('first-account', '2026-10-01T12:00:00Z', 'first-key')])
         self.assertEqual(bot.latest_recorded_buy_time('KRAKEN', 'first-key').day, 1)
         self.assertIsNone(bot.latest_recorded_buy_time('KRAKEN', 'second-key'))
         activity.append_activity_records([buy('new-account', '2026-10-05T12:00:00Z', 'second-key')])
@@ -46,10 +44,9 @@ class AccountHistoryTests(unittest.TestCase):
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]['accountIdentity'], 'first-key')
 
-    def test_matching_legacy_trade_id_cannot_be_claimed_by_a_new_key(self):
+    def test_matching_trade_id_cannot_be_claimed_by_another_account(self):
         from unittest.mock import Mock
-        activity.append_activity_records([buy('trade-ref', '2026-10-01T12:00:00Z')])
-        activity.bind_legacy_account('KRAKEN', 'EUR', 'first-key')
+        activity.append_activity_records([buy('trade-ref', '2026-10-01T12:00:00Z', 'first-key')])
         api = Mock()
         api.normalize_bot_buy.return_value = [buy('trade-ref', '2026-10-05T12:00:00Z')]
         bot.persist_bot_buy(api, {}, {'exchange':'KRAKEN','quote':'EUR','account_identity':'second-key'}, 'event', 0)

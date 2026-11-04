@@ -102,10 +102,6 @@ def unpack(payload):
             if created.tzinfo is None:
                 raise ValueError("Invalid backup timestamp.")
             expected = SCOPES[manifest["scope"]]
-            # Earlier Config archives predate saved pause controls. Keep the
-            # current controls when restoring one of those archives.
-            if manifest["scope"] == "config" and "controls.json" not in data:
-                expected = expected - {"controls.json"}
             if set(data) != expected or manifest["files"] != {
                 name: hashlib.sha256(value).hexdigest() for name, value in data.items()
             }:
@@ -184,21 +180,6 @@ def _records(path):
                 raise ValueError("Activity index and payload disagree.")
             records[record["id"]] = record
         return records
-
-
-def _metadata(path):
-    with closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True)) as db:
-        rows = dict(db.execute("SELECT key,value FROM metadata"))
-    if any(
-        not isinstance(key, str)
-        or not isinstance(value, str)
-        or len(key) > 256
-        or len(value) > 256
-        or not (key == "json_migrated" or key.startswith("legacy_account:"))
-        for key, value in rows.items()
-    ):
-        raise ValueError("Invalid Activity account metadata.")
-    return rows
 
 
 def _unresolved(records):
@@ -313,27 +294,23 @@ class Backups:
             scope = manifest["scope"]
             if scope not in ("full", "config"):
                 raise ValueError("Initial setup requires a Full or Config backup with login credentials.")
-        required = SCOPES[scope] - {"controls.json"} if scope == "config" else SCOPES[scope]
+        required = SCOPES[scope]
         if not required <= data.keys():
             raise ValueError("Backup does not contain the selected restore scope.")
         restore_files = SCOPES[scope] & data.keys()
         with activity._ACTIVITY_LOCK, tempfile.TemporaryDirectory(dir=self.directory, prefix=".restore-") as tmp:
-            records, metadata = {}, {}
+            records = {}
             if scope != "config":
                 incoming = Path(tmp) / "activity.sqlite3"
                 incoming.write_bytes(data["activity.sqlite3"])
                 os.chmod(incoming, 0o600)
                 records = _records(incoming)
-                metadata = _metadata(incoming)
             if _unresolved(records):
                 raise ValueError("Backup contains unresolved withdrawals; restore is blocked.")
             with activity._db():
                 pass
             current_path = self.directory / "activity.sqlite3"
             current = _records(current_path)
-            old_metadata = _metadata(current_path)
-            if any(key in old_metadata and old_metadata[key] != value for key, value in metadata.items()):
-                raise ValueError("Backup account bindings conflict with existing Activity.")
             if _unresolved(current):
                 raise ValueError("Resolve pending withdrawals before restoring a backup.")
             if any(key in records and records[key] != value for key, value in current.items()):
@@ -402,7 +379,6 @@ class Backups:
                 if scope != "config":
                     with activity._db() as db:
                         db.executemany(activity._INSERT, [activity._values(row) for row in records.values()])
-                        db.executemany("INSERT OR IGNORE INTO metadata VALUES(?,?)", metadata.items())
                 (self.directory / "dashboard.json").unlink(missing_ok=True)
                 shutil.rmtree(journal)
                 _sync_directory(self.directory)

@@ -66,7 +66,7 @@ class PauseTests(unittest.TestCase):
 class ActivityFilterTests(unittest.TestCase):
     def test_filters_are_server_side_and_totals_remain_unfiltered(self):
         from app.data import activity
-        with tempfile.TemporaryDirectory() as tmp, patch.object(activity, 'ACTIVITY_PATH', Path(tmp)/'activity.json'):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(activity, 'ACTIVITY_PATH', Path(tmp)/'activity.sqlite3'):
             activity.append_activity_records([
                 {'id': 'buy', 'row': {'datetime':'2026-01-01T00:00:00Z','type':'Buy','identifier':'BTC','shares':'1','amount':'10','fee':'1','currency':'EUR'}},
                 {'id': 'sim', 'simulated':True,'row': {'datetime':'2026-01-01T00:00:00Z','type':'Buy','identifier':'BTC','shares':'1','amount':'10','fee':'1','currency':'EUR'}},
@@ -115,7 +115,7 @@ class BackupIntegrationTests(unittest.TestCase):
         self.root=Path(self.tmp.name)
         from app.data import activity
         self.activity=activity
-        self.patch=patch.object(activity,'ACTIVITY_PATH',self.root/'activity.json');self.patch.start();self.addCleanup(self.patch.stop)
+        self.patch=patch.object(activity,'ACTIVITY_PATH',self.root/'activity.sqlite3');self.patch.start();self.addCleanup(self.patch.stop)
         from app.core.configuration import ConfigStore
         self.store=ConfigStore(self.root/'config.json')
         self.store.create_account('operator','long dashboard password')
@@ -129,7 +129,6 @@ class BackupIntegrationTests(unittest.TestCase):
     def test_snapshot_includes_wal_and_activity_merge_never_deletes(self):
         from app.data.backup import Backups,decrypt,unpack
         manager=Backups(self.root)
-        self.activity.bind_legacy_account('KRAKEN','EUR','identity')
         filename,raw=manager.create('activity','long backup password')
         self.assertFalse((self.root/'backups').exists())
         self.assertTrue(filename.endswith('.dcabackup'))
@@ -156,16 +155,15 @@ class BackupIntegrationTests(unittest.TestCase):
             for name,value in data.items():archive.writestr(name,value)
         return encrypt(output.getvalue(),password)
 
-    def test_earlier_config_backup_keeps_current_pause(self):
+    def test_config_backup_requires_its_pause_controls(self):
         from app.data.backup import Backups
         manager=Backups(self.root)
         _,raw=manager.create('config','long backup password')
-        raw=self.rewrite_backup(raw,lambda data:data.pop('controls.json'))
-        for controls in [{'paused':False,'until':None},{'paused':True,'until':'2099-01-01T00:00:00Z'}]:
-            with self.subTest(controls=controls):
-                (self.root/'controls.json').write_text(json.dumps(controls))
-                manager.restore(raw,'long backup password','config')
-                self.assertEqual(json.loads((self.root/'controls.json').read_text()),controls)
+        incomplete=self.rewrite_backup(raw,lambda data:data.pop('controls.json'))
+        before=(self.root/'config.json').read_bytes()
+        with self.assertRaises(ValueError):manager.restore(incomplete,'long backup password','config')
+        self.assertEqual((self.root/'config.json').read_bytes(),before)
+
 
     def test_invalid_archived_pause_is_rejected_before_restoring_settings(self):
         from app.data.backup import Backups
@@ -389,15 +387,6 @@ class BackupIntegrationTests(unittest.TestCase):
         self.assertTrue(json.loads((self.root/'controls.json').read_text())['paused'])
         self.assertFalse(journal.exists())
 
-    def test_legacy_account_binding_conflicts_are_rejected_without_changing_history(self):
-        from app.data.backup import Backups
-        self.activity.bind_legacy_account('KRAKEN','EUR','original-account')
-        manager=Backups(self.root);_,raw=manager.create('activity','long backup password')
-        with self.activity._db() as db:
-            db.execute("UPDATE metadata SET value='different-account' WHERE key='legacy_account:KRAKEN:EUR'")
-        with self.assertRaisesRegex(ValueError,'account bindings'):
-            manager.restore(raw,'long backup password','activity')
-        self.assertEqual(len(self.activity.read_activity_records()),1)
 
 class PermissionScopeTests(unittest.TestCase):
     def test_missing_closed_orders_scope_is_not_proven_by_open_orders_success(self):
@@ -479,7 +468,7 @@ class ReviewFixTests(unittest.TestCase):
             target=Path(tmp);store=ConfigStore(target/'config.json')
             store.create_account('bootstrap','new dashboard password')
             (target/'state.json').write_text('{}')
-            with patch.object(self.activity,'ACTIVITY_PATH',target/'activity.json'):
+            with patch.object(self.activity,'ACTIVITY_PATH',target/'activity.sqlite3'):
                 account=Runtime(store,target/'state.json')
                 account.backup({'scope':'full','password':'long backup password','current_password':'new dashboard password','archive':base64.b64encode(raw).decode()},restore=True)
                 self.assertEqual(store.first_started_at,'2026-01-01T00:00:00Z')
@@ -500,7 +489,7 @@ class ReviewFixTests(unittest.TestCase):
 class ActivitySearchTests(unittest.TestCase):
     def test_search_matches_hidden_attributes_unicode_and_dates_across_pages(self):
         from app.data import activity
-        with tempfile.TemporaryDirectory() as tmp, patch.object(activity, 'ACTIVITY_PATH', Path(tmp)/'activity.json'):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(activity, 'ACTIVITY_PATH', Path(tmp)/'activity.sqlite3'):
             for i in range(12):
                 activity.append_activity_records([{'id':str(i),'exchange':'KRAKEN','withdrawalId':'Überweisung-123' if i==11 else 'other','row':{'datetime':'2026-01-02T12:34:00Z','type':'Buy','identifier':'BTC','shares':'0.001','price':'100','amount':'10','fee':'1','currency':'EUR'}}])
             rows,total,page,totals,_=activity.read_report(0,2000000000000,limit=5,search='ÜBERWEISUNG-123 kraken')
@@ -519,7 +508,7 @@ class ActivitySearchTests(unittest.TestCase):
 
     def test_search_uses_the_tables_browser_timezone_at_midnight(self):
         from app.data import activity
-        with tempfile.TemporaryDirectory() as tmp, patch.object(activity,'ACTIVITY_PATH',Path(tmp)/'activity.json'):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(activity,'ACTIVITY_PATH',Path(tmp)/'activity.sqlite3'):
             activity.append_activity_records([{'id':'midnight','row':{'datetime':'2026-01-01T23:30:00Z','type':'Buy','identifier':'BTC','shares':'1','amount':'10','price':'10','fee':'0','currency':'EUR'}}])
             self.assertEqual(activity.read_report(0,2000000000000,search='02/01/2026 00:30',search_timezone='Europe/Berlin')[1],1)
             self.assertEqual(activity.read_report(0,2000000000000,search='02/01/2026 00:30',search_timezone='UTC')[1],0)

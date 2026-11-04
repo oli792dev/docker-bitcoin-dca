@@ -1,4 +1,4 @@
-"""Bitcoin-only trading, legacy-history isolation, and configuration regressions."""
+"""Bitcoin-only trading, asset isolation, and configuration regressions."""
 from activity_helpers import totals_from_records
 import os
 import time
@@ -23,7 +23,7 @@ class BitcoinOnlyTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
-        for name, value in [('ACTIVITY_PATH', self.directory / 'activity.json'),
+        for name, value in [('ACTIVITY_PATH', self.directory / 'activity.sqlite3'),
                             ('SNAPSHOT_PATH', self.directory / 'dashboard.json')]:
             replacement = patch.object(activity, name, value)
             replacement.start()
@@ -56,7 +56,7 @@ class BitcoinOnlyTests(unittest.TestCase):
 
 
     def test_live_purchase_uses_bitcoin_interface_and_market(self):
-        # Even a legacy caller's base setting cannot select another asset.
+        # Extra caller fields cannot select another asset.
         self.settings['base'] = 'ETH'
         api = Mock(); api.fiat_deposits.return_value=[]
         api.balance.return_value = Decimal('100')
@@ -163,7 +163,7 @@ class BitcoinOnlyTests(unittest.TestCase):
                                         'EUR', 'test', 1)
         self.assertEqual(rows[0]['row']['identifier'], 'BTC')
 
-    def test_legacy_history_is_preserved_but_not_counted(self):
+    def test_non_bitcoin_activity_is_preserved_but_not_counted(self):
         bitcoin, ether = self.record('BTC'), self.record('ETH')
         ether['row']['datetime'] = '2026-10-25T12:00:00Z'
         activity.append_activity_records([bitcoin, ether])

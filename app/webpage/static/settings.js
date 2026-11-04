@@ -86,7 +86,6 @@ const savedTimezone=initial.settings.timezone;if(typeof savedTimezone==='string'
 for(const input of document.querySelectorAll('[data-setting]')){const v=initial.settings[input.id];if(v===undefined)continue;if(input.type==='checkbox')input.checked=v;else input.value=input.id==='check_interval_seconds'?v/60:v}
 $('accountPanel').hidden=!initial.createAccount;$('settingsForm').hidden=initial.createAccount;if(document.body)document.body.classList.toggle('settings-active',!initial.createAccount);
 const showCredentials=Boolean($('dashboardCredentials'));if(showCredentials)$('username').value=initial.username||'';if(!initial.complete){$('pageHeading').textContent=t('2. Configure your bot');$('back').hidden=true}
-if(showCredentials){$('passwordRequired').hidden=!initial.passwordChangeRequired;if(initial.passwordChangeRequired){$('password').required=true;$('current_password').required=true}}
 if(initial.embedded){
  document.body.classList.add('embedded');$('settingsNavigationHeading').hidden=true;$('back').hidden=true;$('pageHeading').hidden=true;
  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('review').open&&!$('discardDialog').open){event.preventDefault();requestSettingsClose()}});
@@ -110,7 +109,7 @@ if(!initial.createAccount){
   settingsTabs.push({id,panel,button});$('settingsTabs').append(button);
  }
  let rememberedTab='botConfiguration';
- try{const storedTab=localStorage.getItem('bitcoinDcaSettingsTab'),saved=storedTab==='dashboardCredentials'?'dashboardOptions':storedTab;if(settingsTabs.some(item=>item.id===saved))rememberedTab=saved}catch(e){}
+ try{const saved=localStorage.getItem('bitcoinDcaSettingsTab');if(settingsTabs.some(item=>item.id===saved))rememberedTab=saved}catch(e){}
  activateSettingsTab(initial.complete?rememberedTab:'exchangeConnection');
  let invalidTabOpened=false;
  $('settingsForm').addEventListener('invalid',event=>{if(invalidTabOpened)return;const item=settingsTabs.find(item=>item.panel.contains(event.target));if(item){activateSettingsTab(item.id);invalidTabOpened=true;setTimeout(()=>{invalidTabOpened=false},0)}},true);

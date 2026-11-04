@@ -54,7 +54,7 @@ class DepositTests(unittest.TestCase):
         settings={'exchange':'KRAKEN','quote':'EUR','live':True,'deposit_day':1,'deposit_time':'12:00','timezone':'UTC'}
         state={};api=Mock();api.fiat_deposits.return_value=[{'id':'bank','timestamp':int(now.timestamp()*1000)-3600000,
             'status':'completed','symbol':'EUR','amount':'200','fee':'0'}]
-        with tempfile.TemporaryDirectory() as root,patch.object(activity,'ACTIVITY_PATH',Path(root)/'activity.json'):
+        with tempfile.TemporaryDirectory() as root,patch.object(activity,'ACTIVITY_PATH',Path(root)/'activity.sqlite3'):
             self.assertEqual(sync_deposits(api,settings,state,now.replace(hour=7),Decimal(0)),([],0))
             api.fiat_deposits.assert_not_called()
             records,inserted=sync_deposits(api,settings,state,now,Decimal(200))

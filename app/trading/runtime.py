@@ -115,7 +115,7 @@ class Runtime:
     def _check_exchange_activity(self):
         """Read-only startup gate; never submit or retry financial requests here."""
         from app.core.logging_utils import log_transition
-        from app.data.activity import withdrawal_records, write_json_atomic
+        from app.data.activity import withdrawal_records
         from app.trading.withdrawals import reconcile_withdrawals
 
         orders = self.api.open_orders()
@@ -143,11 +143,6 @@ class Runtime:
                 "Startup exchange check: waiting for open orders or Bitcoin withdrawals to close; new transactions are paused",
             )
             return False
-        state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
-        # Retire the former manual flag without resetting pending requests or history.
-        if "recoveryRequired" in state:
-            state.pop("recoveryRequired")
-            write_json_atomic(self.state_path, state)
         self.exchange_check_pending = False
         LOG.info("Startup exchange check passed: no open orders or Bitcoin withdrawals; scheduling may resume")
         return True
@@ -169,15 +164,8 @@ class Runtime:
 
         identity = [self.settings["exchange"], self.settings["quote"], account_identity(self.settings)]
         state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
-        if state.get("configuration_account") in (None, identity[:2]):
-            from app.data.activity import bind_legacy_account
-
-            bind_legacy_account(self.settings["exchange"], self.settings["quote"], identity[2])
-            observation = state.get("fiat_observation", {})
-            if observation.get("identity") == identity[:2]:
-                observation["identity"] = identity
         if (
-            state.get("configuration_account", identity) not in (identity, identity[:2])
+            state.get("configuration_account", identity) != identity
             or state.get("configuration_live", self.settings["live"]) != self.settings["live"]
         ):
             if self.unresolved():
@@ -240,8 +228,6 @@ class Runtime:
                 raise ValueError(
                     "Waiting for the automatic exchange check and any open orders or withdrawals to close."
                 )
-            if self.store.snapshot()["account"].get("password_change_required"):
-                raise ValueError("Change your initial dashboard password in Settings first.")
             if not self.session_validator(session):
                 raise ValueError("Your session expired. Sign in again before requesting a withdrawal.")
             if not self.service:
@@ -291,7 +277,7 @@ class Runtime:
                 or values["withdrawals_enabled"]
                 and not previous["settings"]["withdrawals_enabled"]
             )
-            if account.get("password_change_required") or account_changed or sensitive:
+            if account_changed or sensitive:
                 retry = self.password_attempts.consume(account["username"])
                 if retry:
                     raise PasswordConfirmationError("Too many password confirmation attempts. Try again later.", retry)
@@ -300,10 +286,10 @@ class Runtime:
                     raise PasswordConfirmationError("Your current password is incorrect.")
                 self.password_attempts.clear(account["username"])
                 LOG.info("Current password verified for sensitive settings update")
-            if account.get("password_change_required") or account_changed:
+            if account_changed:
                 username = payload.get("username") or account["username"]
                 password = payload.get("password", "")
-                if password or account.get("password_change_required"):
+                if password:
                     account = account_values(username, password)
                 else:
                     if not isinstance(username, str) or not 3 <= len(username.strip()) <= 64:
@@ -525,7 +511,7 @@ class Runtime:
                     raise ValueError(
                         "Initial backup restore is available only on an empty installation without an account."
                     )
-            elif not account or account.get("password_change_required"):
+            elif not account:
                 raise ValueError("Complete dashboard account setup first.")
             attempt_key = "initial-backup-restore" if setup else account["username"]
             attempts = self.setup_restore_attempts if setup else self.password_attempts

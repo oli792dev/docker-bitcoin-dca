@@ -33,9 +33,6 @@ def reconcile_withdrawals(api, settings, force=False, submitted_only=False):
         stamp = int(datetime.fromisoformat(row["datetime"].replace("Z", "+00:00")).timestamp() * 1000)
         first_submission = int(record.get("firstSubmittedAt", stamp))
         last_submission = int(record.get("lastSubmittedAt", stamp))
-        if settings["exchange"] == "BITVAVO" and not record.get("withdrawalId") and "lastSubmittedAt" not in record:
-            # Older records did not retain retries; search their unresolved lifetime.
-            last_submission = max(stamp, int(time.time() * 1000))
         window_start = max(0, min(stamp, first_submission) - 300000)
         window_end = max(stamp, last_submission) + 300000
         checked += 1
@@ -61,9 +58,8 @@ def reconcile_withdrawals(api, settings, force=False, submitted_only=False):
             ):
                 matches.append(candidate)
         if len(matches) != 1:
-            legacy = record.get("withdrawalStatus") == "legacy_unverified"
-            overdue = not legacy and time.time() - stamp / 1000 >= 3600
-            level = logging.DEBUG if legacy else logging.ERROR if overdue else logging.WARNING
+            overdue = time.time() - stamp / 1000 >= 3600
+            level = logging.ERROR if overdue else logging.WARNING
             log_transition(
                 LOG,
                 api,
@@ -74,9 +70,7 @@ def reconcile_withdrawals(api, settings, force=False, submitted_only=False):
                 identifier,
                 "; unresolved for at least one hour, check exchange status" if overdue else "",
             )
-            record["nextVerificationAt"] = time.time() + (
-                86400 if record.get("withdrawalStatus") == "legacy_unverified" else 300
-            )
+            record["nextVerificationAt"] = time.time() + 300
             record["verificationNote"] = "No unique exchange-history match; not exportable."
             update_activity_record(record)
             continue  # Never guess between indistinguishable withdrawals.

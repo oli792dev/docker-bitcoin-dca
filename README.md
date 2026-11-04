@@ -27,7 +27,7 @@ cp .env.example .env
 1. Set `WEB_UI_TLS_HOSTS` in `.env` to your Docker host IP or hostname; separate multiple addresses with commas.
 2. Run `docker compose up -d --build`.
 3. Open `https://<docker-host>:6890` and [trust the local certificate authority](docs/architecture.md#https-and-session-security).
-4. Create a login (password: at least 12 characters). Use the setup wizard to enter your API credentials, test the connection and configure purchases.
+4. Create a login (password: at least 12 characters) and configure the bot, or restore a Full or Config backup and sign in with its saved login.
 
 Grant these API permissions:
 
@@ -49,22 +49,20 @@ Parqet export consolidates purchases between confirmed withdrawals into one Buy 
 
 ## Backups and updates
 
-Keep the `bitcoin-dca` volume: it holds your settings, credentials and history. Protect access to it; API secrets are stored unencrypted.
+Keep the `bitcoin-dca` volume: it contains settings, login and history. API secrets are stored unencrypted; protect access to the volume.
 
-Settings → Backup offers Full (configuration and activities), Activities only, and Config only backups. Enter your current dashboard password and a separate backup password of at least 12 characters. Download the encrypted file and keep its password safely.
+Create encrypted backups in Settings → Backup using your dashboard password and a separate backup password of at least 12 characters. Full saves everything needed to restore the bot; Config saves settings and login; Activities saves history only.
 
-On a fresh installation, restore a Full or Config backup directly on the first setup page, then sign in with the username and password saved in that backup. Only the backup password is needed to restore; no temporary account is required. Activities-only backups cannot initialize an installation. Once an account exists, use Settings → Backup with the current dashboard password. Activities adds history while keeping current settings.
+Restore Full or Config during initial setup, then use the saved login. On an existing installation, restore through Settings → Backup. Activities only adds history. See [backup details](docs/architecture.md#backups-and-restore).
 
-Existing installations using `bitcoin-dca-webui-data`: the old volume is not renamed or deleted. Before updating, pause live transactions, wait for open orders, withdrawals and funding checks to resolve, and download a Full backup. Stop the old container with `docker compose down` (without `-v`) before starting the updated version. The updated Compose file creates `bitcoin-dca`; restore the Full backup on its first setup page to transfer your login, settings and history. Backups exclude TLS certificates, so trust the new installation’s CA afterward. Keep the old volume until the transfer is verified; resume transactions in Settings when ready.
-
-To update:
+Back up before updating:
 
 ```sh
 git pull
 docker compose up -d --build
 ```
 
-Never run `docker compose down -v`: it deletes the data volume. See [Architecture and operation](docs/architecture.md) for technical details, backup rules, security and troubleshooting.
+Never use `docker compose down -v`: it deletes the data volume.
 
 ## Limitations and disclaimer
 

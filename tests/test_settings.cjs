@@ -1,7 +1,7 @@
 /* Setup/settings UI behavior using a small DOM fixture; no browser or exchange access. */
 const assert=require('node:assert/strict'),vm=require('node:vm'),{execFileSync}=require('node:child_process'),path=require('node:path');
 const root=path.resolve(__dirname,'..');
-const page=execFileSync('python3',['-c',`import sys,json;sys.path.insert(0,'.');from app.webpage.settings_ui import PAGE;from app.core.configuration import DEFAULTS;print(PAGE.replace('__INITIAL__',json.dumps(dict(settings={**DEFAULTS,'kraken_api_key_configured':True,'kraken_api_secret_configured':True},username='operator',complete=True,passwordChangeRequired=False,createAccount=False))))`],{cwd:root,encoding:'utf8'});
+const page=execFileSync('python3',['-c',`import sys,json;sys.path.insert(0,'.');from app.webpage.settings_ui import PAGE;from app.core.configuration import DEFAULTS;print(PAGE.replace('__INITIAL__',json.dumps(dict(settings={**DEFAULTS,'kraken_api_key_configured':True,'kraken_api_secret_configured':True},username='operator',complete=True,createAccount=False))))`],{cwd:root,encoding:'utf8'});
 const script=page.match(/<script>([\s\S]*?)<\/script>/)[1];
 class Element{
  constructor(tag='div'){this.style={};this.tag=tag;this.value='';this.type='';this.dataset={};this.children=[];this.listeners={};this.hidden=false;this.disabled=false;this.checked=false;this.textContent='';this.options=[{},{}];this.classList={toggle(){},add(){}}}
@@ -66,7 +66,7 @@ async function event(id,name='click'){if(id==='confirm'&&!elements.passwordConfi
 })().catch(error=>{console.error(error);process.exitCode=1});
 
 // Step two uses the actual server-rendered page without Login Credentials.
-const setupPage=execFileSync('python3',['-c',`import sys;from types import SimpleNamespace;sys.path.insert(0,'.');from app.core.configuration import DEFAULTS;from app.webpage.settings_ui import settings_page;print(settings_page(SimpleNamespace(public=lambda:dict(settings={**DEFAULTS,'timezone':'Pacific/Chatham'},username='operator',complete=False,passwordChangeRequired=False))))`],{cwd:root,encoding:'utf8'});
+const setupPage=execFileSync('python3',['-c',`import sys;from types import SimpleNamespace;sys.path.insert(0,'.');from app.core.configuration import DEFAULTS;from app.webpage.settings_ui import settings_page;print(settings_page(SimpleNamespace(public=lambda:dict(settings={**DEFAULTS,'timezone':'Pacific/Chatham'},username='operator',complete=False))))`],{cwd:root,encoding:'utf8'});
 const setupElements={};
 class SetupElement extends Element{append(...children){for(const child of children){child.parentElement=this;this.children.push(child);if(child.id)setupElements[child.id]=child}}}
 for(const match of setupPage.matchAll(/<(\w+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)){const el=new SetupElement(match[1]);el.id=match[3];el.type=(match[2].match(/type="([^"]+)"/)||[])[1]||'';if(match[2].includes('data-setting'))el.dataset.setting='';setupElements[el.id]=el}

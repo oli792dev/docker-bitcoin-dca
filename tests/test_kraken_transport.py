@@ -178,7 +178,7 @@ class KrakenTransportTests(unittest.TestCase):
                     'withdraw_threshold': Decimal('1000'), 
                     'startup_delay_seconds': 0, 'order_status_check_seconds': 30}
         with tempfile.TemporaryDirectory() as directory, \
-                patch.object(activity, 'ACTIVITY_PATH', Path(directory) / 'activity.json'), \
+                patch.object(activity, 'ACTIVITY_PATH', Path(directory) / 'activity.sqlite3'), \
                 patch.object(bot, 'read_state', return_value={}), patch.object(bot, 'save_state'), \
                 patch.object(bot, 'update_dashboard_snapshot'), patch.object(bot, 'update_dashboard_schedule'):
             with patch.object(self.api,'fiat_deposits',return_value=[]): bot.run_once(self.api, settings, 300)

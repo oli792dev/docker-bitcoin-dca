@@ -1,4 +1,4 @@
-"""Transactional activity ledger with indexed queries and one-time JSON migration."""
+"""Transactional activity ledger with indexed queries."""
 
 import json
 import logging
@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.data.storage import write_json_atomic
 
-ACTIVITY_PATH = Path("/webui-data/activity.json")  # Legacy source; never overwritten.
+ACTIVITY_PATH = Path("/webui-data/activity.sqlite3")
 SNAPSHOT_PATH = Path("/webui-data/dashboard.json")
 _ACTIVITY_LOCK = RLock()
 
@@ -35,12 +35,7 @@ def withdrawal_gross(record):
         return Decimal(str(record["grossWithdrawalAmountBtc"]))
     row = record["row"]
     amount = Decimal(str(row.get("shares", "0")))
-    if record.get("netWithdrawalAmount") or record.get("exchange") == "KRAKEN":
-        fee = record.get("networkFeeBtc")
-        if fee is None:
-            price = Decimal(str(row.get("price", "0")))
-            fee = Decimal(str(row.get("fee", "0"))) / price if price > 0 else Decimal(0)
-        amount += Decimal(str(fee))
+    amount += Decimal(str(record.get("networkFeeBtc", "0")))
     return amount
 
 
@@ -69,7 +64,7 @@ def _values(record):
         row.get("amount", "0"),
         row.get("fee", "0"),
         str(withdrawal_gross(record)) if row.get("type") == "TransferOut" else "0",
-        record.get("withdrawalStatus", "legacy_unverified") if row.get("type") == "TransferOut" else "",
+        record.get("withdrawalStatus", "unverified") if row.get("type") == "TransferOut" else "",
         json.dumps(record, ensure_ascii=False),
     )
 
@@ -79,7 +74,7 @@ _INSERT = "INSERT OR IGNORE INTO activity VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"
 
 @contextmanager
 def _db():
-    path = ACTIVITY_PATH.with_suffix(".sqlite3")
+    path = ACTIVITY_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     with _ACTIVITY_LOCK:
         connection = sqlite3.connect(path, timeout=30)
@@ -102,27 +97,6 @@ def _db():
                     CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
                     CREATE TABLE IF NOT EXISTS cache(key TEXT PRIMARY KEY,value TEXT,updated REAL);
                 """)
-                if not connection.execute("SELECT 1 FROM metadata WHERE key='json_migrated'").fetchone():
-                    source = ACTIVITY_PATH if ACTIVITY_PATH.exists() else None
-                    if source:
-                        payload = json.loads(source.read_text(encoding="utf-8"))
-                        records = payload.get("records", []) if isinstance(payload, dict) else payload
-                        if not isinstance(records, list):
-                            raise ValueError("Invalid legacy activity list")
-                        snapshot = read_dashboard_snapshot()
-                        for i, record in enumerate(records):
-                            if not isinstance(record, dict) or not isinstance(record.get("row"), dict):
-                                continue
-                            record = dict(record)
-                            record.setdefault("id", f"legacy:{i}")
-                            record.setdefault("exchange", "")
-                            if snapshot.get("exchange"):
-                                record.setdefault("legacyExchangeHint", snapshot["exchange"])
-                            if record["row"].get("type") == "TransferOut":
-                                record.setdefault("withdrawalStatus", "legacy_unverified")
-                            connection.execute(_INSERT, _values(record))
-                    connection.execute("INSERT INTO metadata VALUES('json_migrated','1')")
-                    connection.commit()
                 connection.execute("PRAGMA user_version=1")
                 connection.commit()
             yield connection
@@ -172,11 +146,8 @@ def parqet_interval_records(start, end):
         account_filter = ""
         account_args = ()
         if identity:
-            account_filter = """ AND (json_extract(payload,'$.accountIdentity')=? OR (
-                json_extract(payload,'$.accountIdentity') IS NULL AND
-                EXISTS(SELECT 1 FROM metadata WHERE key='legacy_account:' || activity.exchange || ':' || activity.currency AND value=?)
-            ))"""
-            account_args = (identity, identity)
+            account_filter = " AND json_extract(payload,'$.accountIdentity')=?"
+            account_args = (identity,)
         previous = db.execute(
             "SELECT max(timestamp) FROM activity WHERE "
             + completed
@@ -270,7 +241,7 @@ def _matches_search(payload, query, zone=UTC):
         "failed": "fehlgeschlagen",
         "canceled": "cancelled storniert abgebrochen",
         "cancelled": "canceled storniert abgebrochen",
-        "legacy_unverified": "unverified unbestätigt ungeprüft",
+        "unverified": "unverified unbestätigt ungeprüft",
     }.get(status, "")
     symbol = {"EUR": "€", "USD": "$"}.get(row.get("currency"), "")
     for field in ("amount", "price", "fee"):
@@ -297,7 +268,7 @@ def read_report(start, end, page=1, limit=20, kind="", status="", search="", sea
         "failed",
         "canceled",
         "cancelled",
-        "legacy_unverified",
+        "unverified",
     ):
         raise ValueError("Invalid Activity filter.")
     if not isinstance(search, str) or len(search) > 256:
@@ -400,21 +371,6 @@ def get_activity_record(activity_id):
         return json.loads(row[0]) if row else None
 
 
-def bind_legacy_account(exchange, quote, account_identity):
-    """Bind untagged history once; changing API keys cannot claim another account's history."""
-    key = "legacy_account:" + exchange + ":" + quote
-    with _db() as db:
-        db.execute("INSERT OR IGNORE INTO metadata(key,value) VALUES(?,?)", (key, account_identity))
-
-
-def legacy_account_matches(exchange, quote, account_identity):
-    with _db() as db:
-        row = db.execute(
-            "SELECT value FROM metadata WHERE key=?", ("legacy_account:" + exchange + ":" + quote,)
-        ).fetchone()
-        return row is not None and row[0] == account_identity
-
-
 def latest_real_buy(exchange=None, account_identity=None):
     with _db() as db:
         where = "asset='BTC' AND kind='Buy' AND simulated=0"
@@ -423,12 +379,8 @@ def latest_real_buy(exchange=None, account_identity=None):
             where += " AND exchange=?"
             args.append(exchange)
         if account_identity:
-            where += """ AND (
-                json_extract(payload,'$.accountIdentity')=? OR (
-                    json_extract(payload,'$.accountIdentity') IS NULL AND
-                    EXISTS(SELECT 1 FROM metadata WHERE key='legacy_account:' || activity.exchange || ':' || activity.currency AND value=?)
-                ))"""
-            args.extend((account_identity, account_identity))
+            where += " AND json_extract(payload,'$.accountIdentity')=?"
+            args.append(account_identity)
         row = db.execute(
             "SELECT timestamp FROM activity WHERE " + where + " ORDER BY timestamp DESC LIMIT 1", args
         ).fetchone()

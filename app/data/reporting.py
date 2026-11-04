@@ -84,19 +84,9 @@ def _purchase_cost_eur(row, rates):
     return cost * rates[trade_date]
 
 
-def _withdrawal_net_btc(record, exchange):
+def _withdrawal_net_btc(record):
     row = record["row"]
     amount = Decimal(str(row.get("shares", "0")))
-    if record.get("netWithdrawalAmount"):
-        return amount
-
-    # Older Bitvavo records stored the gross amount requested from the exchange.
-    # Their fiat fee is converted back to BTC using the recorded withdrawal price.
-    if record.get("exchange", exchange) == "BITVAVO":
-        price = Decimal(str(row.get("price", "0")))
-        fee_quote = Decimal(str(row.get("fee", "0")))
-        if price > 0 and fee_quote > 0:
-            amount -= fee_quote / price
     return max(amount, Decimal(0))
 
 
@@ -138,7 +128,7 @@ def parqet_aggregate_rows(records, exchange):
     rates = _usd_eur_rates(purchases)
     total_cost_eur = sum((_purchase_cost_eur(row, rates) for row in purchases), Decimal(0))
     net_withdrawn_btc = sum(
-        (_withdrawal_net_btc(record, exchange) for record in withdrawals),
+        (_withdrawal_net_btc(record) for record in withdrawals),
         Decimal(0),
     )
     if total_cost_eur <= 0 or net_withdrawn_btc <= 0:

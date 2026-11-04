@@ -24,7 +24,7 @@ class LocalizationTests(TestCase):
 
     def test_saved_language_is_in_settings_but_user_values_are_not_translated(self):
         values={**DEFAULTS,'language':'de','kraken_withdraw_key':'Before </script>'}
-        page=settings_page(SimpleNamespace(public=lambda:dict(settings=values,username='Enabled',complete=True,passwordChangeRequired=False)))
+        page=settings_page(SimpleNamespace(public=lambda:dict(settings=values,username='Enabled',complete=True)))
         self.assertIn('<label for="language">Sprache</label>',page)
         self.assertIn('>Prüfen und speichern<',page)
         self.assertIn('"username": "Enabled"',page)

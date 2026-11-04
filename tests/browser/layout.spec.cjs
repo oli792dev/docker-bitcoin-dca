@@ -42,6 +42,13 @@ test('initial setup restores a login backup before creating an account', async (
   await page.route('https://dca.test/',route=>restored?route.fulfill({contentType:'text/html',body:pages['/login']}):route.fallback());
   await page.goto('/setup');
   await expect(page.locator('#accountForm')).toBeVisible();
+  await expect(page.locator('#setupRestoreForm')).toBeHidden();
+  const restoreQuestion=page.locator('#setupRestore>summary');
+  await expect(restoreQuestion).toHaveText('Restore a backup instead?');
+  const account=await rect(page.locator('#accountForm'));
+  expect((await rect(restoreQuestion)).y).toBeGreaterThanOrEqual(account.y+account.height);
+  await page.screenshot({path:test.info().outputPath('initial-setup-collapsed.png'),fullPage:true});
+  await restoreQuestion.click();
   await expect(page.locator('#setupRestoreForm')).toBeVisible();
   await expect(page.locator('#setupRestoreHint')).toContainText('Full or Config');
   await noPageOverflow(page);
@@ -396,4 +403,28 @@ test('settings switches change only when their control is pressed',async({page,i
   }
  }
  await noPageOverflow(page);
+});
+
+test('dashboard surfaces keep equal bottom insets', async ({page}) => {
+  await page.route('**/api/schedule',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({withdrawalsEnabled:true,quote:'EUR',quoteBalance:600,btcBalance:.01,price:60000,withdrawThreshold:2000,forecastDetails:{remainingBtc:.02,remainingPurchases:155,quote:'EUR'}})}));
+  await page.goto('/');
+  await expect(page.locator('#investedTotal')).toContainText('501');
+  await page.locator('.report-details>summary').click();
+  await expect(page.locator('.report-details')).toHaveAttribute('open','');
+  await expect(page.locator('.report-extra')).toBeVisible();
+  const gaps=await page.evaluate(()=>{
+    const bottomGap=(box,content)=>box.getBoundingClientRect().bottom-content.getBoundingClientRect().bottom;
+    return [
+      bottomGap(document.querySelector('.plan-card'),document.querySelector('.purchase-explanation>summary>span')),
+      bottomGap(document.querySelector('#automaticWithdrawalCard'),document.querySelector('#forecastProgress')),
+      ...['.report-primary','.report-extra'].map(selector=>{
+        const box=document.querySelector(selector);
+        const lastBottom=Math.max(...[...box.querySelectorAll('.value,.small')].filter(el=>el.getClientRects().length&&el.textContent.trim()).map(el=>el.getBoundingClientRect().bottom));
+        return box.getBoundingClientRect().bottom-lastBottom;
+      })
+    ];
+  });
+  expect(Math.max(...gaps)-Math.min(...gaps),JSON.stringify(gaps)).toBeLessThanOrEqual(1);
+  await noPageOverflow(page);
+  await page.screenshot({path:test.info().outputPath('dashboard-spacing.png'),fullPage:true});
 });

@@ -22,7 +22,7 @@ class AuditFixTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         for owner, name, value in (
-            (activity, 'ACTIVITY_PATH', self.root / 'activity.json'),
+            (activity, 'ACTIVITY_PATH', self.root / 'activity.sqlite3'),
             (activity, 'SNAPSHOT_PATH', self.root / 'dashboard.json'),
             (bot, 'STATE_PATH', self.root / 'state.json'),
         ):
@@ -90,7 +90,7 @@ class AuditFixTests(unittest.TestCase):
 
     def test_old_bitvavo_checkpoint_never_uses_available_balance_to_verify_booked_credit(self):
         now = datetime(2026, 11, 1, 9, tzinfo=UTC)
-        state = {'fiat_observation':dict(identity=['BITVAVO','EUR'], balance='100', checkedAt=now.isoformat())}
+        state = {'fiat_observation':dict(identity=['BITVAVO','EUR'], balance='100', checkedAt=now.isoformat(), historyStartAt=now.isoformat())}
         api = object.__new__(Bitvavo)
         api.fiat_deposits = Mock(return_value=[dict(
             id='first', timestamp=int((now + timedelta(seconds=1)).timestamp() * 1000),

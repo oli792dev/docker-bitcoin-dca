@@ -7,7 +7,7 @@ def totals_from_records(records):
     groups={}
     for record in bitcoin_activity_records(records):
         row=record['row']
-        status=record.get('withdrawalStatus','legacy_unverified') if row['type']=='TransferOut' else ''
+        status=record.get('withdrawalStatus','unverified') if row['type']=='TransferOut' else ''
         key=(row.get('currency',''),row['type'],bool(record.get('simulated')),status)
         g=groups.setdefault(key,dict(currency=key[0],kind=key[1],simulated=key[2],status=status,
                                     count=0,shares=Decimal(0),amount=Decimal(0),fee=Decimal(0),gross=Decimal(0)))

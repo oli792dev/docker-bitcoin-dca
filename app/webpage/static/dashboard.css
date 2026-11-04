@@ -395,7 +395,6 @@ __DESIGN_CSS__
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)[open]>summary::before{transform:rotate(90deg);}
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary:is(:hover,:active){color:var(--text);background:transparent;}
 /* Quiet surfaces and a deliberate hierarchy for financial data. */
-.redesigned .balance-overview{padding-bottom:28px;}
 .redesigned .metric>.value{font-weight:600;letter-spacing:-.035em;line-height:1.22;margin-top:8px;}
 .redesigned .balance-overview>.metric:first-child>.value{font-size:clamp(1.65rem,3vw,2.2rem);}
 .redesigned .value-unit{font-size:.62em;font-weight:500;letter-spacing:0;color:var(--muted);white-space:nowrap;}
@@ -417,7 +416,6 @@ __DESIGN_CSS__
 .redesigned th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .redesigned .plan-title>span:empty{display:none;}
 @media (max-width:600px){
-.redesigned .balance-overview{padding-bottom:20px;}
 .redesigned .metric>.value{font-size:1.45rem;}
 }
 @media (prefers-contrast:more){
@@ -522,6 +520,7 @@ __DESIGN_CSS__
 /* Labels share their row height so amounts align even when translated labels wrap. */
 @supports(grid-template-rows:subgrid){
  .redesigned :is(.balance-overview,.report-primary,.report-extra)>.metric{display:grid;grid-template-rows:subgrid;grid-row:span 3;row-gap:0;align-self:stretch;align-content:start}
+ .redesigned .report-primary>.metric{grid-row:span 2}
  .redesigned :is(.balance-overview,.report-primary,.report-extra) .metric-label{grid-row:1}
  .redesigned :is(.balance-overview,.report-primary,.report-extra) .metric>.value{grid-row:2;align-self:start}
  .redesigned :is(.balance-overview,.report-primary,.report-extra) .metric>.small{grid-row:3;align-self:start}
@@ -535,8 +534,11 @@ __DESIGN_CSS__
 
 #activityDetailValues dd,#purchaseExplanation dd{overflow-wrap:anywhere;white-space:pre-wrap;}
 
-.redesigned .purchase-explanation{margin-top:var(--space-sm);color:var(--muted);font-size:.82rem;}
-.redesigned .purchase-explanation>summary{font:inherit;color:inherit;cursor:pointer;}
+.redesigned .purchase-explanation{margin-top:auto;padding-top:var(--space-sm);color:var(--muted);font-size:.82rem;}
+.redesigned .purchase-explanation>summary{display:flex;align-items:flex-end;gap:var(--space-xs);list-style:none;font:inherit;color:inherit;cursor:pointer;}
+.redesigned .purchase-explanation>summary::-webkit-details-marker{display:none;}
+.redesigned .purchase-explanation>summary::before{content:"";width:var(--icon-size);height:var(--icon-size);flex-shrink:0;background:currentColor;-webkit-mask:var(--icon-chevron) center/contain no-repeat;mask:var(--icon-chevron) center/contain no-repeat;}
+.redesigned .purchase-explanation[open]>summary::before{transform:rotate(90deg);}
 .activity-toolbar{display:flex;justify-content:flex-end;margin-bottom:var(--space-md);}
 .activity-toolbar input{width:min(240px,100%);min-width:0;min-height:44px;font-size:.82rem;}
 .redesigned button.activity-date-link{display:inline;min-height:0;min-width:0;padding:0;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;text-align:inherit;white-space:nowrap;}
@@ -553,3 +555,6 @@ __DESIGN_CSS__
 #purchaseExplanation dt{font-size:.76rem;color:var(--muted);margin-bottom:var(--space-xs);}
 #purchaseExplanation dd{margin:0;color:var(--text);}
 @media(max-width:600px){#purchaseExplanation{grid-template-columns:minmax(0,1fr);}}
+
+/* Empty helper text must not reserve space at the edge of a card. */
+.redesigned :is(.metric,.plan-card)>.small:empty,.redesigned #orderSummaryNote:empty{display:none;}

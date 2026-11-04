@@ -24,7 +24,7 @@ class ReviewTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name)
-        for name,value in [('ACTIVITY_PATH',self.root/'activity.json'),('SNAPSHOT_PATH',self.root/'dashboard.json')]:
+        for name,value in [('ACTIVITY_PATH',self.root/'activity.sqlite3'),('SNAPSHOT_PATH',self.root/'dashboard.json')]:
             p=patch.object(activity,name,value);p.start();self.addCleanup(p.stop)
         self.settings={'exchange':'KRAKEN','quote':'EUR','live':True,'timezone':'Europe/Berlin','deposit_day':1,
                        'buy_amount':D(0),'withdrawals_enabled':False,'withdraw_threshold':D(1000),
@@ -55,28 +55,7 @@ class ReviewTests(unittest.TestCase):
         with connect(activity.ACTIVITY_PATH.with_suffix('.sqlite3')) as db:
             self.assertEqual(db.execute('SELECT count(*) FROM activity').fetchone()[0],1)
 
-    def test_failed_ledger_initialization_retries_without_partial_import(self):
-        records=[self.record('first'),self.record('invalid')]
-        records[1]['row']['datetime']='invalid timestamp'
-        activity.ACTIVITY_PATH.write_text(json.dumps(records))
-        with self.assertRaises(ValueError):activity.read_activity_records()
-        import sqlite3
-        with sqlite3.connect(activity.ACTIVITY_PATH.with_suffix('.sqlite3')) as db:
-            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],0)
-            self.assertEqual(db.execute('SELECT count(*) FROM activity').fetchone()[0],0)
-        activity.ACTIVITY_PATH.write_text(json.dumps([self.record('first')]))
-        self.assertEqual(len(activity.read_activity_records()),1)
 
-    def test_json_migration_is_once_and_preserves_source_and_metadata(self):
-        r=self.record('old','TransferOut');r['manual']=True
-        text=json.dumps({'records':[r]});activity.ACTIVITY_PATH.write_text(text)
-        got=activity.read_activity_records()[0]
-        self.assertEqual(got['id'],'old');self.assertEqual(got['row'],r['row']);self.assertTrue(got['manual'])
-        self.assertEqual(got['networkFeeBtc'],'.0001');self.assertEqual(got['withdrawalStatus'],'legacy_unverified')
-        self.assertEqual(activity.ACTIVITY_PATH.read_text(),text)
-        self.assertEqual(activity.append_activity_records([r]),0)
-        activity.ACTIVITY_PATH.write_text('not valid JSON any longer')
-        self.assertEqual(len(activity.read_activity_records()),1)
 
     def test_net_wallet_amount_and_gross_balance_have_distinct_meanings(self):
         buys=self.record();out=self.record('withdraw','TransferOut',status='completed')
@@ -88,7 +67,7 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(activity.ledger_balance(),D('.0045'))
 
     def test_only_confirmed_withdrawals_can_be_exported(self):
-        for status in (None,'legacy_unverified','submitted','failed','canceled'):
+        for status in (None,'unverified','submitted','failed','canceled'):
             self.assertEqual(reporting.parqet_aggregate_rows([self.record(),self.record('w','TransferOut',status=status)],'KRAKEN'),[])
 
     def test_status_lookup_does_not_treat_settled_as_completed(self):

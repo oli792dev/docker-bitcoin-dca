@@ -75,7 +75,7 @@ def account_values(username, password):
         raise ConfigurationError("Username must contain 3–64 characters.", "username")
     if not isinstance(password, str) or not 12 <= len(password) <= 1024:
         raise ConfigurationError("Password must contain 12–1024 characters.", "password")
-    return dict(username=username.strip(), password_hash=password_hash(password), password_change_required=False)
+    return dict(username=username.strip(), password_hash=password_hash(password))
 
 
 def validate(values, previous=None, require_credentials=True):
@@ -203,13 +203,7 @@ class ConfigStore:
     def _read(path):
         os.chmod(path, 0o600)
         data = json.loads(path.read_text())
-        # Retired feature settings must not prevent existing volumes from starting.
-        settings = {
-            key: value
-            for key, value in data["settings"].items()
-            if key not in ("adaptive_dca_enabled", "adaptive_dca_strength")
-        }
-        data["settings"] = validate(settings, require_credentials=data["complete"])
+        data["settings"] = validate(data["settings"], require_credentials=data["complete"])
         return data
 
     def _write(self, data):
@@ -254,7 +248,6 @@ class ConfigStore:
             complete=data["complete"],
             settings=settings,
             username=account["username"] if account else "",
-            passwordChangeRequired=bool(account and account.get("password_change_required")),
         )
 
     def authenticate(self, username, password):

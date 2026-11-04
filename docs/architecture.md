@@ -27,17 +27,33 @@ The named volume `bitcoin-dca` mounts at `/webui-data`:
 - `activity.sqlite3`: activity and historical FX cache.
 - Other files: dashboard snapshot, `report-preferences.json`, first-start timestamp, heartbeat and `tls/` certificates/keys.
 
-JSON writes use private temporary files, atomic replacement and filesystem synchronization. SQLite writes are transactional. Full backups include all listed JSON files and Activity; Config backups include `config.json`, `report-preferences.json` and `controls.json`, and Activities backups only the ledger. File names end in `-full`, `-config` or `-activities`. Full restore includes the installation timestamp; restore reloads the in-memory installation default too. The Backup tab holds the account and ledger locks while SQLite's backup API captures committed WAL data. A versioned ZIP_STORED archive uses an exact file allowlist, SHA-256 manifest and a 32 MiB payload limit; scrypt derives an AES-256-GCM key from the backup password. Encrypted archives are returned directly for download and are not retained in the volume. TLS certificates, derived caches and existing backup files are excluded. Private plaintext staging directories can remain in the volume after an abrupt process kill; protect the volume like its existing plaintext configuration.
-
-Before the first account is created, an empty installation can restore a Full or Config backup using its backup password and then use the archived login. This setup-only endpoint rejects existing accounts, financial state, Activity and Activities-only archives; attempts are limited. All later restores require current-password reauthentication and reject queued/unresolved financial work, conflicting Activity/account bindings and archived pending requests. Full restore requires the archived ledger to contain all existing records unchanged and rejects a rewind of the last order timestamp. Config restore validates and replaces settings/login, report preferences and pause controls while preserving current Activity, installation memory and financial state. Activity-only restore merges validated records and legacy account metadata into the application's existing schema; archived SQL and caches are never installed. A durable rollback journal precedes multi-file changes. Failure rolls back; startup rolls back an interrupted restore before loading settings. An unreadable journal prevents startup. Successful restore invalidates sessions and requires the normal read-only exchange gate before future transactions. Full and Config restore archived pause controls, including their expiry; Activity-only restore retains current controls. Earlier Config archives without controls retain the current value. Rollback after a failed or interrupted restore still forces a persistent pause. Local TLS certificates remain unchanged. Stop the container when making an independent full-volume filesystem backup.
+JSON writes use private temporary files, atomic replacement and filesystem synchronization. SQLite writes are transactional.
 
 Test connection reports funds, orders, history, trade and withdrawal access as proven, denied or unknown using read-only requests. Kraken key metadata can prove write scopes; Bitvavo write scopes remain unknown.
 
 Exchange, currency and active API-key fingerprints separate scheduling/account state and export cycles. Changing the active key is treated as a new account, even for a key rotation; historical activity remains. Secret-only rotation preserves the binding. Unresolved transactions block account changes.
 
+## Backups and restore
+
+| Backup | Contents |
+| --- | --- |
+| Full | Settings, login, pause controls, financial state, report preferences, installation timestamp and Activity |
+| Config | Settings, login, report preferences and pause controls |
+| Activities | Activity records only |
+
+Backups use a versioned archive with an exact file allowlist, SHA-256 manifest and a 32 MiB limit. Scrypt derives an AES-256-GCM encryption key from the backup password. SQLite's backup API captures committed data while account and ledger locks are held. TLS certificates and derived caches are excluded. Downloads are not retained; temporary plaintext files can remain after an abrupt process kill.
+
+An empty installation can restore Full or Config before account creation using the backup password. Sign in afterward with the saved login. Activities-only backups cannot initialize an installation. Existing installations require the current dashboard password for every restore.
+
+Restore rejects queued or unresolved financial work, conflicting Activity records and archived pending requests. Full cannot remove current Activity or rewind the last order timestamp. Config preserves financial state and Activity; Activities merges history without overwriting entries. Archived SQL is never installed.
+
+A durable rollback journal protects multi-file changes. Failed or interrupted restores roll back and force a pause; an unreadable journal blocks startup. Successful restore reloads configuration, invalidates sessions and requires a read-only exchange check before new transactions. Full and Config restore their saved pause controls; Activities retains the current controls. Existing TLS certificates remain unchanged.
+
+Stop the container before making an independent filesystem backup of the volume.
+
 ## Execution and recovery
 
-- After startup delay, verify open orders and BTC withdrawals before new transactions. Saved pending requests are reconciled; uncertain non-idempotent submissions are not blindly repeated. Idempotent withdrawal retries persist their attempt times before submission. Verification searches the complete attempt window, requires a unique match and records the exchange timestamp. Older Bitvavo records without attempt metadata are checked over their unresolved lifetime.
+- After startup delay, verify open orders and BTC withdrawals before new transactions. Saved pending requests are reconciled; uncertain non-idempotent submissions are not blindly repeated. Idempotent withdrawal retries persist their attempt times before submission. Verification searches the complete attempt window, requires a unique match and records the exchange timestamp.
 - An explicit pause gates all new buys and withdrawals, including simulation, manual confirmation and retries. Read-only account checks and order/withdrawal reconciliation continue. Live trading and pause are saved together; disabling live trading clears pause. The restrictive pause is persisted before live activation, and pause is cleared only after the configuration is durable. Purchase deadlines are retained.
 - Purchase interval = UTC time from the last purchase to the active deposit deadline ÷ `(affordable purchases + 1)`, minimum 60 seconds. Fees and exchange limits apply; the final purchase can use the remaining budget.
 - Deposit dates use the configured timezone and local time. Short months use their last day; daylight-saving gaps move forward and repeated times use the first occurrence.

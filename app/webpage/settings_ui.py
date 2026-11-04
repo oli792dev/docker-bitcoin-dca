@@ -20,11 +20,7 @@ PAGE = (
 
 def settings_page(store, create_account=False, embedded=False):
     # The unauthenticated first step must not expose imported credentials or destinations.
-    data = (
-        dict(settings={}, complete=False, username="", passwordChangeRequired=False)
-        if create_account
-        else store.public()
-    )
+    data = dict(settings={}, complete=False, username="") if create_account else store.public()
     data["pause"] = {"paused": False, "until": None}
     data["pauseUnavailable"] = False
     data["recoveryRequired"] = False
@@ -40,7 +36,7 @@ def settings_page(store, create_account=False, embedded=False):
     data["embedded"] = embedded
     encoded = json.dumps(data).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     page = PAGE
-    if not data["complete"] and not data["passwordChangeRequired"]:
+    if not data["complete"]:
         page = re.sub(r"<!--dashboard-credentials-start-->.*?<!--dashboard-credentials-end-->", "", page, flags=re.S)
     page = apply_appearance(page.replace("__INITIAL__", encoded), data["settings"].get("appearance", "system"))
     language = data["settings"].get("language", "en")

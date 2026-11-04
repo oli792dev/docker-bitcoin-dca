@@ -24,7 +24,7 @@ class FundingRecoveryTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         for owner, name, value in (
-            (activity, 'ACTIVITY_PATH', self.root / 'activity.json'),
+            (activity, 'ACTIVITY_PATH', self.root / 'activity.sqlite3'),
             (bot, 'STATE_PATH', self.root / 'state.json'),
         ):
             replacement = patch.object(owner, name, value)
@@ -119,17 +119,6 @@ class FundingRecoveryTests(unittest.TestCase):
             reconcile_withdrawals(api,settings,force=True)
         self.assertEqual(activity.read_activity_records()[0]['withdrawalStatus'],'submitted')
 
-    def test_legacy_bitvavo_record_can_find_a_late_accepted_request(self):
-        api = self.withdrawal_api(True)
-        api.accepted_at = 1800000316000
-        activity.append_activity_records([dict(
-            id='withdrawal:legacy',exchange='BITVAVO',withdrawalStatus='submitted',
-            withdrawalAddress='bc1-test',grossWithdrawalAmountBtc='.0045',
-            row=dict(datetime=datetime.fromtimestamp(1800000000,UTC).isoformat(),type='TransferOut',
-                     identifier='BTC',shares='.0045',amount='364.5',price='81000',fee='0',currency='EUR'))])
-        with patch.object(bot.time,'time',return_value=1800000316):
-            reconcile_withdrawals(api,dict(exchange='BITVAVO'),force=True)
-        self.assertEqual(activity.read_activity_records()[0]['withdrawalStatus'],'completed')
 
     def test_replayed_old_deposit_is_excluded_from_a_later_credit_verification(self):
         now = datetime(2026,11,1,9,tzinfo=UTC)

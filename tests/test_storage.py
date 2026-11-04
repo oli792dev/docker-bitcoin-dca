@@ -42,7 +42,7 @@ class StorageTests(TestCase):
         self.assertEqual(json.loads((self.volume/'state.json').read_text()),state)
 
     def test_missing_state_initializes_without_manual_recovery(self):
-        for filename,value in [('config.json',{'complete':True}),('activity.json',{'records':[]})]:
+        for filename,value in [('config.json',{'complete':True}),('activity.sqlite3',{'records':[]})]:
             with self.subTest(filename=filename):
                 self.put(filename,value)
                 with self.assertLogs(storage.LOG,level='WARNING'):storage.prepare_storage(self.volume)
