@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 
 import requests
 
-from app.exchanges.exchange_errors import DefinitiveRejection
+from app.exchanges.exchange_errors import DefinitiveRejection, WithdrawalNotReady
 from app.exchanges.read_cache import ReadCache
 
 BASE_URL = "https://api.kraken.com/0"
@@ -392,8 +392,8 @@ class Kraken:
             )
         return deposits
 
-    def non_deposit_balance_change(self, currency, start_ms, end_ms, baseline, current):
-        """A full ledger chain proves booked proceeds without inventing deposits.
+    def non_deposit_balance_change(self, currency, start_ms, end_ms, baseline, current, deposit_total=Decimal(0)):
+        """Reconcile the full ledger chain, including independently confirmed deposits.
 
         Empty reads or a missing/delayed ledger row never release the funding gate.
         Both endpoint balances and every intervening balance must reconcile.
@@ -418,6 +418,7 @@ class Kraken:
                 raise KrakenAPIError("Invalid Kraken ledger anchor")
         rows = self._fiat_ledger(currency, start_ms, end_ms, "all")
         entries = []
+        ledger_deposits = Decimal(0)
         for item in rows.values():
             timestamp = int(Decimal(str(item["time"])) * 1000)
             if _canonical_asset(item.get("asset", "")) != currency or not start_ms <= timestamp <= end_ms:
@@ -427,13 +428,14 @@ class Kraken:
             balance = Decimal(str(item["balance"]))
             if not all(value.is_finite() for value in (amount, fee, balance)) or fee < 0:
                 raise KrakenAPIError("Invalid Kraken account ledger amounts")
-            # Only an explicitly booked trade credit proves sale proceeds.
-            # Unknown credits, including deposit subtypes, remain unverified.
-            if amount > 0 and item.get("type") != "trade":
-                return False
+            if amount > 0:
+                if item.get("type") == "deposit" and not item.get("subtype"):
+                    ledger_deposits += amount - fee
+                elif item.get("type") != "trade":
+                    return False
             entries.append((timestamp, amount - fee, balance))
         if not entries:
-            return baseline == current
+            return baseline == current and deposit_total == 0
         # Equal-time rows may have unspecified API ordering. A mismatched chain
         # remains blocked rather than guessing an ordering or omitting a row.
         running = baseline
@@ -441,7 +443,7 @@ class Kraken:
             running += change
             if running != balance:
                 return False
-        return running == current
+        return running == current and ledger_deposits == deposit_total
 
     def btc_withdrawals(self, start_ms=0, end_ms=None):
         params = {
@@ -638,7 +640,7 @@ class Kraken:
         fee = Decimal(str(info.get("fee", "0")))
         net_amount = amount - fee
         if net_amount <= 0:
-            raise ValueError("Kraken withdrawal fee is greater than or equal to the available BTC balance")
+            raise WithdrawalNotReady("Kraken withdrawal fee is greater than or equal to the available BTC balance")
         return {
             "asset": "XBT",
             "key": self.withdraw_key,

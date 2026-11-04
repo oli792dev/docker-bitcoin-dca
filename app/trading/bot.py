@@ -32,7 +32,7 @@ from app.data.activity import (
 )
 from app.data.storage import STATE_PATH, prepare_storage
 from app.exchanges.contracts import AccountReadExchange
-from app.exchanges.exchange_errors import DefinitiveRejection, UncertainWithdrawalError
+from app.exchanges.exchange_errors import DefinitiveRejection, UncertainWithdrawalError, WithdrawalNotReady
 from app.exchanges.market_prices import collect_prices
 from app.trading.account import serialized
 from app.trading.deposits import sync_deposits
@@ -261,10 +261,15 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
     if manual_request is None and settings["live"]:
         reconcile_withdrawals(api, settings)
         last_record = get_activity_record(state.get("last_withdrawal", {}).get("activityId", ""))
-        if last_record and last_record.get("withdrawalStatus") == "failed" and not state.get("withdrawal_armed", True):
+        if (
+            last_record
+            and last_record.get("withdrawalStatus") in ("completed", "failed")
+            and not state.get("withdrawal_armed", True)
+        ):
             state["withdrawal_armed"] = True
             save_state(STATE_PATH, state)
-            return
+            if last_record["withdrawalStatus"] == "failed":
+                return
         if not state.get("pending_withdrawal") and any(
             r.get("exchange") == settings["exchange"] and r.get("withdrawalStatus") == "submitted"
             for r in withdrawal_records(unresolved=True)
@@ -389,7 +394,11 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
         )
         return
     idempotency_key = str(uuid.uuid4())
-    withdrawal = manual_request or api.withdrawal_request(amount, idempotency_key, settings)
+    try:
+        withdrawal = manual_request or api.withdrawal_request(amount, idempotency_key, settings)
+    except WithdrawalNotReady as exc:
+        log_transition(LOG, api, "withdrawal-wait", "fee-exceeds-balance", logging.INFO, "%s", exc)
+        return
     state["pending_withdrawal"] = withdrawal
     state["pending_withdrawal_context"] = {
         "exchange": settings["exchange"],

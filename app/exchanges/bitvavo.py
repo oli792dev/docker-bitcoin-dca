@@ -243,8 +243,8 @@ class Bitvavo:
             )
         return deposits
 
-    def non_deposit_balance_change(self, currency, start_ms, end_ms, baseline, current):
-        """Reconcile complete bounded account history before treating credits as sale proceeds."""
+    def non_deposit_balance_change(self, currency, start_ms, end_ms, baseline, current, deposit_total=Decimal(0)):
+        """Reconcile complete account history against sales and confirmed deposits."""
         if baseline is None:
             return False
         rows = []
@@ -283,6 +283,7 @@ class Bitvavo:
         else:
             raise ValueError("Bitvavo account-history page limit reached")
         delta = Decimal(0)
+        ledger_deposits = Decimal(0)
         positive_credit = False
         for item in rows:
             stamp = datetime.fromisoformat(item["executedAt"].replace("Z", "+00:00"))
@@ -294,7 +295,9 @@ class Bitvavo:
             if any(not value.is_finite() or value < 0 for value in (received, sent, fee)):
                 raise ValueError("Invalid Bitvavo account-history amounts")
             if item.get("receivedCurrency") == currency and received > 0:
-                if item.get("type") != "sell":
+                if item.get("type") == "deposit":
+                    ledger_deposits += received - (fee if item.get("feesCurrency") == currency else Decimal(0))
+                elif item.get("type") != "sell":
                     return False
                 positive_credit = True
                 delta += received
@@ -302,7 +305,7 @@ class Bitvavo:
                 delta -= sent
             if item.get("feesCurrency") == currency:
                 delta -= fee
-        return positive_credit and baseline + delta == current
+        return positive_credit and baseline + delta == current and ledger_deposits == deposit_total
 
     def btc_withdrawals(self, start_ms=0, end_ms=None):
         # Split saturated time windows so equal timestamps are never skipped.

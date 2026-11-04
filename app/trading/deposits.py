@@ -45,7 +45,7 @@ def sync_deposits(
     if booked is not None and "booked" in previous:
         rise = booked - Decimal(previous["booked"])
     if rise >= Decimal(".01"):
-        pending = pending or {"start": previous["checkedAt"]}
+        pending = pending or {"start": previous["checkedAt"], "balanceBaseline": previous["balance"]}
         if booked is not None and "booked" in previous and "bookedBaseline" not in pending:
             pending["bookedBaseline"] = previous["booked"]
     confirmed = previous.get("confirmed", [])
@@ -100,16 +100,12 @@ def sync_deposits(
         records.append(record)
     # Insert before advancing the checkpoint; retrying the same exchange IDs is harmless.
     inserted = _persist_deposits(records) if records else 0
-    known = {record["id"] for record in confirmed}
-    if any(record["id"] not in known for record in records):
-        observation.pop("pending", None)
-        observation["confirmed"] = records
-    elif (
-        not records
-        and booked is not None
-        and (
-            "bookedBaseline" in pending or getattr(type(api), "supports_unanchored_funding_verification", False) is True
-        )
+    deposit_total = sum(
+        (Decimal(record["row"]["amount"]) - Decimal(record["row"]["fee"]) for record in records), Decimal(0)
+    )
+    verified = False
+    if booked is not None and (
+        "bookedBaseline" in pending or getattr(type(api), "supports_unanchored_funding_verification", False) is True
     ):
         classifier = getattr(type(api), "non_deposit_balance_change", None)
         if (
@@ -121,8 +117,15 @@ def sync_deposits(
                 int(now.timestamp() * 1000),
                 Decimal(pending["bookedBaseline"]) if "bookedBaseline" in pending else None,
                 booked,
+                deposit_total,
             )
             is True
         ):
-            observation.pop("pending", None)
+            verified = True
+    elif booked is None and records and "balanceBaseline" in pending:
+        verified = Decimal(pending["balanceBaseline"]) + deposit_total == balance
+    if verified:
+        observation.pop("pending", None)
+        if records:
+            observation["confirmed"] = records
     return observation["confirmed"], inserted

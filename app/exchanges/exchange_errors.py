@@ -9,3 +9,7 @@ class DefinitiveRejection(requests.RequestException):
 
 class UncertainWithdrawalError(ValueError):
     """A financial submission is unresolved and requires verification."""
+
+
+class WithdrawalNotReady(ValueError):
+    """A withdrawal cannot yet cover its fee; no request was submitted."""

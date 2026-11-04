@@ -28,6 +28,7 @@ class DepositActivity(TypedDict):
 
 class PendingDeposit(TypedDict):
     start: str
+    balanceBaseline: NotRequired[str]
     bookedBaseline: NotRequired[str]
 
 
