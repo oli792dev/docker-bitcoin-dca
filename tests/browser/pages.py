@@ -18,6 +18,7 @@ with tempfile.TemporaryDirectory() as directory:
     print(json.dumps({
         '/': dashboard_page().replace('__REPORT_FROM__', '2026-01-01T00:00:00Z').replace('__WITHDRAW_DESTINATION__', 'Fixture destination'),
         '/settings': settings_page(store),
+        '/setup': settings_page(store,create_account=True),
         '/settings?embedded=1': settings_page(store,embedded=True),
         '/settings-live':settings_page(live_store),
         '/settings-live?embedded=1':settings_page(live_store,embedded=True),

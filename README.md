@@ -53,7 +53,7 @@ Keep the `bitcoin-dca-webui-data` volume: it holds your settings, credentials an
 
 Settings → Backup offers Full (configuration and activities), Activities only, and Config only backups. Enter your current dashboard password and a separate backup password of at least 12 characters. Download the encrypted file and keep its password safely.
 
-On a fresh installation, create a login before restoring. Full and Config restore the saved settings and login; Activities adds history while keeping current settings. Sign in again after restore, using the archived login for Full/Config.
+On a fresh installation, restore a Full or Config backup directly on the first setup page, then sign in with the username and password saved in that backup. Only the backup password is needed to restore; no temporary account is required. Activities-only backups cannot initialize an installation. Once an account exists, use Settings → Backup with the current dashboard password. Activities adds history while keeping current settings.
 
 To update:
 

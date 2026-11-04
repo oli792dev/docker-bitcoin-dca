@@ -341,7 +341,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get("X-DCA-Action") != "settings" or self.headers.get("Content-Type") != "application/json":
             raise ValueError("Invalid settings request.")
         length = int(self.headers.get("Content-Length", "0"))
-        maximum = 46 * 1024 * 1024 if urlparse(self.path).path == "/api/settings/restore" else 32768
+        maximum = (
+            46 * 1024 * 1024 if urlparse(self.path).path in ("/api/settings/restore", "/api/setup/restore") else 32768
+        )
         if not 0 < length <= maximum:
             raise ValueError("Invalid settings request size.")
         data = json.loads(self.rfile.read(length).decode("utf-8"))
@@ -355,6 +357,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         operation = {
             "/api/setup/account": "Initial account creation",
+            "/api/setup/restore": "Initial backup restore",
             "/api/settings/test": "Exchange connection test",
             "/api/settings": "Settings update",
             "/api/settings/forecast": "Forecast settings update",
@@ -363,7 +366,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/settings/backup": "Encrypted backup creation",
             "/api/settings/restore": "Encrypted backup restore",
         }[path]
-        if path != "/api/setup/account" and not self._require_authentication():
+        if path not in ("/api/setup/account", "/api/setup/restore") and not self._require_authentication():
             LOG.info("%s rejected: authentication required", operation)
             return
         try:
@@ -383,6 +386,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(b"{}")
+            elif path == "/api/setup/restore":
+                self._json(200, self.runtime.backup(payload, restore=True, setup=True))
             elif path == "/api/settings/pause":
                 self._json(200, self.runtime.set_pause(payload))
             elif path in ("/api/settings/backup", "/api/settings/restore"):
@@ -477,6 +482,7 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path in (
             "/api/setup/account",
+            "/api/setup/restore",
             "/api/settings",
             "/api/settings/test",
             "/api/settings/forecast",

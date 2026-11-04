@@ -692,7 +692,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_http_setup_login_settings_and_feature_enforcement(self):
         request = self.server()
         status, page = request('/')
-        self.assertEqual(status, 200); self.assertIn('1. Create your account', page)
+        self.assertEqual(status, 200); self.assertIn('id="accountForm"', page); self.assertIn('id="setupRestoreForm"', page)
         self.assertEqual(request('/api/settings')[0], 401)
         credentials = {'username': 'operator', 'password': PASSWORD}
         self.assertEqual(request('/api/setup/account', credentials, header=False)[0], 400)

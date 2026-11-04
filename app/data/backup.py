@@ -306,9 +306,13 @@ class Backups:
             return filename, encrypted
 
     def restore(self, encrypted, password, scope, unresolved=False):
-        if not isinstance(scope, str) or scope not in SCOPES or unresolved:
+        if (scope is not None and (not isinstance(scope, str) or scope not in SCOPES)) or unresolved:
             raise ValueError("Resolve pending financial work before restoring a backup.")
         manifest, data = unpack(decrypt(encrypted, password))
+        if scope is None:
+            scope = manifest["scope"]
+            if scope not in ("full", "config"):
+                raise ValueError("Initial setup requires a Full or Config backup with login credentials.")
         required = SCOPES[scope] - {"controls.json"} if scope == "config" else SCOPES[scope]
         if not required <= data.keys():
             raise ValueError("Backup does not contain the selected restore scope.")

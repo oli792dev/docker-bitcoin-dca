@@ -118,6 +118,20 @@ if(!initial.createAccount){
 $('quote').addEventListener('change',updatePurchaseCurrencyLabel);selectedExchange();$('exchange').addEventListener('change',()=>{for(const prefix of ['kraken','bitvavo'])for(const part of ['key','secret'])$(prefix+'_api_'+part).value='';connectionMessage('');selectedExchange()});
 function values(){const result={};for(const input of document.querySelectorAll('[data-setting]')){if(input.id==='withdraw_threshold'&&input.disabled){result[input.id]=initial.settings.withdraw_threshold;continue}result[input.id]=input.id==='check_interval_seconds'?Math.round(Number(input.value)*60):input.type==='checkbox'?input.checked:input.type==='number'&&['deposit_day','startup_delay_seconds','check_interval_seconds','order_status_check_seconds','dashboard_refresh_seconds'].includes(input.id)?Number(input.value):input.value}return result}
 $('accountForm').addEventListener('submit',async e=>{e.preventDefault();if($('newPassword').value!==$('confirmPassword').value){message('Passwords do not match.',true,'confirmPassword');return}const b=e.submitter;b.disabled=true;try{await request('/api/setup/account',{username:$('newUsername').value,password:$('newPassword').value});location.href='/settings'}catch(err){message(err.message,true,err.field)}finally{b.disabled=false}});
+$('setupRestoreForm')?.addEventListener('submit',async event=>{
+ event.preventDefault();
+ const file=$('setupRestoreFile').files?.[0];if(!file)return;
+ const button=$('setupRestoreSubmit'),accountButton=$('accountForm').querySelector('button'),status=$('setupRestoreStatus');
+ button.disabled=true;accountButton.disabled=true;button.setAttribute('aria-busy','true');
+ status.hidden=false;status.classList.toggle('is-error',false);status.textContent=t('Restoring backup…');
+ try{
+  const archive=await readBackupFile(file);
+  await request('/api/setup/restore',{password:$('setupRestorePassword').value,archive});
+  try{sessionStorage.setItem('bitcoinDcaRestoredBackup',file.name)}catch{}
+  location.href='/';
+ }catch(error){status.textContent=t(error.message);status.classList.toggle('is-error',true)}
+ finally{button.disabled=false;accountButton.disabled=false;button.setAttribute('aria-busy','false');$('setupRestorePassword').value=''}
+});
 $('testConnection').addEventListener('click',async()=>{if(!exchangeCredentialsReady())return;const b=$('testConnection');b.disabled=true;b.ariaBusy='true';b.textContent=t('Testing…');connectionMessage('Testing connection…');try{const result=await request('/api/settings/test',values());connectionMessage(result.message);if(result.permissions){for(const [name,evidence] of Object.entries(result.permissions)){const line=document.createElement('span');line.style.display='block';line.textContent=t({funds:'Funds',orders:'Orders',history:'History',trade:'Trade',withdraw:'Withdraw'}[name])+': '+t(evidence.status)+' · '+t(evidence.evidence);$('connectionStatus').append(line)}}}catch(err){connectionMessage(err.message,true)}finally{b.disabled=false;b.ariaBusy='false';b.textContent=t('Test connection')}});
 function needsPassword(){
  if(!initial.complete||!pending)return false;
@@ -252,6 +266,12 @@ if(initial.complete&&initial.embedded){
 
 let restorePayload=null;
 let restoreFilename='';
+async function readBackupFile(file){
+ if(file.size>32*1024*1024+128)throw Error('Backup file is too large.');
+ const bytes=new Uint8Array(await file.arrayBuffer());let binary='';
+ for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));
+ return btoa(binary);
+}
 function backupFieldError(field,text,restore=false){
  if(restore)field=({backupLoginPassword:'restoreLoginPassword',backupPassword:'restorePassword'})[field]||field;
  if(!['backupPassword','backupLoginPassword','restorePassword','restoreLoginPassword','restoreFile'].includes(field))field='restoreFile';
@@ -282,7 +302,7 @@ $('restoreBackup')?.addEventListener('click',async()=>{
  if(!credentials.current_password){backupFieldError('restoreLoginPassword','Enter your current dashboard password.');$('restoreLoginPassword').focus();return}
  if(credentials.password.length<12){backupFieldError('restorePassword','Backup password must contain 12–1024 characters.');$('restorePassword').focus();return}
  if(file.size>32*1024*1024+128){backupFieldError('restoreFile','Backup file is too large.');return}
- try{const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));restorePayload={...credentials,archive:btoa(binary)};restoreFilename=file.name;$('restoreScopeName').textContent=scopeLabel;$('restoreReviewFilename').textContent=file.name;$('backupReview').showModal()}
+ try{restorePayload={...credentials,archive:await readBackupFile(file)};restoreFilename=file.name;$('restoreScopeName').textContent=scopeLabel;$('restoreReviewFilename').textContent=file.name;$('backupReview').showModal()}
  catch(error){backupFieldError('restoreFile',error.message)}
 });
 $('cancelBackupRestore')?.addEventListener('click',()=>{restorePayload=null;restoreFilename='';$('backupReview').close()});

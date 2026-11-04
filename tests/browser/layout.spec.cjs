@@ -29,6 +29,50 @@ async function noPageOverflow(page) {
 }
 async function rect(locator) { return locator.boundingBox(); }
 
+test('initial setup restores a login backup before creating an account', async ({page}) => {
+  let restored=false;
+  await page.route('**/api/setup/restore',route=>{
+    const payload=route.request().postDataJSON();
+    expect(Object.keys(payload).sort()).toEqual(['archive','password']);
+    expect(Buffer.from(payload.archive,'base64').toString()).toBe('encrypted setup fixture');
+    if(payload.password!=='correct-backup-password')return route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:'Backup password is incorrect or the backup was modified.'})});
+    restored=true;
+    return route.fulfill({contentType:'application/json',body:JSON.stringify({restored:true,scope:'config',signInRequired:true})});
+  });
+  await page.route('https://dca.test/',route=>restored?route.fulfill({contentType:'text/html',body:pages['/login']}):route.fallback());
+  await page.goto('/setup');
+  await expect(page.locator('#accountForm')).toBeVisible();
+  await expect(page.locator('#setupRestoreForm')).toBeVisible();
+  await expect(page.locator('#setupRestoreHint')).toContainText('Full or Config');
+  await noPageOverflow(page);
+  await page.screenshot({path:test.info().outputPath('initial-setup.png'),fullPage:true});
+  await page.locator('#setupRestoreFile').setInputFiles({name:'config.dcabackup',mimeType:'application/octet-stream',buffer:Buffer.from('encrypted setup fixture')});
+  await page.locator('#setupRestorePassword').fill('incorrect-backup-password');
+  await page.locator('#setupRestoreSubmit').click();
+  await expect(page.locator('#setupRestoreStatus')).toContainText('incorrect');
+  await expect(page.locator('#accountForm button')).toBeEnabled();
+  await page.locator('#setupRestorePassword').fill('correct-backup-password');
+  await page.locator('#setupRestoreSubmit').click();
+  await expect(page.locator('form[action="/login"]')).toBeVisible();
+  await expect(page.locator('#restoredBackupName')).toHaveText('config.dcabackup');
+  await noPageOverflow(page);
+});
+
+test('initial setup can create a new account without selecting a backup', async ({page}) => {
+  await page.route('**/api/setup/account',route=>{
+    expect(route.request().postDataJSON()).toEqual({username:'new-user',password:'new-login-password'});
+    return route.fulfill({contentType:'application/json',body:'{}'});
+  });
+  await page.goto('/setup');
+  await page.locator('#newUsername').fill('new-user');
+  await page.locator('#newPassword').fill('new-login-password');
+  await page.locator('#confirmPassword').fill('new-login-password');
+  await page.locator('#accountForm button').click();
+  await expect(page.locator('#settingsForm')).toBeVisible();
+  await expect(page.locator('#settingsTabs')).toBeVisible();
+  await expect(page.locator('#accountPanel')).toBeHidden();
+});
+
 test('dashboard controls, analysis spacing and modal scroll restoration', async ({page}) => {
   await page.goto('/');
   await expect(page.locator('#investedTotal')).toContainText('501');
@@ -218,7 +262,7 @@ test('operational controls, backup review and Activity filters remain usable', a
   expect((await rect(download)).height).toBe(44);
   await expect(download).toHaveCSS('border-top-color','rgba(0, 0, 0, 0)');
   await expect(page.locator('#restoreBackup')).toHaveCSS('border-top-color','rgba(0, 0, 0, 0)');
-  const backupGroups=page.locator('.backup-groups>.settings-group');
+  const backupGroups=page.locator('#backupOptions .backup-groups>.settings-group');
   const first=await rect(backupGroups.nth(0)),second=await rect(backupGroups.nth(1));
   if(page.viewportSize().width>=900)expect(Math.round(first.y)).toBe(Math.round(second.y));
   else expect(second.y-first.y-first.height).toBeGreaterThanOrEqual(24);

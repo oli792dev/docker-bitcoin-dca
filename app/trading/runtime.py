@@ -41,6 +41,7 @@ class Runtime:
         self.invalidate_sessions = lambda: None
         self._configuration_uncertain = False
         self.password_attempts = AttemptLimiter(capacity=1)
+        self.setup_restore_attempts = AttemptLimiter(capacity=1)
         self.startup_pending = True
         self.exchange_check_pending = True
         self.ready_at = time.monotonic() + self.settings["startup_delay_seconds"]
@@ -496,29 +497,45 @@ class Runtime:
             LOG.info("Transaction pause updated: paused=%s; until=%s", result["paused"], result["until"])
             return result
 
-    def backup(self, payload, restore=False):
-        """Require current login reauthentication before handling private archives."""
+    def backup(self, payload, restore=False, setup=False):
+        """Reauthenticate, or allow initial restore only before an account or history exists."""
         import base64
 
         from app.data.backup import MAX_BYTES, Backups
 
         allowed = (
-            {"scope", "password", "current_password", "archive"}
-            if restore
-            else {"scope", "password", "current_password"}
+            {"password", "archive"}
+            if setup
+            else (
+                {"scope", "password", "current_password", "archive"}
+                if restore
+                else {"scope", "password", "current_password"}
+            )
         )
-        if not isinstance(payload, dict) or set(payload) != allowed:
+        if not isinstance(payload, dict) or set(payload) != allowed or setup and not restore:
             raise ValueError("Invalid backup request.")
         with self.lock, self.store.lock:
-            account = self.store.snapshot()["account"]
-            if not account or account.get("password_change_required"):
+            saved = self.store.snapshot()
+            account = saved["account"]
+            if setup:
+                from app.data.activity import read_activity_records
+
+                state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
+                if account is not None or saved["complete"] or state or read_activity_records():
+                    raise ValueError(
+                        "Initial backup restore is available only on an empty installation without an account."
+                    )
+            elif not account or account.get("password_change_required"):
                 raise ValueError("Complete dashboard account setup first.")
-            retry = self.password_attempts.consume(account["username"])
+            attempt_key = "initial-backup-restore" if setup else account["username"]
+            attempts = self.setup_restore_attempts if setup else self.password_attempts
+            retry = attempts.consume(attempt_key)
             if retry:
                 raise PasswordConfirmationError("Too many password confirmation attempts. Try again later.", retry)
-            if not self.store.authenticate(account["username"], payload["current_password"]):
+            if not setup and not self.store.authenticate(account["username"], payload["current_password"]):
                 raise PasswordConfirmationError("Your current password is incorrect.")
-            self.password_attempts.clear(account["username"])
+            if not setup:
+                attempts.clear(attempt_key)
             if self.worker.stop.is_set() or self._configuration_uncertain:
                 raise ValueError("Settings are being verified or the container is stopping; try again later.")
             manager = Backups(self.state_path.parent)
@@ -541,7 +558,7 @@ class Runtime:
             if self.unresolved() or self.worker.queue.unfinished_tasks:
                 raise ValueError("Resolve pending transactions and queued requests before restoring a backup.")
             try:
-                result = manager.restore(encrypted, payload["password"], payload["scope"])
+                result = manager.restore(encrypted, payload["password"], None if setup else payload["scope"])
             except BaseException:
                 self.exchange_check_pending = True
                 self.service = None
@@ -553,9 +570,10 @@ class Runtime:
             self._recover_configuration()
             self.invalidate_sessions()
             self.worker.reconfigure.set()
+            attempts.clear(attempt_key)
             LOG.info(
                 "Encrypted backup restored: scope=%s; transactions paused=%s; automatic exchange check required",
-                payload["scope"],
+                result["scope"],
                 result["paused"],
             )
             return {**result, "signInRequired": True}

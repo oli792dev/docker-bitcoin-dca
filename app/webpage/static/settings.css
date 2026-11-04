@@ -12,6 +12,7 @@ p{margin:0;color:var(--muted);line-height:1.6;}
 .settings-tab-panel{display:grid;gap:var(--field-gap);min-width:0;}
 .field-description{display:block;margin-top:var(--control-gap);}
 #accountForm{display:grid;gap:var(--field-gap);}
+#setupRestoreFile{height:auto;min-height:44px;padding:8px;}
 .actions button{max-width:100%;white-space:normal;}
 #settingsForm{display:grid;gap:var(--section-gap);}
 .panel{display:grid;gap:var(--field-gap);background:#111a2c;border:1px solid var(--line);border-radius:var(--corner-radius);padding:20px;}
