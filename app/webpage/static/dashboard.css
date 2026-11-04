@@ -268,10 +268,11 @@ __DESIGN_CSS__
 /* One card contract for account, schedule and report surfaces. */
 .redesigned .balance-overview,.redesigned .period-activities .activity-panel,.redesigned .plan-card,.redesigned .report-extra,.redesigned .report-primary{background:var(--panel);border:1px solid transparent;border-radius:var(--corner-radius);padding:20px}
 /* Dashboard redesign: balances, next actions, analysis, then activity. */
+.redesigned{--dashboard-gap:16px;}
 .redesigned main{max-width:1160px;padding-top:20px;}
 .redesigned h1{font-size:1.2rem;letter-spacing:-.025em;}
 .redesigned .dashboard-logo{width:44px;height:44px;flex-basis:44px;}
-.redesigned .top{padding:var(--space-sm) 0 20px;margin-bottom:0;}
+.redesigned .top{padding:var(--space-sm) 0 var(--dashboard-gap);margin-bottom:0;}
 .redesigned .top-actions{flex-direction:row;align-items:center;gap:var(--space-lg);}
 .redesigned .balance-overview{display:grid;gap:var(--space-xl);}
 .redesigned .metric{min-width:0;}
@@ -356,7 +357,7 @@ __DESIGN_CSS__
 .redesigned .withdrawal-disabled .plan-title h2,.redesigned .withdrawal-disabled>#estimatedWithdrawalAt{color:var(--muted);}
 .redesigned .withdrawal-disabled>#estimatedWithdrawalAt{font-size:1.1rem;font-weight:500;}
 .redesigned .withdrawal-disabled>:not(.plan-title):not(#estimatedWithdrawalAt),.redesigned .withdrawal-disabled #withdrawalBadge{display:none!important;}
-.redesigned .analysis-header{margin-bottom:var(--space-md);}
+.redesigned .analysis-header{margin-bottom:var(--dashboard-gap);}
 .redesigned .selected-period-label{margin:0 0 var(--space-xl);color:var(--text);font-weight:500;line-height:1.5;font-variant-numeric:tabular-nums;}
 .redesigned .report-primary{margin:0;}
 .redesigned .report-details{border:0;}
@@ -399,7 +400,7 @@ __DESIGN_CSS__
 .redesigned .balance-overview>.metric:first-child>.value{font-size:clamp(1.65rem,3vw,2.2rem);}
 .redesigned .value-unit{font-size:.62em;font-weight:500;letter-spacing:0;color:var(--muted);white-space:nowrap;}
 .redesigned .metric-label{font-weight:500;}
-.redesigned .planning-overview{gap:16px;}
+.redesigned .planning-overview{gap:var(--dashboard-gap);}
 .redesigned .plan-card{border-color:transparent;gap:0;}
 .redesigned .plan-title{margin-bottom:12px;align-items:baseline;}
 .redesigned .plan-title h2{font-weight:600;letter-spacing:-.015em;}
@@ -407,7 +408,7 @@ __DESIGN_CSS__
 .redesigned .plan-countdown{color:var(--text);font-weight:500;margin-top:6px;}
 .redesigned .plan-footer{border:0;padding-top:0;margin-top:var(--space-sm);font-size:.82rem;}
 .redesigned progress{margin-top:16px;height:4px;}
-.redesigned .analysis-section{padding-top:24px;margin-top:24px;}
+.redesigned .analysis-section{padding-top:var(--dashboard-gap);margin-top:var(--dashboard-gap);}
 .redesigned .selected-period-label{margin-bottom:20px;font-size:.94rem;}
 .redesigned .report-primary{gap:20px 24px;}
 .redesigned .report-primary .value{font-weight:600;line-height:1.25;margin-top:8px;}
@@ -450,7 +451,7 @@ __DESIGN_CSS__
 .redesigned .report-extra,.redesigned .period-activities .activity-panel{border-color:CanvasText;}
 }
 /* Account balances share the appearance-aware card surface. */
-.redesigned .balance-overview{margin-bottom:16px;}
+.redesigned .balance-overview{margin-bottom:var(--dashboard-gap);}
 @media (prefers-contrast:more){
 .redesigned .balance-overview{border-color:var(--line);}
 }
@@ -460,7 +461,7 @@ __DESIGN_CSS__
 /* Keep the selected dates alongside their section heading. */
 .redesigned .analysis-title{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 16px;min-width:0;}
 .redesigned .analysis-title .selected-period-label{margin:0;font-size:.76rem;font-weight:400;line-height:1.5;color:var(--muted);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
-.redesigned .analysis-header{gap:12px 20px;}
+.redesigned .analysis-header{gap:var(--dashboard-gap);}
 /* Equal tracks and consistent insets across every dashboard metric surface. */
 .redesigned .balance-overview{grid-template-columns:repeat(3,minmax(0,1fr));column-gap:24px;}
 .redesigned .report-primary{grid-template-columns:repeat(5,minmax(0,1fr));column-gap:24px;}

@@ -428,3 +428,20 @@ test('dashboard surfaces keep equal bottom insets', async ({page}) => {
   await noPageOverflow(page);
   await page.screenshot({path:test.info().outputPath('dashboard-spacing.png'),fullPage:true});
 });
+
+test('dashboard uses one compact vertical spacing grid', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('#investedTotal')).toContainText('501');
+  const gaps=await page.evaluate(()=>{
+    const rect=selector=>document.querySelector(selector).getBoundingClientRect();
+    const balances=rect('.balance-overview'),planning=rect('.planning-overview');
+    const section=rect('.analysis-section'),header=rect('.analysis-header'),report=rect('.report-primary');
+    const title=rect('.analysis-title'),dates=rect('.period-shortcuts');
+    const result=[planning.top-balances.bottom,section.top-planning.bottom,header.top-section.top-1,report.top-header.bottom];
+    if(dates.top>=title.bottom)result.push(dates.top-title.bottom);
+    return result;
+  });
+  for(const gap of gaps)expect(gap).toBeCloseTo(16,0);
+  await noPageOverflow(page);
+  await page.screenshot({path:test.info().outputPath('compact-dashboard.png'),fullPage:true,animations:'disabled'});
+});
