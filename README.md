@@ -3,11 +3,10 @@
 A self-hosted Bitcoin DCA bot for Kraken and Bitvavo, managed through an HTTPS dashboard.
 
 - Automatic Bitcoin purchases on Kraken or Bitvavo, spreading your available fiat budget until the next monthly deposit.
-- Simulation and live trading, exchange-verified deposits and a pause control for new transactions.
 - Optional automatic Bitcoin withdrawals at a configured threshold, plus manual withdrawals with confirmation.
 - Responsive English/German web UI with guided setup, exchange settings and light/dark appearance.
 - Dashboard with balances, purchase schedules, withdrawal forecasts, period analysis, searchable activity and Parqet CSV export.
-- Encrypted Full, Config or Activities backups; restore Full or Config during initial setup to reuse your saved login.
+- Backup and restore options for configuration and bot activities.
 
 <details>
 <summary>Dashboard preview</summary>
