@@ -445,3 +445,13 @@ test('dashboard uses one compact vertical spacing grid', async ({page}) => {
   await noPageOverflow(page);
   await page.screenshot({path:test.info().outputPath('compact-dashboard.png'),fullPage:true,animations:'disabled'});
 });
+
+test('exchange minimum note stays eight pixels above purchase explanation', async ({page}) => {
+  await page.route('**/api/schedule',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({quote:'EUR',quoteBalance:600,configuredBuyAmount:0,effectiveBuyAmount:.0001})}));
+  await page.goto('/');
+  await expect(page.locator('#orderSummaryNote')).toHaveText('(exchange minimum)');
+  const note=await rect(page.locator('#orderSummaryNote'));
+  const label=await rect(page.locator('.purchase-explanation>summary>span'));
+  expect(label.y-note.y-note.height).toBeCloseTo(8,0);
+  expect((await rect(page.locator('.purchase-explanation>summary'))).height).toBeGreaterThanOrEqual(44);
+});
