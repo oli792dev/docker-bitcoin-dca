@@ -415,8 +415,9 @@ test('dashboard surfaces keep equal bottom insets', async ({page}) => {
   await expect(page.locator('.report-extra')).toBeVisible();
   const gaps=await page.evaluate(()=>{
     const bottomGap=(box,content)=>box.getBoundingClientRect().bottom-content.getBoundingClientRect().bottom;
+    const cards=[...document.querySelectorAll('.plan-card')];
+    if(cards.some(card=>getComputedStyle(card).paddingBottom!==getComputedStyle(cards[0]).paddingBottom))throw new Error('Different card padding');
     return [
-      bottomGap(document.querySelector('.plan-card'),document.querySelector('.purchase-explanation>summary>span')),
       bottomGap(document.querySelector('#automaticWithdrawalCard'),document.querySelector('#forecastProgress')),
       ...['.report-primary','.report-extra'].map(selector=>{
         const box=document.querySelector(selector);
@@ -471,4 +472,20 @@ test('purchase amount and disclosure stay in place when toggled',async({page})=>
  await page.locator('.purchase-explanation>summary').click();
  const closed=await positions();
  closed.forEach((position,index)=>expect(position).toBeCloseTo(before[index],0));
+});
+
+test('planning cards always share their height',async({page})=>{
+ await page.goto('/');
+ await expect(page.locator('#investedTotal')).toContainText('501');
+ const check=async()=>{
+   const purchase=await rect(page.locator('.plan-card').first());
+   const withdrawal=await rect(page.locator('#automaticWithdrawalCard'));
+   expect(purchase.height).toBeCloseTo(withdrawal.height,0);
+ };
+ await check();
+ await page.locator('.purchase-explanation>summary').click();
+ await expect(page.locator('.purchase-explanation')).toHaveAttribute('open','');
+ await check();
+ await page.locator('.purchase-explanation>summary').click();
+ await check();
 });
