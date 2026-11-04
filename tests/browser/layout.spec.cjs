@@ -357,7 +357,8 @@ test('purchase explanation uses compact responsive field columns',async({page,is
  await page.goto('/');
  await page.locator('.purchase-explanation>summary').click();
  const fields=page.locator('#purchaseExplanation>.purchase-explanation-field');
- await expect(fields).toHaveCount(11);
+ await expect(fields).toHaveCount(10);
+ await expect(page.locator('#purchaseExplanation dt').filter({hasText:'Spendable balance'})).toHaveCount(0);
  const a=await rect(fields.nth(0)),b=await rect(fields.nth(1));
  if(isMobile)expect(b.y).toBeGreaterThan(a.y);else expect(Math.abs(b.y-a.y)).toBeLessThan(1);
  await noPageOverflow(page);
@@ -454,4 +455,20 @@ test('exchange minimum note stays eight pixels above purchase explanation', asyn
   const label=await rect(page.locator('.purchase-explanation>summary>span'));
   expect(label.y-note.y-note.height).toBeCloseTo(8,0);
   expect((await rect(page.locator('.purchase-explanation>summary'))).height).toBeGreaterThanOrEqual(44);
+});
+
+test('purchase amount and disclosure stay in place when toggled',async({page})=>{
+ await page.route('**/api/schedule',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({quote:'EUR',quoteBalance:600,configuredBuyAmount:0,effectiveBuyAmount:.00006,withdrawalsEnabled:true,estimatedWithdrawalStatus:'Waiting for the exchange account check and confirmation of the configured withdrawal destination before the next automatic withdrawal. '.repeat(8)})}));
+ await page.goto('/');
+ await expect(page.locator('#orderSummaryNote')).toHaveText('(exchange minimum)');
+ const selectors=['#orderSummary','#orderSummaryNote','.purchase-explanation>summary>span'];
+ const positions=()=>page.evaluate(selectors=>selectors.map(selector=>document.querySelector(selector).getBoundingClientRect().top+scrollY),selectors);
+ const before=await positions();
+ await page.locator('.purchase-explanation>summary').click();
+ await expect(page.locator('.purchase-explanation')).toHaveAttribute('open','');
+ const after=await positions();
+ after.forEach((position,index)=>expect(position).toBeCloseTo(before[index],0));
+ await page.locator('.purchase-explanation>summary').click();
+ const closed=await positions();
+ closed.forEach((position,index)=>expect(position).toBeCloseTo(before[index],0));
 });
