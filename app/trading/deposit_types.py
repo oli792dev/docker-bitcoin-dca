@@ -37,6 +37,7 @@ class FiatObservation(TypedDict):
     checkedAt: str
     balance: str
     booked: NotRequired[str]
+    historyStartAt: NotRequired[str]
     confirmed: NotRequired[list[DepositActivity]]
     pending: NotRequired[PendingDeposit]
 

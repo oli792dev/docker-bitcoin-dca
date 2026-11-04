@@ -170,6 +170,8 @@ def persist_bot_withdrawal(api, withdrawal, result, settings, context):
         "withdrawalId": result.get("id") or result.get("refid"),
         "withdrawalAddress": withdrawal.get("address"),
         "withdrawalNetwork": withdrawal.get("network"),
+        "firstSubmittedAt": timestamp_ms,
+        "lastSubmittedAt": int(context.get("last_submission_at", timestamp_ms)),
     }
     if settings.get("account_identity"):
         record["accountIdentity"] = settings["account_identity"]
@@ -319,6 +321,9 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
                 )
                 return
             try:
+                context["last_submission_at"] = int(time.time() * 1000)
+                state["pending_withdrawal_context"] = context
+                save_state(STATE_PATH, state)
                 result = api.withdraw_btc(pending)
             except DefinitiveRejection:
                 state.pop("pending_withdrawal", None)

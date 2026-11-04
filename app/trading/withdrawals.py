@@ -31,8 +31,15 @@ def reconcile_withdrawals(api, settings, force=False, submitted_only=False):
             continue
         row = record["row"]
         stamp = int(datetime.fromisoformat(row["datetime"].replace("Z", "+00:00")).timestamp() * 1000)
+        first_submission = int(record.get("firstSubmittedAt", stamp))
+        last_submission = int(record.get("lastSubmittedAt", stamp))
+        if settings["exchange"] == "BITVAVO" and not record.get("withdrawalId") and "lastSubmittedAt" not in record:
+            # Older records did not retain retries; search their unresolved lifetime.
+            last_submission = max(stamp, int(time.time() * 1000))
+        window_start = max(0, min(stamp, first_submission) - 300000)
+        window_end = max(stamp, last_submission) + 300000
         checked += 1
-        candidates = api.btc_withdrawals(max(0, stamp - 300000), stamp + 300000)
+        candidates = api.btc_withdrawals(window_start, window_end)
         identifier = record.get("withdrawalId") or record["id"].removeprefix("withdrawal:")
         matches = []
         for candidate in candidates:
@@ -49,7 +56,7 @@ def reconcile_withdrawals(api, settings, force=False, submitted_only=False):
             gross = Decimal(str(candidate.get("amount", "0"))) + fee
             if (
                 candidate.get("address") == record["withdrawalAddress"]
-                and abs(int(candidate.get("timestamp", 0)) - stamp) <= 300000
+                and window_start <= int(candidate.get("timestamp", 0)) <= window_end
                 and gross == Decimal(str(record.get("grossWithdrawalAmountBtc", "-1")))
             ):
                 matches.append(candidate)
@@ -74,6 +81,8 @@ def reconcile_withdrawals(api, settings, force=False, submitted_only=False):
             update_activity_record(record)
             continue  # Never guess between indistinguishable withdrawals.
         found = matches[0]
+        if found.get("timestamp") and int(found["timestamp"]) > 0:
+            row["datetime"] = datetime.fromtimestamp(int(found["timestamp"]) / 1000, UTC).isoformat()
         status = str(found.get("status", "")).lower()
         if status in ("success", "completed"):
             status = "completed"

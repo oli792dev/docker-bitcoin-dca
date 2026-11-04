@@ -12,8 +12,8 @@ services:
     ports:
       - "${WEB_UI_PORT:-6890}:${WEB_UI_PORT:-6890}"
     volumes:
-      - bitcoin_dca_webui_data:/webui-data
+      - bitcoin-dca:/webui-data
 
 volumes:
-  bitcoin_dca_webui_data:
-    name: bitcoin-dca-webui-data
+  bitcoin-dca:
+    name: bitcoin-dca

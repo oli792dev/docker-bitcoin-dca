@@ -23,7 +23,7 @@ def sync_deposits(
     now: datetime,
     balance: Decimal,
 ) -> tuple[list[DepositActivity], int]:
-    """Verify booked increases, excluding order holds; keep unexplained funding paused."""
+    """Import observed deposits independently of net balance; verify unexplained credits."""
     identity = [settings["exchange"], settings["quote"]]
     if settings.get("account_identity"):
         identity.append(settings["account_identity"])
@@ -38,6 +38,7 @@ def sync_deposits(
             raise ValueError("Booked fiat balance could not be verified")
         observation["booked"] = str(booked)
     if previous is None or previous.get("identity") != identity:
+        observation["historyStartAt"] = now.isoformat()
         state["fiat_observation"] = observation
         return [], 0
     pending = previous.get("pending")
@@ -50,13 +51,14 @@ def sync_deposits(
             pending["bookedBaseline"] = previous["booked"]
     confirmed = previous.get("confirmed", [])
     observation["confirmed"] = confirmed
-    if not pending:
-        state["fiat_observation"] = observation
-        return confirmed, 0
-    observation["pending"] = pending
+    observation["historyStartAt"] = previous.get("historyStartAt", previous["checkedAt"])
+    if pending:
+        observation["pending"] = pending
     state["fiat_observation"] = observation
     # The adapter may round request timestamps; filter returned rows to this exact window.
-    start = max(0, int(datetime.fromisoformat(pending["start"]).timestamp() * 1000))
+    start = max(0, int(datetime.fromisoformat(observation["historyStartAt"]).timestamp() * 1000))
+    verification_start = max(0, int(datetime.fromisoformat(pending["start"]).timestamp() * 1000)) if pending else start
+    start = min(start, verification_start)
     rows = api.fiat_deposits(settings["quote"], start, int(now.timestamp() * 1000))
     if not isinstance(rows, list):
         raise ValueError("Fiat deposit history could not be verified")
@@ -100,8 +102,17 @@ def sync_deposits(
         records.append(record)
     # Insert before advancing the checkpoint; retrying the same exchange IDs is harmless.
     inserted = _persist_deposits(records) if records else 0
+    if not pending:
+        if records:
+            observation["confirmed"] = records
+        return observation["confirmed"], inserted
     deposit_total = sum(
-        (Decimal(record["row"]["amount"]) - Decimal(record["row"]["fee"]) for record in records), Decimal(0)
+        (
+            Decimal(record["row"]["amount"]) - Decimal(record["row"]["fee"])
+            for record in records
+            if int(datetime.fromisoformat(record["row"]["datetime"]).timestamp() * 1000) >= verification_start
+        ),
+        Decimal(0),
     )
     verified = False
     if booked is not None and (
@@ -113,7 +124,7 @@ def sync_deposits(
             and classifier(
                 api,
                 settings["quote"],
-                start,
+                verification_start,
                 int(now.timestamp() * 1000),
                 Decimal(pending["bookedBaseline"]) if "bookedBaseline" in pending else None,
                 booked,

@@ -49,11 +49,13 @@ Parqet export consolidates purchases between confirmed withdrawals into one Buy 
 
 ## Backups and updates
 
-Keep the `bitcoin-dca-webui-data` volume: it holds your settings, credentials and history. Protect access to it; API secrets are stored unencrypted.
+Keep the `bitcoin-dca` volume: it holds your settings, credentials and history. Protect access to it; API secrets are stored unencrypted.
 
 Settings → Backup offers Full (configuration and activities), Activities only, and Config only backups. Enter your current dashboard password and a separate backup password of at least 12 characters. Download the encrypted file and keep its password safely.
 
 On a fresh installation, restore a Full or Config backup directly on the first setup page, then sign in with the username and password saved in that backup. Only the backup password is needed to restore; no temporary account is required. Activities-only backups cannot initialize an installation. Once an account exists, use Settings → Backup with the current dashboard password. Activities adds history while keeping current settings.
+
+Existing installations using `bitcoin-dca-webui-data`: the old volume is not renamed or deleted. Before updating, pause live transactions, wait for open orders, withdrawals and funding checks to resolve, and download a Full backup. Stop the old container with `docker compose down` (without `-v`) before starting the updated version. The updated Compose file creates `bitcoin-dca`; restore the Full backup on its first setup page to transfer your login, settings and history. Backups exclude TLS certificates, so trust the new installation’s CA afterward. Keep the old volume until the transfer is verified; resume transactions in Settings when ready.
 
 To update:
 

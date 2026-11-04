@@ -64,13 +64,13 @@ class DepositTests(unittest.TestCase):
             self.assertEqual(sync_deposits(api,settings,state,now,Decimal(200))[1],0)
             api.fiat_deposits.side_effect=requests.ConnectionError('offline')
             calls=api.fiat_deposits.call_count
-            self.assertEqual(calls,1)
+            self.assertEqual(calls,2)
             with self.assertRaises(requests.ConnectionError):sync_deposits(api,settings,state,now,Decimal(210))
             self.assertIn('pending',state['fiat_observation'])
-            self.assertEqual(api.fiat_deposits.call_count,2)
+            self.assertEqual(api.fiat_deposits.call_count,3)
             self.assertEqual(len(activity.read_activity_records()),1)
 
-    def test_only_balance_increases_query_a_narrow_window_and_pending_checks_retry(self):
+    def test_every_check_replays_the_history_window_and_pending_checks_survive_restart(self):
         from datetime import timedelta
         import json
         settings={'exchange':'KRAKEN','quote':'EUR'}
@@ -79,25 +79,25 @@ class DepositTests(unittest.TestCase):
         sync_deposits(api,settings,state,now,Decimal(100))
         sync_deposits(api,settings,state,now+timedelta(minutes=5),Decimal(92))
         sync_deposits(api,settings,state,now+timedelta(minutes=10),Decimal(92))
-        api.fiat_deposits.assert_not_called()
+        self.assertEqual(api.fiat_deposits.call_count,2)
         sync_deposits(api,settings,state,now+timedelta(minutes=15),Decimal(292))
-        self.assertEqual(api.fiat_deposits.call_args.args[1],int((now+timedelta(minutes=10)).timestamp()*1000))
+        self.assertEqual(api.fiat_deposits.call_args.args[1],int(now.timestamp()*1000))
         self.assertIn('pending',state['fiat_observation'])
         # A restart or unchanged balance must not lose an awaiting confirmation window.
         state=json.loads(json.dumps(state))
         sync_deposits(api,settings,state,now+timedelta(minutes=20),Decimal(292))
-        self.assertEqual(api.fiat_deposits.call_count,2)
-        self.assertEqual(api.fiat_deposits.call_args.args[1],int((now+timedelta(minutes=10)).timestamp()*1000))
+        self.assertEqual(api.fiat_deposits.call_count,4)
+        self.assertEqual(api.fiat_deposits.call_args.args[1],int(now.timestamp()*1000))
 
     def test_released_hold_does_not_create_unverified_deposit(self):
         now=datetime(2026,11,1,9,tzinfo=timezone.utc)
         settings={'exchange':'KRAKEN','quote':'EUR'}
-        api=type('BookedAPI', (), {'booked_balance': lambda api, currency: Decimal('200')})(); api.fiat_deposits=Mock()
+        api=type('BookedAPI', (), {'booked_balance': lambda api, currency: Decimal('200')})(); api.fiat_deposits=Mock(return_value=[])
         state={}
         sync_deposits(api,settings,state,now,Decimal('100'))
         sync_deposits(api,settings,state,now,Decimal('200'))
         self.assertNotIn('pending',state['fiat_observation'])
-        api.fiat_deposits.assert_not_called()
+        api.fiat_deposits.assert_called_once()
 
     def test_booked_increase_checks_even_when_new_funds_are_held(self):
         now=datetime(2026,11,1,9,tzinfo=timezone.utc)
