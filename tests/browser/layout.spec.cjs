@@ -108,12 +108,12 @@ test('dashboard controls, analysis spacing and modal scroll restoration', async 
     const b = await rect(page.locator(second));
     return Math.round(b.y - a.y - a.height);
   }
-  await expect.poll(() => verticalGap('.report-primary', '.report-details>summary')).toBe(8);
+  await expect.poll(() => verticalGap('.report-primary', '.report-details>summary')).toBe(16);
   await page.locator('.report-details>summary').click();
-  await expect.poll(() => verticalGap('.report-details>summary', '.report-extra')).toBe(8);
-  await expect.poll(() => verticalGap('.report-extra', '.period-activities>summary')).toBe(8);
+  await expect.poll(() => verticalGap('.report-details>summary', '.report-extra')).toBe(16);
+  await expect.poll(() => verticalGap('.report-extra', '.period-activities>summary')).toBe(16);
   await page.locator('.period-activities>summary').click();
-  await expect.poll(() => verticalGap('.period-activities>summary', '.activity-panel')).toBe(8);
+  await expect.poll(() => verticalGap('.period-activities>summary', '.activity-panel')).toBe(16);
   const button = page.locator('#openSettings');
   await button.evaluate(el => { el.textContent = 'A deliberately long translated settings button label that must wrap'; el.style.width = '160px'; });
   expect((await rect(button)).height).toBeGreaterThan(44);
@@ -474,7 +474,7 @@ test('purchase amount and disclosure stay in place when toggled',async({page})=>
  closed.forEach((position,index)=>expect(position).toBeCloseTo(before[index],0));
 });
 
-test('planning cards always share their height',async({page})=>{
+test('planning cards share collapsed height and expand independently',async({page})=>{
  await page.goto('/');
  await expect(page.locator('#investedTotal')).toContainText('501');
  const check=async()=>{
@@ -483,9 +483,12 @@ test('planning cards always share their height',async({page})=>{
    expect(purchase.height).toBeCloseTo(withdrawal.height,0);
  };
  await check();
+ const beforePurchase=await rect(page.locator('.plan-card').first());
+ const beforeWithdrawal=await rect(page.locator('#automaticWithdrawalCard'));
  await page.locator('.purchase-explanation>summary').click();
  await expect(page.locator('.purchase-explanation')).toHaveAttribute('open','');
- await check();
+ expect((await rect(page.locator('.plan-card').first())).height).toBeGreaterThan(beforePurchase.height);
+ expect((await rect(page.locator('#automaticWithdrawalCard'))).height).toBeLessThanOrEqual(beforeWithdrawal.height);
  await page.locator('.purchase-explanation>summary').click();
  await check();
 });
