@@ -124,6 +124,11 @@ def update_activity_record(record):
         )
 
 
+def has_activity_records():
+    with _db() as db:
+        return db.execute("SELECT 1 FROM activity LIMIT 1").fetchone() is not None
+
+
 def read_activity_records():
     with _db() as db:
         return [json.loads(r[0]) for r in db.execute("SELECT payload FROM activity ORDER BY timestamp,id")]

@@ -483,7 +483,23 @@ class Runtime:
             LOG.info("Transaction pause updated: paused=%s; until=%s", result["paused"], result["until"])
             return result
 
-    def backup(self, payload, restore=False, setup=False):
+    def _require_empty_installation(self):
+        from app.data.activity import has_activity_records
+
+        saved = self.store.snapshot()
+        state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
+        if saved["account"] is not None or saved["complete"] or state or has_activity_records():
+            raise ValueError("Initial backup restore is available only on an empty installation without an account.")
+
+    def reserve_setup_restore(self):
+        """Reject closed or exhausted setup before the HTTP handler reads an upload."""
+        with self.lock, self.store.lock:
+            self._require_empty_installation()
+            retry = self.setup_restore_attempts.consume("initial-backup-restore")
+            if retry:
+                raise PasswordConfirmationError("Too many password confirmation attempts. Try again later.", retry)
+
+    def backup(self, payload, restore=False, setup=False, *, setup_attempt_reserved=False):
         """Reauthenticate, or allow initial restore only before an account or history exists."""
         import base64
 
@@ -504,18 +520,12 @@ class Runtime:
             saved = self.store.snapshot()
             account = saved["account"]
             if setup:
-                from app.data.activity import read_activity_records
-
-                state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
-                if account is not None or saved["complete"] or state or read_activity_records():
-                    raise ValueError(
-                        "Initial backup restore is available only on an empty installation without an account."
-                    )
+                self._require_empty_installation()
             elif not account:
                 raise ValueError("Complete dashboard account setup first.")
             attempt_key = "initial-backup-restore" if setup else account["username"]
             attempts = self.setup_restore_attempts if setup else self.password_attempts
-            retry = attempts.consume(attempt_key)
+            retry = 0 if setup and setup_attempt_reserved else attempts.consume(attempt_key)
             if retry:
                 raise PasswordConfirmationError("Too many password confirmation attempts. Try again later.", retry)
             if not setup and not self.store.authenticate(account["username"], payload["current_password"]):

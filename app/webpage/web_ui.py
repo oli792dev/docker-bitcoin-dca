@@ -10,12 +10,12 @@ from datetime import UTC, datetime
 from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler
 from secrets import token_urlsafe
-from threading import RLock
+from threading import BoundedSemaphore, RLock
 from urllib.parse import parse_qs, urlparse
 
 import requests
 
-from app.core.security import AttemptLimiter, PasswordConfirmationError
+from app.core.security import AttemptLimiter, PasswordConfirmationError, string_object
 from app.data.activity import parqet_interval_records, read_dashboard_snapshot, read_report, withdrawal_records
 from app.data.analytics import report as build_report
 from app.data.reporting import parqet_aggregate_rows, parqet_csv
@@ -44,6 +44,7 @@ LOGIN_HTML = load_page("login")
 SESSION_TTL_SECONDS = 30 * 60
 _SESSION_LOCK = RLock()
 _LOGIN_ATTEMPTS = AttemptLimiter()
+_RESTORE_UPLOADS = BoundedSemaphore(1)
 _SESSIONS = {}
 
 
@@ -337,7 +338,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
-    def _settings_body(self):
+    def _settings_length(self):
         if self.headers.get("X-DCA-Action") != "settings" or self.headers.get("Content-Type") != "application/json":
             raise ValueError("Invalid settings request.")
         length = int(self.headers.get("Content-Length", "0"))
@@ -346,7 +347,19 @@ class Handler(BaseHTTPRequestHandler):
         )
         if not 0 < length <= maximum:
             raise ValueError("Invalid settings request size.")
-        data = json.loads(self.rfile.read(length).decode("utf-8"))
+        return length
+
+    def _settings_body(self):
+        length = self._settings_length()
+        text = self.rfile.read(length).decode("utf-8")
+        if urlparse(self.path).path in ("/api/settings/restore", "/api/setup/restore"):
+            from app.data.backup import MAX_BYTES
+
+            limits = {"password": 1024, "archive": (MAX_BYTES + 128) * 4 // 3 + 4}
+            if urlparse(self.path).path == "/api/settings/restore":
+                limits.update(scope=8, current_password=1024)
+            return string_object(text, limits)
+        data = json.loads(text)
         if not isinstance(data, dict):
             raise ValueError("Invalid settings request.")
         return data
@@ -369,7 +382,16 @@ class Handler(BaseHTTPRequestHandler):
         if path not in ("/api/setup/account", "/api/setup/restore") and not self._require_authentication():
             LOG.info("%s rejected: authentication required", operation)
             return
+        upload_reserved = False
         try:
+            if path in ("/api/setup/restore", "/api/settings/restore"):
+                self.close_connection = True
+                self._settings_length()
+                if not _RESTORE_UPLOADS.acquire(blocking=False):
+                    raise PasswordConfirmationError("Another backup restore is in progress. Try again later.", 1)
+                upload_reserved = True
+            if path == "/api/setup/restore":
+                self.runtime.reserve_setup_restore()
             payload = self._settings_body()
             if path == "/api/setup/account":
                 self.runtime.store.create_account(payload.get("username"), payload.get("password"))
@@ -387,7 +409,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(b"{}")
             elif path == "/api/setup/restore":
-                self._json(200, self.runtime.backup(payload, restore=True, setup=True))
+                self._json(200, self.runtime.backup(payload, restore=True, setup=True, setup_attempt_reserved=True))
             elif path == "/api/settings/pause":
                 self._json(200, self.runtime.set_pause(payload))
             elif path in ("/api/settings/backup", "/api/settings/restore"):
@@ -436,6 +458,10 @@ class Handler(BaseHTTPRequestHandler):
                 "Settings failure stack:\n%s", "".join(traceback.format_list(traceback.extract_tb(exc.__traceback__)))
             )
             self._json(500, {"error": "Settings could not be confirmed. Check persistent storage and try again."})
+
+        finally:
+            if upload_reserved:
+                _RESTORE_UPLOADS.release()
 
     def _dashboard_html(self):
         settings = self.settings

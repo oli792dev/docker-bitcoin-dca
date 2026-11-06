@@ -664,6 +664,7 @@
   "Restoring backup…": "Backup wird wiederhergestellt…",
   "Initial setup requires a Full or Config backup with login credentials.": "Die Ersteinrichtung erfordert ein Full- oder Config-Backup mit Zugangsdaten.",
   "Initial backup restore is available only on an empty installation without an account.": "Die Wiederherstellung bei der Ersteinrichtung ist nur auf einer leeren Installation ohne Konto verfügbar.",
+  "Another backup restore is in progress. Try again later.": "Eine Backup-Wiederherstellung läuft bereits. Versuche es später erneut.",
   "Complete configuration in Settings first.": "Schließe zuerst die Konfiguration in den Einstellungen ab.",
   "Restoring a Full or Config backup replaces your settings and login credentials. Sign in with the login saved in the backup afterward. Restoring Activities adds history without changing existing entries. Pending transactions or conflicting history prevent restoration.": "Beim Wiederherstellen eines Full- oder Config-Backups werden deine Einstellungen und Zugangsdaten ersetzt. Melde dich anschließend mit den Zugangsdaten aus dem Backup an. Activities ergänzt den Verlauf, ohne bestehende Einträge zu ändern. Offene Transaktionen oder widersprüchliche Verlaufseinträge verhindern die Wiederherstellung.",
   "A reliable purchase schedule is not available yet. Current status: {status}.": "Eine verlässliche Kaufplanung liegt noch nicht vor. Aktueller Status: {status}.",
