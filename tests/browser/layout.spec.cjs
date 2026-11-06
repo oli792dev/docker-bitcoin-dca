@@ -108,7 +108,9 @@ test('dashboard controls, analysis spacing and modal scroll restoration', async 
     const b = await rect(page.locator(second));
     return Math.round(b.y - a.y - a.height);
   }
-  await expect.poll(() => verticalGap('.report-primary', '.report-details>summary>span')).toBe(8);
+  await expect.poll(() => verticalGap('.report-primary', '.report-details>summary>span')).toBe(16);
+  expect(await verticalGap('.report-details>summary>span','.period-activities>summary>span')).toBeLessThanOrEqual(24);
+  expect(await verticalGap('.period-activities>summary>span','.dashboard-footnotes>summary>span')).toBeLessThanOrEqual(24);
   await page.locator('.report-details>summary').click();
   await expect.poll(() => verticalGap('.report-details>summary>span', '.report-extra')).toBe(8);
   await expect.poll(() => verticalGap('.report-extra', '.period-activities>summary>span')).toBe(8);

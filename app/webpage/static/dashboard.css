@@ -390,6 +390,9 @@ __DESIGN_CSS__
 .parqet-export-dialog .feedback-wrap{margin-top:12px;}
 /* The three supplemental disclosures share one heading and spacing contract. */
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes){margin-top:var(--space-sm);padding:0;border:0;}
+.redesigned .report-details{margin-top:var(--dashboard-gap);}
+.redesigned .analysis-section:has(.report-details:not([open]))+.period-activities,
+.redesigned .period-activities:not([open])+.dashboard-footnotes{margin-top:0;}
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary{position:relative;z-index:1;display:flex;align-items:flex-start;gap:var(--space-sm);list-style:none;min-height:44px;margin:0;padding:0;font-size:.9rem;font-weight:600;line-height:1.4;color:var(--text);cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
 /* Keep the text 8px from each box while retaining a 44px click target. */
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)[open]>summary{min-height:0;}
