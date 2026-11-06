@@ -108,12 +108,15 @@ test('dashboard controls, analysis spacing and modal scroll restoration', async 
     const b = await rect(page.locator(second));
     return Math.round(b.y - a.y - a.height);
   }
-  await expect.poll(() => verticalGap('.report-primary', '.report-details>summary')).toBe(16);
+  await expect.poll(() => verticalGap('.report-primary', '.report-details>summary')).toBe(8);
   await page.locator('.report-details>summary').click();
-  await expect.poll(() => verticalGap('.report-details>summary', '.report-extra')).toBe(16);
-  await expect.poll(() => verticalGap('.report-extra', '.period-activities>summary')).toBe(16);
+  await expect.poll(() => verticalGap('.report-details>summary>span', '.report-extra')).toBe(8);
+  await expect.poll(() => verticalGap('.report-extra', '.period-activities>summary')).toBe(8);
   await page.locator('.period-activities>summary').click();
-  await expect.poll(() => verticalGap('.period-activities>summary', '.activity-panel')).toBe(16);
+  await expect.poll(() => verticalGap('.period-activities>summary>span', '.activity-panel')).toBe(8);
+  await expect.poll(() => verticalGap('.period-activities', '.dashboard-footnotes>summary')).toBe(8);
+  await page.locator('.dashboard-footnotes>summary').click();
+  await expect.poll(() => verticalGap('.dashboard-footnotes>summary>span', '.dashboard-footnotes>ol')).toBe(8);
   const button = page.locator('#openSettings');
   await button.evaluate(el => { el.textContent = 'A deliberately long translated settings button label that must wrap'; el.style.width = '160px'; });
   expect((await rect(button)).height).toBeGreaterThan(44);
