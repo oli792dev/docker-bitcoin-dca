@@ -112,13 +112,13 @@ test('dashboard controls, analysis spacing and modal scroll restoration', async 
   expect(await verticalGap('.report-details>summary>span','.period-activities>summary>span')).toBeLessThanOrEqual(24);
   expect(await verticalGap('.period-activities>summary>span','.dashboard-footnotes>summary>span')).toBeLessThanOrEqual(24);
   await page.locator('.report-details>summary').click();
-  await expect.poll(() => verticalGap('.report-details>summary>span', '.report-extra')).toBe(8);
-  await expect.poll(() => verticalGap('.report-extra', '.period-activities>summary>span')).toBe(8);
+  await expect.poll(() => verticalGap('.report-details>summary>span', '.report-extra')).toBe(16);
+  await expect.poll(() => verticalGap('.report-extra', '.period-activities>summary>span')).toBe(16);
   await page.locator('.period-activities>summary').click();
-  await expect.poll(() => verticalGap('.period-activities>summary>span', '.activity-panel')).toBe(8);
-  await expect.poll(() => verticalGap('.period-activities', '.dashboard-footnotes>summary>span')).toBe(8);
+  await expect.poll(() => verticalGap('.period-activities>summary>span', '.activity-panel')).toBe(16);
+  await expect.poll(() => verticalGap('.period-activities', '.dashboard-footnotes>summary>span')).toBe(16);
   await page.locator('.dashboard-footnotes>summary').click();
-  await expect.poll(() => verticalGap('.dashboard-footnotes>summary>span', '.dashboard-footnotes>ol')).toBe(8);
+  await expect.poll(() => verticalGap('.dashboard-footnotes>summary>span', '.dashboard-footnotes>ol')).toBe(16);
   await page.locator('.dashboard-footnotes>summary').scrollIntoViewIfNeeded();
   const notesTarget=await rect(page.locator('.dashboard-footnotes>summary'));
   await page.mouse.click(notesTarget.x+8,notesTarget.y+35);

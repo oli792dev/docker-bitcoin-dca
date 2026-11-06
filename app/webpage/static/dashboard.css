@@ -381,7 +381,7 @@ __DESIGN_CSS__
 .redesigned .period-shortcuts button{min-height:var(--button-height);}
 }
 .redesigned .period-activities{border:0;padding-top:0;}
-.redesigned :is(.report-details>.report-extra,.period-activities>.activity-panel,.dashboard-footnotes>ol){margin-top:var(--space-sm);}
+.redesigned :is(.report-details>.report-extra,.period-activities>.activity-panel,.dashboard-footnotes>ol){margin-top:var(--dashboard-gap);}
 .redesigned .report-extra .value{color:var(--text);font-weight:600;}
 .parqet-export-dialog{width:min(620px,calc(100vw - 32px));}
 .parqet-export-dialog .field{margin-top:16px;}
@@ -389,12 +389,11 @@ __DESIGN_CSS__
 .parqet-export-dialog .confirmation-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:16px;}
 .parqet-export-dialog .feedback-wrap{margin-top:12px;}
 /* The three supplemental disclosures share one heading and spacing contract. */
-.redesigned :is(.report-details,.period-activities,.dashboard-footnotes){margin-top:var(--space-sm);padding:0;border:0;}
-.redesigned .report-details{margin-top:var(--dashboard-gap);}
+.redesigned :is(.report-details,.period-activities,.dashboard-footnotes){margin-top:var(--dashboard-gap);padding:0;border:0;}
 .redesigned .analysis-section:has(.report-details:not([open]))+.period-activities,
 .redesigned .period-activities:not([open])+.dashboard-footnotes{margin-top:0;}
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary{position:relative;z-index:1;display:flex;align-items:flex-start;gap:var(--space-sm);list-style:none;min-height:44px;margin:0;padding:0;font-size:.9rem;font-weight:600;line-height:1.4;color:var(--text);cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
-/* Keep the text 8px from each box while retaining a 44px click target. */
+/* Align text with the shared section gap while retaining a 44px click target. */
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)[open]>summary{min-height:0;}
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary::after{content:"";position:absolute;inset:0 0 auto;height:100%;min-height:44px;}
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary::-webkit-details-marker{display:none;}
