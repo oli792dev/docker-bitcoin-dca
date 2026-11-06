@@ -48,6 +48,12 @@ const context={document:{getElementById:get,createElement:()=>new Element()},loc
 const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
 (async()=>{
  vm.createContext(context);vm.runInContext(script,context);await settle();
+ assert.match(vm.runInContext('purchaseExplanationText({nextPurchaseStatus:"Waiting for deposit"})',context),/Current status: Waiting for deposit/);
+ const explanation={quote:'EUR',timezone:'UTC',purchaseExplanation:{availableBalance:'600',price:'60000',plannedQuantity:'.0001',plannedCost:'6.02',possibleBuys:99,intervalSeconds:3600,lastPurchaseAt:null,nextDepositAt:'2026-11-09T14:00:00Z',dueAt:'2026-11-05T11:00:00Z',useRemainingBudget:true}};
+ const firstPurchase=vm.runInContext('purchaseExplanationText('+JSON.stringify(explanation)+')',context);
+ assert.match(firstPurchase,/No previous purchase is recorded/);
+ assert.match(firstPurchase,/final purchase uses the remaining budget/);
+ assert(!firstPurchase.includes('divided by'),'First purchase must not invent a previous purchase date');
  assert.equal(get('investedTotal').textContent,'€3,839.58');
  assert(html.includes('<details class="activities-section period-activities"'));assert(html.includes('>Period activities</summary>'));
  withdrawalHistoryEmpty=true;await context.window.DCA_DASHBOARD_ACTIONS.export();assert.equal(get('exportDialog').open,true);assert.equal(get('exportDialogMessage').textContent,'');assert.equal(get('confirmExport').disabled,false);await get('confirmExport').handlers.click();assert.match(get('exportDialogMessage').textContent,/No confirmed withdrawal/);get('cancelExport').handlers.click();

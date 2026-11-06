@@ -353,14 +353,19 @@ test('Activity dates are unboxed links and details use responsive columns', asyn
  await page.screenshot({path:test.info().outputPath('activity-details.png')});
 });
 
-test('purchase explanation uses compact responsive field columns',async({page,isMobile})=>{
+test('purchase explanation explains the saved schedule in prose',async({page})=>{
+ await page.route('**/api/schedule',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({quote:'EUR',timezone:'UTC',purchaseExplanation:{availableBalance:'600',price:'60000',plannedQuantity:'.0001',plannedCost:'6.02',possibleBuys:99,intervalSeconds:3600,lastPurchaseAt:'2026-11-05T10:00:00Z',nextDepositAt:'2026-11-09T14:00:00Z',dueAt:'2026-11-05T11:00:00Z'}})}));
  await page.goto('/');
  await page.locator('.purchase-explanation>summary').click();
- const fields=page.locator('#purchaseExplanation>.purchase-explanation-field');
- await expect(fields).toHaveCount(10);
- await expect(page.locator('#purchaseExplanation dt').filter({hasText:'Spendable balance'})).toHaveCount(0);
- const a=await rect(fields.nth(0)),b=await rect(fields.nth(1));
- if(isMobile)expect(b.y).toBeGreaterThan(a.y);else expect(Math.abs(b.y-a.y)).toBeLessThan(1);
+ const text=page.locator('#purchaseExplanation');
+ await expect(text).toContainText('€600.00');
+ await expect(text).toContainText('0.0001 BTC');
+ await expect(text).toContainText('€6.02');
+ await expect(text).toContainText('99 purchases');
+ await expect(text).toContainText('divided by 100');
+ await expect(text).toContainText('60 minutes');
+ await expect(text).toContainText('saved target time');
+ await expect(text.locator('dt,dd')).toHaveCount(0);
  await noPageOverflow(page);
 });
 

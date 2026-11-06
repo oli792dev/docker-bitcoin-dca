@@ -36,6 +36,23 @@ function renderWithdrawalProgress(balance,price,threshold,enabled){
 function updateStatusLight(tone){
  $('botStatusLight').className='status-light status-'+(['active','waiting','error'].includes(tone)?tone:'waiting');
 }
+function purchaseExplanationText(schedule){
+ const plan=schedule.purchaseExplanation||{};
+ const sentence=(text,values={})=>t(text).replace(/\{(\w+)\}/g,(_,key)=>String(values[key]));
+ const date=value=>Number.isFinite(Date.parse(value))?dateLabel(Date.parse(value),schedule.timezone||'UTC'):null;
+ const last=date(plan.lastPurchaseAt),deposit=date(plan.nextDepositAt),due=date(plan.dueAt);
+ if(!deposit||!due||!knownNumber(plan.availableBalance)||!knownNumber(plan.price)||!knownNumber(plan.plannedQuantity)||!knownNumber(plan.plannedCost)||!(plan.possibleBuys>0)||!(plan.intervalSeconds>0)){
+  return sentence('A reliable purchase schedule is not available yet. Current status: {status}.',{status:t(schedule.nextPurchaseStatus||'Waiting for account check')});
+ }
+ const text=[sentence('With {balance} available and a BTC price of {price}, the next purchase of {quantity} costs about {cost}, including trading fees.',{balance:money(plan.availableBalance,schedule.quote),price:money(plan.price,schedule.quote),quantity:btc(plan.plannedQuantity),cost:money(plan.plannedCost,schedule.quote)}),
+ sentence('The remaining purchase budget covers {buys} purchases before the next expected deposit on {deposit}.',{buys:Number(plan.possibleBuys).toLocaleString(locale),deposit})];
+ if(last)text.push(sentence('The time from the last purchase on {last} to that deposit is divided by {slots}, giving an interval of {minutes} minutes between purchases.',{last,slots:Number(plan.possibleBuys)+1,minutes:(plan.intervalSeconds/60).toLocaleString(locale,{maximumFractionDigits:1})}));
+ else text.push(t('No previous purchase is recorded, so the first purchase becomes due once startup and exchange checks are complete.'));
+ text.push(sentence('The saved target time for the next purchase is {due}.',{due}));
+ if(plan.useRemainingBudget)text.push(t('This final purchase uses the remaining budget within the exchange limits.'));
+ text.push(t('Confirmed early deposits can bring the target time forward. Startup checks, pauses or open transactions can delay execution.'));
+ return text.join(' ');
+}
 let dashboardRefreshSeconds=30,scheduleRefreshTimer=null,lastReportData=null,lastAccountMarket=null;
 async function refreshPurchaseSchedule(){
  const request=++scheduleRequest;
@@ -63,12 +80,7 @@ async function refreshPurchaseSchedule(){
     activityRates=rates;renderActivities();
    }
   }
-  if($('purchaseExplanation')){
-   const output=$('purchaseExplanation');output.replaceChildren();const plan=schedule.purchaseExplanation||{};
-   const planMoney=value=>value==null?null:money(value,schedule.quote),planBtc=value=>value==null?null:btc(value),planDate=value=>Number.isFinite(Date.parse(value))?dateLabel(Date.parse(value),schedule.timezone||'UTC'):null;
-   const fields=[['Available balance',planMoney(plan.availableBalance)],['BTC price',plan.price==null?null:money(plan.price,schedule.quote)+'/BTC'],['Planned BTC',planBtc(plan.plannedQuantity)],['Planned cost including fee',planMoney(plan.plannedCost)],['Fee rate',plan.feeRate==null?null:(Number(plan.feeRate)*100).toLocaleString(locale,{maximumFractionDigits:4})+'%'],['Possible purchases',plan.possibleBuys],['Purchase interval (minutes)',plan.intervalSeconds!=null?(plan.intervalSeconds/60).toLocaleString(locale,{maximumFractionDigits:1}):null],['Last purchase',planDate(plan.lastPurchaseAt)],['Next deposit',planDate(plan.nextDepositAt)],['Saved due time',planDate(plan.dueAt)]];
-   for(const [label,value] of fields){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=t(label);dd.textContent=value==null?'—':t(String(value));const field=document.createElement('div');field.className='purchase-explanation-field';field.append(dt,dd);output.append(field)}
-  }
+  if($('purchaseExplanation'))$('purchaseExplanation').textContent=purchaseExplanationText(schedule);
   const detail=schedule.forecastDetails;
   $('forecastProgress').textContent=detail?t('About {btc} BTC · {buys} purchases remaining'.replace('{btc}',Number(detail.remainingBtc).toLocaleString(locale,{maximumFractionDigits:8})).replace('{buys}',detail.remainingPurchases)):'';
   $('forecastAssumptions').hidden=!detail;
