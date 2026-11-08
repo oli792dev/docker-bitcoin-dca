@@ -266,51 +266,51 @@ __DESIGN_CSS__
 .status-light.status-error{background:var(--red);}
 #thresholdCard.threshold-inactive .value{color:var(--muted);opacity:.55;}
 /* One card contract for account, schedule and report surfaces. */
-.redesigned .balance-overview,.redesigned .period-activities .activity-panel,.redesigned .plan-card,.redesigned .report-extra,.redesigned .report-primary{background:var(--panel);border:1px solid transparent;border-radius:var(--corner-radius);padding:20px}
+.redesigned .balance-overview,.redesigned .period-activities .activity-panel,.redesigned .plan-card,.redesigned .report-extra,.redesigned .report-primary{background:var(--panel);border:1px solid transparent;border-radius:var(--corner-radius);padding:var(--panel-padding)}
 /* Dashboard redesign: balances, next actions, analysis, then activity. */
-.redesigned{--dashboard-gap:16px;}
-.redesigned main{max-width:1160px;padding-top:20px;}
+.redesigned{--dashboard-gap:var(--space-lg);--dashboard-metric-row-gap:20px;--dashboard-caption-gap:6px;}
+.redesigned main{max-width:1160px;padding-top:var(--panel-padding);}
 .redesigned h1{font-size:1.2rem;letter-spacing:-.025em;}
 .redesigned .dashboard-logo{width:44px;height:44px;flex-basis:44px;}
 .redesigned .top{padding:var(--space-sm) 0 var(--dashboard-gap);margin-bottom:0;}
 .redesigned .top-actions{flex-direction:row;align-items:center;gap:var(--space-lg);}
-.redesigned .balance-overview{display:grid;gap:var(--space-xl);}
+.redesigned .balance-overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-xl);margin-bottom:var(--dashboard-gap);}
 .redesigned .metric{min-width:0;}
 .redesigned .metric-label{font-size:.82rem;color:var(--muted);line-height:1.45;}
-.redesigned .metric>.value{font-size:1.9rem;overflow-wrap:anywhere;font-variant-numeric:tabular-nums;}
+.redesigned .metric>.value{font-size:1.9rem;overflow-wrap:anywhere;font-variant-numeric:tabular-nums;margin-top:var(--space-sm);}
 .redesigned .metric .small{font-size:.76rem;}
 .redesigned .balance-overview .withdraw-action{align-items:flex-start;margin-top:var(--space-md);}
 .redesigned .balance-overview #manualWithdraw{font-size:.76rem;padding:var(--space-sm) var(--space-md);background:transparent;}
-.redesigned .planning-overview{display:grid;grid-template-columns:1fr 1fr;margin-bottom:0;}
-.redesigned .plan-card{min-width:0;display:flex;flex-direction:column;align-items:stretch;}
-.redesigned .plan-title{display:flex;justify-content:space-between;gap:var(--space-md);}
+.redesigned .planning-overview{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:var(--dashboard-gap);margin-bottom:0;}
+.redesigned .plan-card{min-width:0;display:flex;flex-direction:column;align-items:stretch;gap:0;}
+.redesigned .plan-title{display:flex;justify-content:space-between;align-items:baseline;gap:var(--space-md);margin-bottom:var(--space-md);}
 .redesigned .plan-title h2{font-size:1rem;margin:0;}
 .redesigned .plan-title>span{color:var(--muted);font-size:.76rem;}
 .redesigned .plan-card>.value{overflow-wrap:anywhere;}
-.redesigned .plan-countdown{font-size:.88rem;font-variant-numeric:tabular-nums;}
-.redesigned .plan-footer{border-top:1px solid var(--line);color:var(--muted);}
-.redesigned .plan-footer #orderSummaryNote{display:block;margin-top:6px;}
-.redesigned progress{appearance:none;-webkit-appearance:none;border:0;width:100%;border-radius:var(--corner-radius);margin:var(--space-lg) 0 var(--space-xs);background:var(--line);color:var(--accent);}
+.redesigned .plan-countdown{font-size:.88rem;font-variant-numeric:tabular-nums;color:var(--text);font-weight:500;margin-top:var(--dashboard-caption-gap);}
+.redesigned .plan-footer{border:0;padding-top:var(--space-sm);margin-top:0;color:var(--muted);font-size:.82rem;}
+.redesigned .plan-footer #orderSummaryNote{display:block;margin-top:var(--dashboard-caption-gap);}
+.redesigned progress{appearance:none;-webkit-appearance:none;border:0;width:100%;border-radius:var(--corner-radius);height:var(--space-xs);margin:var(--dashboard-gap) 0 var(--space-xs);background:var(--line);color:var(--accent);}
 .redesigned progress::-webkit-progress-bar{background:var(--line);border-radius:var(--corner-radius);}
 .redesigned progress::-webkit-progress-value{background:var(--accent);border-radius:var(--corner-radius);}
 .redesigned progress::-moz-progress-bar{background:var(--accent);border-radius:var(--corner-radius);}
-.redesigned .analysis-section,.redesigned .activities-section{border-top:1px solid var(--line);padding-top:var(--space-xl);margin-top:var(--space-xl);}
-.redesigned .analysis-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;}
+.redesigned .analysis-section{border-top:1px solid var(--line);padding-top:var(--dashboard-gap);margin-top:var(--dashboard-gap);}
+.redesigned .analysis-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--dashboard-gap);margin-bottom:var(--dashboard-gap);}
 .redesigned .analysis-header h2,.redesigned .activities-section>h2{font-size:1.35rem;margin:0;}
 .redesigned .analysis-header .bottom-actions{margin:0;}
 .redesigned .analysis-header .feedback-wrap{flex-basis:100%;margin:0;}
 .redesigned .analysis-header .feedback-wrap:has(.hidden){display:none;}
-.redesigned .report-primary{display:grid;}
+.redesigned .report-primary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--dashboard-metric-row-gap) var(--space-xl);margin:0;}
 .redesigned .report-primary .value{font-size:1.45rem;}
 .redesigned .report-details{color:var(--muted);font-size:.82rem;}
-.redesigned .report-extra{display:grid;}
+.redesigned .report-extra{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-sm) var(--space-xl);}
 .redesigned .report-extra .value{font-size:1.2rem;}
 .redesigned .activity-panel{padding:0;background:transparent;border:0;margin:var(--space-lg) 0 0;}
 .redesigned .tablewrap{border:0;border-radius:0;background:transparent;padding:0;}
 .redesigned .dashboard-footnotes{font-size:.76rem;border:0;}
 .redesigned [hidden]{display:none!important;}
 @media (max-width:800px){
-.redesigned .balance-overview{gap:20px;}
+.redesigned .balance-overview{row-gap:var(--dashboard-metric-row-gap);}
 .redesigned .metric>.value{font-size:1.4rem;}
 }
 @media (max-width:600px){
@@ -324,20 +324,19 @@ __DESIGN_CSS__
 .redesigned .bot-status{max-width:none;}
 .redesigned .balance-overview>.metric:last-child{grid-column:1/-1;border-top:1px solid var(--line);padding-top:var(--space-lg);}
 .redesigned .balance-overview>.metric:last-child .value{font-size:1.2rem;}
-.redesigned .planning-overview{grid-template-columns:1fr;gap:var(--space-lg);}
+.redesigned .planning-overview{grid-template-columns:1fr;}
 .redesigned .plan-card>.value{font-size:1.3rem;}
-.redesigned .analysis-header{gap:var(--space-lg);}
 .redesigned .analysis-header button{font-size:.82rem;}
 .redesigned .controls{grid-template-columns:1fr;}
 .redesigned .report-primary .value{font-size:1.3rem;}
 }
 .redesigned .period-shortcuts{display:flex;gap:2px;border:0;background:var(--panel);border-radius:var(--corner-radius);padding:3px;margin-left:auto;}
-.redesigned .period-shortcuts button{font-size:.76rem;min-height:var(--button-height);padding:8px 12px;background:transparent;color:var(--muted);border:0;border-radius:var(--corner-radius);}
+.redesigned .period-shortcuts button{font-size:.76rem;min-height:var(--button-height);padding:var(--space-sm) var(--space-md);background:transparent;color:var(--muted);border:0;border-radius:var(--corner-radius);}
 .redesigned .period-shortcuts button[aria-pressed=true],.redesigned .period-shortcuts button[aria-pressed=true]:hover{background:var(--selection);color:var(--text);border:0;font-weight:600;}
 .redesigned .period-shortcuts button:not([aria-pressed=true]):is(:hover,:active){background:var(--tab-hover);color:var(--text);}
 @media (max-width:600px){
 .redesigned .period-shortcuts{order:3;flex-basis:100%;margin:0;}
-.redesigned .period-shortcuts button{padding:8px 8px;}
+.redesigned .period-shortcuts button{padding:var(--space-sm);}
 .redesigned .analysis-header .bottom-actions{margin-left:auto;}
 }
 .redesigned .settings-dialog-header{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);}
@@ -350,17 +349,10 @@ __DESIGN_CSS__
 .redesigned .settings-header-actions{grid-column:2;}
 .redesigned .settings-header-actions .logout-button{padding:8px 10px;font-size:.76rem;}
 }
-@media (max-width:600px){
-.redesigned .report-extra{grid-template-columns:repeat(2,minmax(0,1fr));}
-}
 .redesigned .plan-card.withdrawal-disabled{background:var(--panel);border-color:transparent;}
 .redesigned .withdrawal-disabled .plan-title h2,.redesigned .withdrawal-disabled>#estimatedWithdrawalAt{color:var(--muted);}
 .redesigned .withdrawal-disabled>#estimatedWithdrawalAt{font-size:1.1rem;font-weight:500;}
 .redesigned .withdrawal-disabled>:not(.plan-title):not(#estimatedWithdrawalAt),.redesigned .withdrawal-disabled #withdrawalBadge{display:none!important;}
-.redesigned .analysis-header{margin-bottom:var(--dashboard-gap);}
-.redesigned .selected-period-label{margin:0 0 var(--space-xl);color:var(--text);font-weight:500;line-height:1.5;font-variant-numeric:tabular-nums;}
-.redesigned .report-primary{margin:0;}
-.redesigned .report-details{border:0;}
 .report-range-dialog{width:min(620px,calc(100vw - 32px));}
 .report-range-dialog .controls{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:var(--space-lg);gap:var(--space-lg);}
 .report-range-dialog .controls .field:first-child{grid-column:1/-1;}
@@ -380,14 +372,13 @@ __DESIGN_CSS__
 @media (pointer:coarse){
 .redesigned .period-shortcuts button{min-height:var(--button-height);}
 }
-.redesigned .period-activities{border:0;padding-top:0;}
 .redesigned :is(.report-details>.report-extra,.period-activities>.activity-panel,.dashboard-footnotes>ol){margin-top:var(--dashboard-gap);}
 .redesigned .report-extra .value{color:var(--text);font-weight:600;}
 .parqet-export-dialog{width:min(620px,calc(100vw - 32px));}
-.parqet-export-dialog .field{margin-top:16px;}
+.parqet-export-dialog .field{margin-top:var(--dashboard-gap);}
 .parqet-export-dialog select{width:100%;min-width:0;min-height:44px;}
-.parqet-export-dialog .confirmation-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:16px;}
-.parqet-export-dialog .feedback-wrap{margin-top:12px;}
+.parqet-export-dialog .confirmation-actions{display:flex;justify-content:flex-end;gap:var(--space-md);margin-top:var(--dashboard-gap);}
+.parqet-export-dialog .feedback-wrap{margin-top:var(--space-md);}
 /* The three supplemental disclosures share one heading and spacing contract. */
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes){margin-top:var(--dashboard-gap);padding:0;border:0;}
 .redesigned .analysis-section:has(.report-details:not([open]))+.period-activities,
@@ -400,25 +391,20 @@ __DESIGN_CSS__
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary::before{content:"";flex:0 0 var(--icon-size);width:var(--icon-size);height:var(--icon-size);background:currentColor;-webkit-mask:var(--icon-chevron) center/contain no-repeat;mask:var(--icon-chevron) center/contain no-repeat;transition:transform 150ms ease;}
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)[open]>summary::before{transform:rotate(90deg);}
 .redesigned :is(.report-details,.period-activities,.dashboard-footnotes)>summary:is(:hover,:active){color:var(--text);background:transparent;}
+/* Supplemental disclosures share an 8px spacing rhythm. */
+.redesigned .dashboard-footnotes :is(li,.note-subheading,li>strong){margin-bottom:var(--space-sm);}
+.redesigned .dashboard-footnotes :is(p,.note-subsection){margin-top:var(--space-sm);}
+.redesigned .dashboard-footnotes li:last-child{margin-bottom:0;}
+
 /* Quiet surfaces and a deliberate hierarchy for financial data. */
-.redesigned .metric>.value{font-weight:600;letter-spacing:-.035em;line-height:1.22;margin-top:8px;}
+.redesigned .metric>.value{font-weight:600;letter-spacing:-.035em;line-height:1.22;}
 .redesigned .balance-overview>.metric:first-child>.value{font-size:clamp(1.65rem,3vw,2.2rem);}
 .redesigned .value-unit{font-size:.62em;font-weight:500;letter-spacing:0;color:var(--muted);white-space:nowrap;}
 .redesigned .metric-label{font-weight:500;}
-.redesigned .planning-overview{gap:var(--dashboard-gap);grid-auto-rows:1fr;}
-.redesigned .plan-card{border-color:transparent;gap:0;}
-.redesigned .plan-title{margin-bottom:12px;align-items:baseline;}
 .redesigned .plan-title h2{font-weight:600;letter-spacing:-.015em;}
 .redesigned .plan-card>.value{font-size:clamp(1.35rem,2.5vw,1.65rem);line-height:1.3;letter-spacing:-.025em;}
-.redesigned .plan-countdown{color:var(--text);font-weight:500;margin-top:6px;}
-.redesigned .plan-footer{border:0;padding-top:var(--space-sm);margin-top:0;font-size:.82rem;}
-.redesigned progress{margin-top:16px;height:4px;}
-.redesigned .analysis-section{padding-top:var(--dashboard-gap);margin-top:var(--dashboard-gap);}
-.redesigned .selected-period-label{margin-bottom:20px;font-size:.94rem;}
-.redesigned .report-primary{gap:20px 24px;}
-.redesigned .report-primary .value{font-weight:600;line-height:1.25;margin-top:8px;}
-.redesigned .report-extra{gap:16px 24px;}
-.redesigned .activity-panel .activity-heading{margin-bottom:8px;}
+.redesigned .report-primary .value{font-weight:600;line-height:1.25;}
+.redesigned .activity-panel .activity-heading{margin-bottom:var(--space-sm);}
 .redesigned th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .redesigned .plan-title>span:empty{display:none;}
 @media (max-width:600px){
@@ -456,7 +442,6 @@ __DESIGN_CSS__
 .redesigned .report-extra,.redesigned .period-activities .activity-panel{border-color:CanvasText;}
 }
 /* Account balances share the appearance-aware card surface. */
-.redesigned .balance-overview{margin-bottom:var(--dashboard-gap);}
 @media (prefers-contrast:more){
 .redesigned .balance-overview{border-color:var(--line);}
 }
@@ -464,13 +449,9 @@ __DESIGN_CSS__
 .redesigned .balance-overview{border-color:CanvasText;}
 }
 /* Keep the selected dates alongside their section heading. */
-.redesigned .analysis-title{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 16px;min-width:0;}
+.redesigned .analysis-title{display:flex;align-items:baseline;flex-wrap:wrap;gap:var(--dashboard-caption-gap) var(--dashboard-gap);min-width:0;}
 .redesigned .analysis-title .selected-period-label{margin:0;font-size:.76rem;font-weight:400;line-height:1.5;color:var(--muted);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
-.redesigned .analysis-header{gap:var(--dashboard-gap);}
 /* Equal tracks and consistent insets across every dashboard metric surface. */
-.redesigned .balance-overview{grid-template-columns:repeat(3,minmax(0,1fr));column-gap:24px;}
-.redesigned .report-primary{grid-template-columns:repeat(5,minmax(0,1fr));column-gap:24px;}
-.redesigned .report-extra{grid-template-columns:repeat(3,minmax(0,1fr));column-gap:24px;}
 .redesigned :is(.balance-overview,.report-primary,.report-extra)>.metric{min-width:0;align-self:start;}
 .redesigned :is(.balance-overview,.report-primary,.report-extra) .metric-label{min-height:1.45em;}
 @media (min-width:801px) and (max-width:1000px){
@@ -480,8 +461,8 @@ __DESIGN_CSS__
 .redesigned .report-primary{grid-template-columns:repeat(2,minmax(0,1fr));}
 }
 @media (max-width:600px){
-.redesigned .balance-overview{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px;}
-.redesigned .report-primary,.redesigned .report-extra{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px;}
+.redesigned .balance-overview{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--dashboard-metric-row-gap) var(--dashboard-gap);}
+.redesigned .report-primary,.redesigned .report-extra{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:var(--dashboard-gap);}
 }
 @media (max-width:360px){
 .redesigned .balance-overview,.redesigned .report-primary,.redesigned .report-extra{grid-template-columns:minmax(0,1fr);}
@@ -500,14 +481,14 @@ __DESIGN_CSS__
 .redesigned .plan-card.withdrawal-disabled{border-color:CanvasText;}
 }
 /* Pagination wraps as whole control groups rather than breaking labels. */
-.redesigned .pagination{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
-.redesigned .pagination .page-size,.redesigned .pagination .pagination-navigation,.redesigned .pagination .page-jump{display:flex;align-items:center;flex-wrap:nowrap;gap:8px;white-space:nowrap;min-width:0;}
+.redesigned .pagination{display:flex;align-items:center;gap:var(--space-sm);margin-top:var(--space-sm);flex-wrap:wrap;}
+.redesigned .pagination .page-size,.redesigned .pagination .pagination-navigation,.redesigned .pagination .page-jump{display:flex;align-items:center;flex-wrap:nowrap;gap:var(--space-sm);white-space:nowrap;min-width:0;}
 .redesigned .pagination :is(button,label,select){white-space:nowrap;overflow-wrap:normal;flex-shrink:0;}
 .redesigned .pagination .page-size select{min-width:72px;}
 .redesigned .pagination .page-jump input{width:64px;min-width:48px;flex:0 1 64px;}
 .redesigned .pagination .page-jump{flex:0 0 auto;}
 @media (max-width:600px){
-.redesigned .pagination{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;}
+.redesigned .pagination{display:grid;grid-template-columns:minmax(0,1fr) auto;}
 .redesigned .pagination>.page-size{grid-column:1;order:0;margin:0;}
 .redesigned .pagination>.pagination-navigation{grid-column:2;order:0;justify-content:flex-end;}
 .redesigned .pagination>.page-jump{grid-column:1/-1;order:1;justify-content:flex-end;}
@@ -520,8 +501,6 @@ __DESIGN_CSS__
 .redesigned .pagination>.page-jump{justify-content:flex-start;}
 .redesigned .pagination>.notice{text-align:start;}
 }
-
-@media(max-width:600px){.redesigned .balance-overview,.redesigned .period-activities .activity-panel,.redesigned .plan-card,.redesigned .report-extra,.redesigned .report-primary{padding:16px}}
 
 /* Labels share their row height so amounts align even when translated labels wrap. */
 @supports(grid-template-rows:subgrid){
@@ -542,11 +521,11 @@ __DESIGN_CSS__
 
 .redesigned .purchase-explanation{margin-top:var(--space-sm);color:var(--muted);font-size:.82rem;}
 /* Preserve the 44px hit area without adding space between text lines. */
-.redesigned .purchase-explanation>summary{display:flex;align-items:center;padding:12px 0;margin:-12px 0;gap:var(--space-xs);list-style:none;font:inherit;color:inherit;cursor:pointer;}
+.redesigned .purchase-explanation>summary{display:flex;align-items:center;padding:var(--space-md) 0;margin:calc(-1 * var(--space-md)) 0;gap:var(--space-xs);list-style:none;font:inherit;color:inherit;cursor:pointer;}
 .redesigned .purchase-explanation>summary::-webkit-details-marker{display:none;}
 .redesigned .purchase-explanation>summary::before{content:"";width:var(--icon-size);height:var(--icon-size);flex-shrink:0;background:currentColor;-webkit-mask:var(--icon-chevron) center/contain no-repeat;mask:var(--icon-chevron) center/contain no-repeat;}
 .redesigned .purchase-explanation[open]>summary::before{transform:rotate(90deg);}
-.activity-toolbar{display:flex;justify-content:flex-end;margin-bottom:var(--space-md);}
+.redesigned .activity-toolbar{display:flex;justify-content:flex-end;margin-bottom:var(--space-sm);}
 .activity-toolbar input{width:min(240px,100%);min-width:0;min-height:44px;font-size:.82rem;}
 .redesigned button.activity-date-link{display:inline;min-height:0;min-width:0;padding:0;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;text-align:inherit;white-space:nowrap;}
 .redesigned button.activity-date-link:hover,.redesigned button.activity-date-link:active{background:transparent;color:var(--accent);text-decoration:underline;}
@@ -561,14 +540,6 @@ __DESIGN_CSS__
 
 /* Empty helper text must not reserve space at the edge of a card. */
 .redesigned :is(.metric,.plan-card)>.small:empty,.redesigned #orderSummaryNote:empty{display:none;}
-
-/* Supplemental disclosures share an 8px spacing rhythm. */
-.redesigned .report-extra{row-gap:var(--space-sm);}
-.redesigned .activity-toolbar{margin-bottom:var(--space-sm);}
-.redesigned .pagination{margin-top:var(--space-sm);gap:var(--space-sm);}
-.redesigned .dashboard-footnotes :is(li,.note-subheading,li>strong){margin-bottom:var(--space-sm);}
-.redesigned .dashboard-footnotes :is(p,.note-subsection){margin-top:var(--space-sm);}
-.redesigned .dashboard-footnotes li:last-child{margin-bottom:0;}
 
 /* Expanded purchase details must not stretch the adjacent withdrawal card. */
 .redesigned .planning-overview:has(.purchase-explanation[open]){grid-auto-rows:auto;align-items:start;}
