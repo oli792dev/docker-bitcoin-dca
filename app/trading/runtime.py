@@ -556,6 +556,8 @@ class Runtime:
             try:
                 result = manager.restore(encrypted, payload["password"], None if setup else payload["scope"])
             except BaseException:
+                if (self.state_path.parent / ".restore-completed").exists():
+                    self._configuration_uncertain = True
                 self.exchange_check_pending = True
                 self.service = None
                 if self.recovery_required:

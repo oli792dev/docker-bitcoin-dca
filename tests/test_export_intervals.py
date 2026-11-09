@@ -37,6 +37,23 @@ class ExportIntervals(unittest.TestCase):
     def export(self,start=1,end=12):
         return reporting.parqet_aggregate_rows(activity.parqet_interval_records(stamp(start),stamp(end)),'KRAKEN')
 
+    def test_withdrawal_api_returns_account_scoped_bounds_without_key_identity(self):
+        records = [record('a-first', 2, 'TransferOut'), record('b-first', 5, 'TransferOut'),
+                   record('a-second', 8, 'TransferOut')]
+        for item, identity in zip(records, ['secret-fingerprint-a', 'secret-fingerprint-b', 'secret-fingerprint-a']):
+            item['accountIdentity'] = identity
+        handler = object.__new__(web_ui.Handler)
+        handler.path = '/api/withdrawals'
+        handler.settings = {'exchange':'KRAKEN'}
+        handler._require_authentication = lambda: True
+        results = []
+        handler._json = lambda status, data: results.append(data)
+        with patch.object(web_ui, 'withdrawal_records', return_value=records):
+            handler.do_GET()
+        self.assertEqual([r['startTimestamp'] for r in results[0]], [0, 0, stamp(2)])
+        self.assertNotIn('secret-fingerprint', str(results))
+        self.assertTrue(all(set(r) == {'timestamp','startTimestamp','txId','exchange'} for r in results[0]))
+
     def test_only_latest_cycle_even_when_selection_contains_multiple_withdrawals(self):
         row=self.export()[0]
         self.assertEqual(Decimal(row['amount']),Decimal('240.40'))

@@ -175,7 +175,7 @@ async function loadIntervals(){
  const response=await fetch("/api/withdrawals");if(!response.ok)throw new Error("Could not load withdrawal history.");
  const withdrawals=await response.json();const select=$("interval");select.innerHTML="";
  const custom=document.createElement("option");custom.value="";custom.textContent=t("Custom date range");select.appendChild(custom);
- for(let i=1;i<withdrawals.length;i++){const a=withdrawals[i-1],b=withdrawals[i],o=document.createElement("option");o.value=a.timestamp+","+b.timestamp;o.textContent=t(dateLabel(a.timestamp)+" → "+dateLabel(b.timestamp));select.appendChild(o)}
+ for(const withdrawal of withdrawals){const start=Number(withdrawal.startTimestamp),end=Number(withdrawal.timestamp);if(!(start>0&&end>start))continue;const o=document.createElement("option");o.value=start+","+end;o.textContent=t(dateLabel(start)+" → "+dateLabel(end));select.appendChild(o)}
  select.value="";
 }
 let selectedQuickRange='customRange',rangeDraft=null,customPeriod=null;
@@ -325,10 +325,10 @@ async function requestParqetExport(){
  try{
   const response=await fetch('/api/withdrawals');if(!response.ok)throw new Error('Could not load withdrawal history.');
   const records=await response.json();if(request!==exportDialogRequest)return;
-  const previous=new Map();let period;try{period=selectedPeriod()}catch{period={start:0,end:Date.now()}}let preferred='';
+  let period;try{period=selectedPeriod()}catch{period={start:0,end:Date.now()}}let preferred='';
   for(const withdrawal of records){
    const end=Number(withdrawal.timestamp);if(!Number.isFinite(end)||end<=0)continue;
-   const exchange=withdrawal.exchange||'',start=previous.get(exchange)||0;previous.set(exchange,end);if(start>=end)continue;
+   const exchange=withdrawal.exchange||'',start=Number(withdrawal.startTimestamp);if(!Number.isFinite(start)||start<0||start>=end)continue;
    const option=document.createElement('option');option.value=start+','+end;
    const name=exchange==='KRAKEN'?'Kraken':exchange==='BITVAVO'?'Bitvavo':exchange;
    option.textContent=(name?name+' · ':'')+(start?dateLabel(start):t('First recorded purchase'))+' → '+dateLabel(end);

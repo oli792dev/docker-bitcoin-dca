@@ -770,16 +770,22 @@ class Handler(BaseHTTPRequestHandler):
                 self._handle_schedule()
                 return
             if parsed.path == "/api/withdrawals":
-                withdrawals = [
-                    {
-                        "timestamp": _row_timestamp_ms(record["row"]),
-                        "txId": record.get("id", ""),
-                        "exchange": record.get("exchange", ""),
-                    }
-                    for record in withdrawal_records()
-                    if record.get("withdrawalStatus") == "completed"
-                ]
-                withdrawals.sort(key=lambda item: item["timestamp"])
+                withdrawals = []
+                previous = {}
+                for record in withdrawal_records():
+                    if record.get("withdrawalStatus") != "completed":
+                        continue
+                    timestamp = _row_timestamp_ms(record["row"])
+                    scope = (record.get("exchange", ""), record.get("accountIdentity", ""))
+                    withdrawals.append(
+                        {
+                            "timestamp": timestamp,
+                            "startTimestamp": previous.get(scope, 0),
+                            "txId": record.get("id", ""),
+                            "exchange": record.get("exchange", ""),
+                        }
+                    )
+                    previous[scope] = timestamp
                 self._json(200, withdrawals)
                 return
             if parsed.path in ("/api/analytics", "/api/export.csv"):

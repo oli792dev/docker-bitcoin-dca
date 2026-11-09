@@ -126,6 +126,32 @@ class BackupIntegrationTests(unittest.TestCase):
     def record(self,identifier):
         return {'id': identifier, 'exchange':'KRAKEN','row': {'datetime':'2026-01-01T00:00:00Z','type':'Buy','identifier':'BTC','shares':'1','amount':'10','fee':'1','price':'10','currency':'EUR'}}
 
+    def test_interrupted_journal_cleanup_keeps_activity_and_allows_restart(self):
+        from app.data import backup
+        manager = backup.Backups(self.root)
+        _, raw = manager.create('config', 'long backup password')
+        real_remove = backup.shutil.rmtree
+        interrupted = False
+        def remove(path, *args, **kwargs):
+            nonlocal interrupted
+            if Path(path).name.startswith('.restore-') and not interrupted:
+                interrupted = True
+                (Path(path) / 'activity.sqlite3').unlink()
+                raise OSError('interrupted cleanup')
+            return real_remove(path, *args, **kwargs)
+        with patch.object(backup.shutil, 'rmtree', side_effect=remove):
+            manager.restore(raw, 'long backup password', 'config')
+        backup.recover_restore(self.root)
+        self.assertEqual([r['id'] for r in self.activity.read_activity_records()], ['first'])
+        self.assertFalse((self.root / '.restore-journal').exists())
+
+    def test_missing_snapshot_source_never_overwrites_activity(self):
+        from app.data.backup import sqlite_snapshot
+        import sqlite3
+        with self.assertRaises(sqlite3.OperationalError):
+            sqlite_snapshot(self.root / 'missing.sqlite3', self.root / 'activity.sqlite3')
+        self.assertEqual([r['id'] for r in self.activity.read_activity_records()], ['first'])
+
     def test_snapshot_includes_wal_and_activity_merge_never_deletes(self):
         from app.data.backup import Backups,decrypt,unpack
         manager=Backups(self.root)

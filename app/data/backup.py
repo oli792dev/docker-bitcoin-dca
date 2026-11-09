@@ -7,6 +7,7 @@ lock. The durable journal survives interruption and is rolled back before startu
 import hashlib
 import io
 import json
+import logging
 import os
 import shutil
 import sqlite3
@@ -34,6 +35,8 @@ SCOPES = {
     "config": frozenset({"config.json", "report-preferences.json", "controls.json"}),
 }
 JOURNAL = ".restore-journal"
+COMPLETED = ".restore-completed"
+LOG = logging.getLogger("bitcoin-dca.backup")
 
 
 def _key(password, salt):
@@ -113,7 +116,10 @@ def unpack(payload):
 
 def sqlite_snapshot(source, destination):
     """Use SQLite's backup API to include committed WAL content consistently."""
-    with closing(sqlite3.connect(source)) as reader, closing(sqlite3.connect(destination)) as writer:
+    with (
+        closing(sqlite3.connect(Path(source).resolve().as_uri() + "?mode=ro", uri=True)) as reader,
+        closing(sqlite3.connect(destination)) as writer,
+    ):
         reader.backup(writer)
     os.chmod(destination, 0o600)
 
@@ -199,9 +205,23 @@ def _sync_directory(directory):
         os.close(descriptor)
 
 
+def _finish_restore(directory):
+    # Retire the complete journal atomically before any rollback copies are deleted.
+    os.replace(directory / JOURNAL, directory / COMPLETED)
+    _sync_directory(directory)
+    recover_restore(directory)
+
+
 def recover_restore(directory):
     """Rollback interrupted multi-file restore before settings can be loaded."""
     directory = Path(directory)
+    completed = directory / COMPLETED
+    if completed.exists():
+        try:
+            shutil.rmtree(completed)
+            _sync_directory(directory)
+        except OSError:
+            LOG.warning("Completed restore cleanup deferred until restart")
     journal = directory / JOURNAL
     marker = journal / "manifest.json"
     if not journal.exists():
@@ -233,8 +253,7 @@ def recover_restore(directory):
             else:
                 target.unlink(missing_ok=True)
         write_json_atomic(directory / "controls.json", {"paused": True, "until": None})
-        shutil.rmtree(journal)
-        _sync_directory(directory)
+        _finish_restore(directory)
 
 
 class Backups:
@@ -299,6 +318,9 @@ class Backups:
             raise ValueError("Backup does not contain the selected restore scope.")
         restore_files = SCOPES[scope] & data.keys()
         with activity._ACTIVITY_LOCK, tempfile.TemporaryDirectory(dir=self.directory, prefix=".restore-") as tmp:
+            recover_restore(self.directory)
+            if (self.directory / COMPLETED).exists():
+                raise ValueError("Previous restore cleanup could not finish; check persistent storage.")
             records = {}
             if scope != "config":
                 incoming = Path(tmp) / "activity.sqlite3"
@@ -380,9 +402,8 @@ class Backups:
                     with activity._db() as db:
                         db.executemany(activity._INSERT, [activity._values(row) for row in records.values()])
                 (self.directory / "dashboard.json").unlink(missing_ok=True)
-                shutil.rmtree(journal)
-                _sync_directory(self.directory)
             except BaseException:
                 recover_restore(self.directory)
                 raise
+            _finish_restore(self.directory)
         return {"restored": True, "paused": controls["paused"], "scope": scope}

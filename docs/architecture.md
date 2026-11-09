@@ -23,7 +23,7 @@ The named volume `bitcoin-dca` mounts at `/webui-data`:
 - `config.json`: settings, API credentials and hashed login password.
 - `state.json`: schedule, funding checkpoints and pending transactions.
 - `controls.json`: durable pause and optional UTC expiry, independent of monthly scheduling.
-- `.restore-journal/`: temporary durable rollback copies during restore.
+- `.restore-journal/`: temporary durable rollback copies during restore; atomically renamed to `.restore-completed/` before cleanup.
 - `activity.sqlite3`: activity and historical FX cache.
 - Other files: dashboard snapshot, `report-preferences.json`, first-start timestamp, heartbeat and `tls/` certificates/keys.
 
@@ -47,7 +47,7 @@ An empty installation can restore Full or Config before account creation using t
 
 Restore rejects queued or unresolved financial work, conflicting Activity records and archived pending requests. Full cannot remove current Activity or rewind the last order timestamp. Config preserves financial state and Activity; Activities merges history without overwriting entries. Archived SQL is never installed.
 
-A durable rollback journal protects multi-file changes. Failed or interrupted restores roll back and force a pause; an unreadable journal blocks startup. Successful restore reloads configuration, invalidates sessions and requires a read-only exchange check before new transactions. Full and Config restore their saved pause controls; Activities retains the current controls. Existing TLS certificates remain unchanged.
+A durable rollback journal protects multi-file changes. Failed or interrupted restores roll back and force a pause; an unreadable journal blocks startup. Completed journals are retired before deletion, so interrupted cleanup never triggers rollback from partial copies. Successful restore reloads configuration, invalidates sessions and requires a read-only exchange check before new transactions. Full and Config restore their saved pause controls; Activities retains the current controls. Existing TLS certificates remain unchanged.
 
 Stop the container before making an independent filesystem backup of the volume.
 
