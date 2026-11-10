@@ -73,10 +73,13 @@ th,td{border-color:var(--line);}
 /* Native dialogs provide keyboard containment, Escape and focus restoration. */
 dialog,.confirmation-dialog{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:var(--corner-radius);box-shadow:0 24px 80px #0004;padding:var(--space-xl);max-height:calc(100dvh - 32px);}
 dialog::backdrop,.confirmation-dialog::backdrop{background:var(--scrim);backdrop-filter:none;-webkit-backdrop-filter:none;}
-dialog h2,.confirmation-dialog h2{font-size:1.18rem;font-weight:600;}
+dialog h2,.confirmation-dialog h2{font-size:1.18rem;font-weight:600;margin:0 0 var(--space-sm);}
+dialog>p{margin:0 0 var(--space-lg);}
+.confirmation-actions{margin-top:var(--space-lg);}
+.activity-heading h4,.dashboard-footnotes li>strong,.dashboard-footnotes .note-subheading{font-weight:600;}
 .confirmation-values dt,dialog dt{font-size:.82rem;color:var(--muted);}
 .confirmation-values dd,dialog dd{font-size:.94rem;color:var(--text);}
-.confirmation-values,.confirmation-actions{gap:var(--space-md);}
+.confirmation-values,.confirmation-actions{gap:var(--space-lg);}
 .confirmation-actions{flex-wrap:wrap;}
 .settings-dialog{padding:0;overflow:hidden;background:var(--bg);}
 .settings-dialog-header{background:var(--bg);border-color:var(--line);padding:var(--space-md) var(--space-lg);}
@@ -114,9 +117,9 @@ dialog h2,.confirmation-dialog h2{font-size:1.18rem;font-weight:600;}
 }
 .login-page .card{background:var(--panel);border-radius:var(--corner-radius);padding:var(--space-xl);}
 .login-brand{margin:0 0 var(--space-lg);gap:var(--space-lg);}
-.login-brand h1{font-size:1.6rem;}
-.login-page label{font-size:.82rem;margin-top:var(--space-lg);margin-bottom:var(--space-xs);}
-.login-page input{font-size:1rem;min-height:48px;}
+.login-brand h1,.settings-page>main>header h1{font-size:1.5rem;}
+.login-page label{font-size:.82rem;margin-top:var(--space-lg);margin-bottom:var(--space-sm);}
+.login-page input{font-size:1rem;height:var(--button-height);min-height:var(--button-height);padding:10px var(--space-md);}
 .login-page button{margin-top:var(--space-lg);min-height:var(--button-height);}
 .login-support,.login-support code{font-size:.7rem;line-height:1.6;color:var(--muted);}
 .login-support>span{color:var(--red);}

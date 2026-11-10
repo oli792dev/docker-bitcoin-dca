@@ -281,7 +281,7 @@ test('operational controls, backup review and Activity filters remain usable', a
   const backupGroups=page.locator('#backupOptions .backup-groups>.settings-group');
   const first=await rect(backupGroups.nth(0)),second=await rect(backupGroups.nth(1));
   if(page.viewportSize().width>=900)expect(Math.round(first.y)).toBe(Math.round(second.y));
-  else expect(second.y-first.y-first.height).toBeGreaterThanOrEqual(24);
+  else expect(Math.round(second.y-first.y-first.height)).toBe(16);
   await expect(page.locator('#chooseRestoreFile')).toHaveText('Choose file');
   await expect(page.locator('#restoreFile')).toBeHidden();
   await expect(page.locator('#restoreFileName')).toBeHidden();

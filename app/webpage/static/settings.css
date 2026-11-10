@@ -12,7 +12,11 @@ p{margin:0;color:var(--muted);line-height:1.6;}
 .settings-tab-panel{display:grid;gap:var(--field-gap);min-width:0;}
 .field-description{display:block;margin-top:var(--control-gap);}
 #accountForm{display:grid;gap:var(--field-gap);}
-#setupRestoreFile{height:auto;min-height:44px;padding:8px;}
+#setupRestoreFile{height:auto;min-height:var(--button-height);padding:0;border:0;border-radius:0;background:transparent;font-size:.82rem;}
+#setupRestoreFile::file-selector-button{min-height:var(--button-height);margin-right:var(--space-md);padding:8px var(--space-lg);border:0;border-radius:var(--corner-radius);background:var(--surface);color:var(--accent);font-family:inherit;font-size:.82rem;font-weight:600;line-height:1.35;cursor:pointer;}
+#setupRestoreForm{gap:var(--space-sm);}
+#setupRestoreForm>button{margin-top:var(--space-sm);}
+#accountPanel{border-color:transparent;}
 .actions button{max-width:100%;white-space:normal;}
 #settingsForm{display:grid;gap:var(--section-gap);}
 .panel{display:grid;gap:var(--field-gap);background:#111a2c;border:1px solid var(--line);border-radius:var(--corner-radius);padding:20px;}
@@ -108,13 +112,13 @@ __SCROLL_CSS__
 }
 __DESIGN_CSS__
 /* Compact forms: the controls define fields; no additional tile borders. */
-.settings-page{--section-gap:16px;--field-gap:16px;--control-gap:4px;}
+.settings-page{--section-gap:16px;--field-gap:16px;--control-gap:8px;}
 .settings-page .settings-tab-panel,.settings-page .credential-editor{padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;}
 .settings-page .settings-card-grid{column-gap:var(--space-xl);row-gap:var(--space-lg);align-items:start;}
 .settings-page .settings-card-grid>div:not(.option-card){padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;}
 .settings-page .option-card{min-height:64px;padding:var(--space-sm) 0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none;gap:var(--space-md);}
 .settings-page .option-card small{margin-top:var(--space-xs);}
-.settings-page .currency-card{gap:var(--space-xs);padding:0;border:0;min-height:0;}
+.settings-page .currency-card{gap:var(--space-sm);padding:0;border:0;min-height:0;}
 .settings-page .currency-card small{margin:0;}
 .settings-page .field-description{margin-top:var(--space-xs);}
 .settings-page .settings-tab-panel input:not([type=checkbox]),.settings-page .settings-tab-panel select{height:44px;padding:10px var(--space-md);}
@@ -187,14 +191,14 @@ __DESIGN_CSS__
 .settings-save-actions{width:100%;margin:0;}
 }
 /* Uniform label/control/help spacing across all four Settings tabs. */
-.settings-page .settings-card-grid>div:not(.option-card){display:flex;flex-direction:column;gap:var(--space-xs);}
+.settings-page .settings-card-grid>div:not(.option-card){display:flex;flex-direction:column;gap:var(--space-sm);}
 .settings-page .settings-card-grid>div:not(.option-card)>label{margin:0;}
 .settings-page .settings-card-grid>div:not(.option-card)>.field-description{margin:0;}
 .settings-page .option-card{align-items:center;}
 .settings-page .currency-card{align-items:stretch;}
 .settings-page .settings-tab-panel>.settings-fields{margin:0;}
 .settings-footer-actions,.settings-quick-actions,.settings-action-feedback{gap:var(--space-md);}
-.settings-page dialog h2{margin:0 0 var(--space-md);}
+.settings-page dialog h2{margin:0 0 var(--space-sm);}
 .settings-page dialog>p{margin:0 0 var(--space-lg);}
 .settings-page dialog .actions{margin-top:var(--space-lg);}
 .settings-page .review-list dd{margin-bottom:var(--space-md);}
@@ -207,18 +211,18 @@ __DESIGN_CSS__
 .settings-page .settings-tabs button{min-height:var(--button-height);}
 }
 /* Grouped Settings lists: labels and help on the left, controls on the right. */
-.settings-page .settings-groups,.settings-page .settings-tab-panel,.settings-page .credential-editor{gap:var(--space-xl);}
+.settings-page .settings-groups,.settings-page .settings-tab-panel,.settings-page .credential-editor{gap:var(--space-lg);}
 .settings-page .settings-groups{display:grid;grid-template-columns:minmax(0,1fr);min-width:0;}
 .settings-page .settings-group{min-width:0;margin:0;padding:0;border:0;background:transparent;}
 .settings-page .settings-group>h3{margin:0 0 var(--space-sm);color:var(--muted);font-size:.82rem;font-weight:600;line-height:1.4;}
 .settings-page .setting-list{display:flex;flex-direction:column;gap:0;min-width:0;}
-.settings-page .setting-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,40%);grid-template-rows:auto auto;gap:var(--space-xs) 20px;align-items:center;min-width:0;padding:var(--space-sm) 0;border:0;background:transparent;}
+.settings-page .setting-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,40%);grid-template-rows:auto auto;gap:var(--space-sm) var(--space-lg);align-items:center;min-width:0;padding:var(--space-sm) 0;border:0;background:transparent;}
 .settings-page .setting-row>label{grid-column:1;grid-row:1;margin:0;font-size:.88rem;font-weight:600;line-height:1.4;}
 .settings-page .setting-row>input,.settings-page .setting-row>select{grid-column:2;grid-row:1 / span 2;min-width:0;width:100%;min-height:44px;align-self:center;margin:0;}
 .settings-page .setting-row>.hint{grid-column:1;grid-row:2;margin:0;font-size:.76rem;line-height:1.45;}
 .settings-page .setting-row:not(:has(>.hint))>label{grid-row:1 / span 2;align-self:center;}
 .settings-page .setting-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 var(--space-lg);min-width:0;}
-.settings-page .setting-pair>.setting-row{display:flex;flex-direction:column;align-items:stretch;gap:var(--space-xs);}
+.settings-page .setting-pair>.setting-row{display:flex;flex-direction:column;align-items:stretch;gap:var(--space-sm);}
 .settings-page .setting-pair>.setting-row>label{margin:0;}
 .settings-page .setting-pair>.setting-row>input,.settings-page .setting-pair>.setting-row>select{align-self:stretch;}
 @supports (grid-template-rows:subgrid){
@@ -244,8 +248,8 @@ __DESIGN_CSS__
 .settings-page #dashboardEditor .setting-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-sm) var(--space-xl);}
 }
 @media (max-width:600px){
-.settings-page .settings-tab-panel,.settings-page .settings-groups,.settings-page .credential-editor{gap:20px;}
-.settings-page .setting-row{display:flex;flex-direction:column;align-items:stretch;gap:var(--space-xs);padding:var(--space-sm) 0;}
+.settings-page .settings-tab-panel,.settings-page .settings-groups,.settings-page .credential-editor{gap:var(--space-lg);}
+.settings-page .setting-row{display:flex;flex-direction:column;align-items:stretch;gap:var(--space-sm);padding:var(--space-sm) 0;}
 .settings-page .setting-row>input,.settings-page .setting-row>select{align-self:stretch;}
 .settings-page .setting-row>label{align-self:stretch;}
 .settings-page .setting-row>.hint{order:3;}
@@ -281,7 +285,7 @@ __DESIGN_CSS__
 
 .settings-page,.settings-page.embedded{background:var(--bg);}
 
-.settings-page .backup-groups{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-xl);min-width:0;}
+.settings-page .backup-groups{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-lg);min-width:0;}
 .settings-page .backup-groups>.settings-group{display:flex;flex-direction:column;gap:var(--space-sm);}
 .settings-page .backup-groups>.settings-group>button{align-self:flex-start;margin-top:var(--space-sm);min-height:var(--button-height);font-size:.82rem;}
 .settings-page .backup-groups label{margin-bottom:0;}
