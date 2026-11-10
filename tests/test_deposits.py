@@ -124,7 +124,7 @@ class DepositTests(unittest.TestCase):
         settings={'exchange':'KRAKEN','quote':'EUR'}
         values=iter([Decimal('100'),Decimal('200')])
         api=type('CreditAPI', (), {'booked_balance': lambda api, currency: next(values),
-            'non_deposit_balance_change':lambda api,*args: True})()
+            'non_deposit_balance_change':lambda api,*args,**kwargs: True})()
         api.fiat_deposits=Mock(return_value=[])
         state={}
         sync_deposits(api,settings,state,now,Decimal('100'))
@@ -151,7 +151,7 @@ class DepositTests(unittest.TestCase):
         settings={'exchange':'KRAKEN','quote':'EUR'}
         values=iter([Decimal('100'),Decimal('200'),Decimal('200'),Decimal('200')])
         api=type('CreditAPI', (), {'booked_balance': lambda api, currency: next(values),
-            'non_deposit_balance_change':lambda api,*args: api.classify(*args)})()
+            'non_deposit_balance_change':lambda api,*args,**kwargs: api.classify(*args,**kwargs)})()
         api.classify=Mock(side_effect=[False,requests.ConnectionError('offline'),False])
         api.fiat_deposits=Mock(return_value=[])
         state={}

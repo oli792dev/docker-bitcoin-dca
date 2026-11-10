@@ -42,6 +42,7 @@ def sync_deposits(
         if not isinstance(booked, Decimal) or not booked.is_finite():
             raise ValueError("Booked fiat balance could not be verified")
         observation["booked"] = str(booked)
+        observation["readUntil"] = max(now, datetime.now(UTC)).isoformat()
     if previous is None or previous.get("identity") != identity:
         state["fiat_observation"] = observation
         return [], 0
@@ -53,6 +54,8 @@ def sync_deposits(
         pending = pending or {"start": previous["checkedAt"], "balanceBaseline": previous["balance"]}
         if booked is not None and "booked" in previous and "bookedBaseline" not in pending:
             pending["bookedBaseline"] = previous["booked"]
+            if previous.get("readUntil"):
+                pending["baselineReadUntil"] = previous["readUntil"]
     confirmed = previous.get("confirmed", [])
     observation["confirmed"] = confirmed
     observation["historyStartAt"] = previous["historyStartAt"]
@@ -118,6 +121,9 @@ def sync_deposits(
     verified = False
     if booked is not None and "bookedBaseline" in pending:
         classifier = getattr(type(api), "non_deposit_balance_change", None)
+        checkpoint = {}
+        if settings["exchange"] == "KRAKEN" and pending.get("baselineReadUntil"):
+            checkpoint["baseline_end_ms"] = int(datetime.fromisoformat(pending["baselineReadUntil"]).timestamp() * 1000)
         if (
             callable(classifier)
             and classifier(
@@ -128,6 +134,7 @@ def sync_deposits(
                 Decimal(pending["bookedBaseline"]) if "bookedBaseline" in pending else None,
                 booked,
                 deposit_total,
+                **checkpoint,
             )
             is True
         ):

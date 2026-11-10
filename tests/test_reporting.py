@@ -163,7 +163,7 @@ class ScheduleBalanceTests(unittest.TestCase):
         for status in ('Submitting the order and waiting for its status check',
                        'Waiting for confirmation that the previous order has ended'):
             with self.subTest(status=status),patch.object(web_ui,'read_dashboard_snapshot',return_value={
-                    'exchange':'KRAKEN','quote':'EUR','nextPurchaseStatus':status}):
+                    'exchange':'KRAKEN','quote':'EUR','nextPurchaseStatus':status,'nextPurchaseStatusCode':'submitting' if status.startswith('Submitting') else 'verifying_order'}):
                 handler.do_GET()
                 result=handler._json.call_args.args[1]
                 self.assertEqual((result['botStatusLabel'],result['botStatusTone']),('Bot active','active'))
@@ -180,15 +180,15 @@ class ScheduleBalanceTests(unittest.TestCase):
         from app.webpage.status import dashboard_status
 
         cases = [
-            ('Verifying deposit', True, 'Verifying deposit', 'waiting', False),
-            ('Waiting until the balance covers an order', True, 'Waiting for deposit', 'waiting', False),
-            ('Scheduled', False, 'Simulation', 'waiting', False),
-            ('Scheduled', True, 'Bot active', 'active', False),
+            ('verifying_deposit', 'Verifying deposit', True, 'Verifying deposit', 'waiting', False),
+            ('waiting_deposit', 'Waiting for deposit', True, 'Waiting for deposit', 'waiting', False),
+            ('scheduled', 'Scheduled', False, 'Simulation', 'waiting', False),
+            ('scheduled', 'Scheduled', True, 'Bot active', 'active', False),
         ]
-        for purchase_status, live, label, tone, warning in cases:
+        for code, purchase_status, live, label, tone, warning in cases:
             with self.subTest(purchase_status=purchase_status, live=live):
                 status = dashboard_status(
-                    balance_matches=True, purchase_status=purchase_status, live=live,
+                    balance_matches=True, purchase_status=purchase_status, purchase_status_code=code, live=live,
                     exchange_check_pending=False, startup_delay=False,
                     worker_healthy=True, worker_error=False,
                 )

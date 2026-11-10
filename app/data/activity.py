@@ -19,6 +19,44 @@ SNAPSHOT_PATH = Path("/webui-data/dashboard.json")
 _ACTIVITY_LOCK = RLock()
 
 
+SCHEMA_VERSION = 1
+SCHEMA_TABLES = {
+    "activity": (
+        ("id", "TEXT PRIMARY KEY"),
+        ("timestamp", "INTEGER NOT NULL"),
+        ("kind", "TEXT"),
+        ("asset", "TEXT"),
+        ("simulated", "INTEGER"),
+        ("exchange", "TEXT"),
+        ("currency", "TEXT"),
+        ("shares", "TEXT"),
+        ("amount", "TEXT"),
+        ("fee", "TEXT"),
+        ("gross", "TEXT"),
+        ("status", "TEXT"),
+        ("payload", "TEXT NOT NULL"),
+    ),
+    "metadata": (("key", "TEXT PRIMARY KEY"), ("value", "TEXT NOT NULL")),
+    "cache": (("key", "TEXT PRIMARY KEY"), ("value", "TEXT"), ("updated", "REAL")),
+}
+SCHEMA_INDEXES = {
+    "activity_period": ("activity", "asset,timestamp DESC,id"),
+    "activity_type": ("activity", "kind,status,timestamp"),
+}
+
+
+def validate_schema(db):
+    if db.execute("PRAGMA user_version").fetchone() != (SCHEMA_VERSION,):
+        raise ValueError("Invalid Activity database version.")
+    objects = set(db.execute("SELECT type,name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'"))
+    allowed = {("table", name) for name in SCHEMA_TABLES} | {("index", name) for name in SCHEMA_INDEXES}
+    if objects != allowed:
+        raise ValueError("Unsupported Activity schema.")
+    for table, columns in SCHEMA_TABLES.items():
+        if [row[1] for row in db.execute(f"PRAGMA table_info({table})")] != [name for name, _ in columns]:
+            raise ValueError("Unsupported Activity columns.")
+
+
 def _timestamp(row):
     value = datetime.fromisoformat(row["datetime"].replace("Z", "+00:00"))
     return int(value.replace(tzinfo=value.tzinfo or UTC).timestamp() * 1000)
@@ -69,7 +107,7 @@ def _values(record):
     )
 
 
-_INSERT = "INSERT OR IGNORE INTO activity VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"
+_INSERT = "INSERT OR IGNORE INTO activity VALUES(" + ",".join("?" for _ in SCHEMA_TABLES["activity"]) + ")"
 
 
 @contextmanager
@@ -83,21 +121,16 @@ def _db():
             os.chmod(path, 0o600)
             connection.execute("PRAGMA synchronous=FULL")
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version > 1:
+            if version > SCHEMA_VERSION:
                 raise ValueError("Activity database version is newer than this application supports.")
             if version == 0:
                 connection.execute("PRAGMA journal_mode=WAL")
-                connection.executescript("""
-                    CREATE TABLE IF NOT EXISTS activity(
-                        id TEXT PRIMARY KEY, timestamp INTEGER NOT NULL, kind TEXT, asset TEXT,
-                        simulated INTEGER, exchange TEXT, currency TEXT, shares TEXT, amount TEXT,
-                        fee TEXT, gross TEXT, status TEXT, payload TEXT NOT NULL);
-                    CREATE INDEX IF NOT EXISTS activity_period ON activity(asset,timestamp DESC,id);
-                    CREATE INDEX IF NOT EXISTS activity_type ON activity(kind,status,timestamp);
-                    CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
-                    CREATE TABLE IF NOT EXISTS cache(key TEXT PRIMARY KEY,value TEXT,updated REAL);
-                """)
-                connection.execute("PRAGMA user_version=1")
+                for table, columns in SCHEMA_TABLES.items():
+                    definition = ",".join(name + " " + declaration for name, declaration in columns)
+                    connection.execute(f"CREATE TABLE IF NOT EXISTS {table}({definition})")
+                for name, (table, columns) in SCHEMA_INDEXES.items():
+                    connection.execute(f"CREATE INDEX IF NOT EXISTS {name} ON {table}({columns})")
+                connection.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
                 connection.commit()
             yield connection
             connection.commit()

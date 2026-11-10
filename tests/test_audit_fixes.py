@@ -33,6 +33,124 @@ class AuditFixTests(unittest.TestCase):
                              deposit_day=1, buy_amount=D('.001'), withdrawals_enabled=True,
                              withdraw_threshold=D('100'), order_status_check_seconds=30)
 
+    def funded_api(self):
+        api = Mock()
+        api.fiat_deposits.return_value = []
+        api.balance.return_value = D('100')
+        api.price.return_value = D('80000')
+        api.estimate_taker_fee.return_value = D('.0025')
+        api.market.return_value = dict(status='trading', minOrderInBaseAsset='.0001',
+                                      minOrderInQuoteAsset='5', quantityDecimals=8, notionalDecimals=2)
+        return api
+
+    def schedule(self, settings):
+        from app.webpage.web_ui import Handler
+        handler = object.__new__(Handler)
+        handler.settings = settings
+        results = []
+        handler._json = lambda status, data: results.append(data)
+        handler._handle_schedule()
+        return results[0]
+
+    def test_bitvavo_permission_rejection_does_not_leave_a_pending_order(self):
+        import requests
+        adapter = Bitvavo(api_key='fictional', api_secret='fictional')
+        adapter.session = Mock()
+        response = Mock(status_code=403)
+        response.json.return_value = dict(errorCode=310, error='Trade permission missing')
+        response.raise_for_status.side_effect = requests.HTTPError('403 Forbidden')
+        adapter.session.request.return_value = response
+        api = self.funded_api()
+        api.buy_btc = adapter.buy_btc
+        settings = {**self.settings, 'exchange':'BITVAVO', 'withdrawals_enabled':False}
+        bot.run_once(api, settings, 300)
+        self.assertNotIn('pending_order', json.loads(bot.STATE_PATH.read_text()))
+
+    def test_kraken_balance_read_overlap_verifies_deposit_without_double_counting_trade(self):
+        now = datetime(2026, 11, 1, 9, tzinfo=UTC)
+        api = object.__new__(Kraken)
+        trade = dict(type='trade', asset='ZEUR', time=str(now.timestamp()+1),
+                     amount='-20', fee='0', balance='80')
+        bank = dict(type='deposit', asset='ZEUR', time=str(now.timestamp()+120),
+                    amount='100', fee='0', balance='180')
+        api._fiat_ledger = lambda currency, start, end, kind: {'bank':bank} if kind=='deposit' else {'trade':trade,'bank':bank}
+        state = {}
+        with patch.object(Kraken, 'booked_balance', return_value=D('80')) as balance:
+            with patch('app.trading.deposits.datetime', wraps=datetime) as clock:
+                clock.now.return_value = now+timedelta(seconds=2)
+                sync_deposits(api, self.settings, state, now, D('80'))
+            balance.return_value = D('180')
+            sync_deposits(api, self.settings, state, now+timedelta(minutes=5), D('180'))
+        self.assertNotIn('pending', state['fiat_observation'])
+        self.assertEqual(len(activity.read_activity_records()), 1)
+        # A missing credit after the checkpoint must still block trading.
+        self.assertFalse(api.non_deposit_balance_change('EUR', int(now.timestamp()*1000),
+                         int((now+timedelta(minutes=5)).timestamp()*1000), D('80'), D('200'), D('100')))
+        # Two occurrences of the baseline are not a unique checkpoint.
+        api._fiat_ledger = Mock(return_value={
+            'first':dict(trade, time='1'),
+            'up':dict(trade, time='2', amount='20', balance='100'),
+            'down':dict(trade, time='3'),
+            'bank':dict(bank, time='4')})
+        self.assertFalse(api.non_deposit_balance_change('EUR', 0, 5000, D('80'), D('180'), D('100'), baseline_end_ms=3500))
+
+    def test_kraken_cannot_rebase_to_a_checkpoint_after_the_balance_read(self):
+        api = object.__new__(Kraken)
+        api._fiat_ledger = Mock(return_value={
+            'trade':dict(type='trade', asset='ZEUR', time='3', amount='-20', fee='0', balance='80'),
+            'bank':dict(type='deposit', asset='ZEUR', time='4', amount='100', fee='0', balance='180')})
+        self.assertFalse(api.non_deposit_balance_change('EUR', 0, 5000, D('80'), D('180'), D('100'),
+                         baseline_end_ms=2000))
+
+    def test_buy_rejection_is_visible_without_echoing_exchange_details_and_clears_on_success(self):
+        from app.exchanges.exchange_errors import DefinitiveRejection
+        api = self.funded_api()
+        api.buy_btc.side_effect = DefinitiveRejection('sensitive exchange request detail')
+        settings = {**self.settings, 'withdrawals_enabled':False}
+        bot.run_once(api, settings, 300)
+        result = self.schedule(settings)
+        self.assertEqual(result['botStatusTone'], 'error')
+        self.assertIn('rejected', result['nextPurchaseStatus'].lower())
+        self.assertNotIn('sensitive exchange request detail', str(result))
+        api.buy_btc.side_effect = None
+        api.buy_btc.return_value = {'orderId':'accepted-order'}
+        bot.run_once(api, settings, 300)
+        self.assertNotEqual(self.schedule(settings)['botStatusTone'], 'error')
+
+    def test_withdrawal_failure_is_visible_and_clears_after_successful_retry(self):
+        from app.exchanges.exchange_errors import DefinitiveRejection
+        api = self.funded_api()
+        api.balance.side_effect = lambda currency: D('.01') if currency=='BTC' else D('100')
+        api.withdrawal_request.return_value = dict(asset='XBT', key='wallet', amount='.0099', fee='.0001')
+        api.withdraw_btc.side_effect = DefinitiveRejection('sensitive exchange request detail')
+        state = {'last_order_at':datetime.now(UTC).isoformat()}
+        bot.save_state(bot.STATE_PATH, state)
+        bot.run_once(api, self.settings, 300)
+        result = self.schedule(self.settings)
+        self.assertEqual(result['botStatusTone'], 'error')
+        self.assertIsNone(result['estimatedWithdrawalAt'])
+        self.assertIn('failed', result['estimatedWithdrawalStatus'].lower())
+        self.assertNotIn('sensitive exchange request detail', str(result))
+        api.withdraw_btc.side_effect = None
+        api.withdraw_btc.return_value = {'id':'accepted-withdrawal'}
+        bot.run_once(api, self.settings, 300)
+        self.assertNotEqual(self.schedule(self.settings)['botStatusTone'], 'error')
+
+    def test_uncertain_withdrawal_keeps_pending_state_and_shows_a_warning(self):
+        import requests
+        api = self.funded_api()
+        api.balance.side_effect = lambda currency: D('.01') if currency=='BTC' else D('100')
+        api.withdrawal_request.return_value = dict(asset='XBT', key='wallet', amount='.0099', fee='.0001')
+        api.withdraw_btc.side_effect = requests.ReadTimeout('sensitive exchange request detail')
+        bot.save_state(bot.STATE_PATH, {'last_order_at':datetime.now(UTC).isoformat()})
+        bot.run_once(api, self.settings, 300)
+        self.assertIn('pending_withdrawal', json.loads(bot.STATE_PATH.read_text()))
+        result = self.schedule(self.settings)
+        self.assertEqual(result['botStatusTone'], 'error')
+        self.assertIsNone(result['estimatedWithdrawalAt'])
+        self.assertIn('uncertain', result['estimatedWithdrawalStatus'])
+        self.assertNotIn('sensitive exchange request detail', str(result))
+
     def test_partial_deposit_history_stays_pending_until_the_whole_credit_is_verified(self):
         now = datetime(2026, 11, 1, 9, tzinfo=UTC)
         first = dict(id='first', timestamp=int((now + timedelta(seconds=1)).timestamp() * 1000),

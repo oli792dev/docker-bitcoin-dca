@@ -19,6 +19,7 @@ from app.core.contracts import AccountCycleData, ForecastPlan
 from app.core.deposit_calendar import deposit_at
 from app.core.logging_utils import clear_transition, log_transition
 from app.core.planning import OrderPlan, plan_order, purchase_interval
+from app.core.purchase_status import PURCHASE_LABELS, PurchaseStatus
 from app.data.activity import (
     append_activity_records,
     get_activity_record,
@@ -39,6 +40,8 @@ from app.trading.funding import observe_deposit
 from app.trading.withdrawals import reconcile_withdrawals
 
 LOG = logging.getLogger("bitcoin-dca")
+WITHDRAWAL_FAILED = "Automatic withdrawal failed; check exchange status and settings."
+WITHDRAWAL_UNCERTAIN = "Withdrawal outcome is uncertain; check exchange status before taking further action."
 
 
 def cycle_dates(now, deposit_day, deposit_time="00:00"):
@@ -194,19 +197,22 @@ def update_dashboard_snapshot(settings, quote_balance, price, btc_balance=None, 
             "withdrawThreshold": format(settings["withdraw_threshold"], "f"),
             "nextPurchaseAt": previous.get("nextPurchaseAt"),
             "nextPurchaseStatus": previous.get("nextPurchaseStatus", "Schedule pending"),
+            "nextPurchaseStatusCode": previous.get("nextPurchaseStatusCode", PurchaseStatus.UNKNOWN),
+            "withdrawalError": previous.get("withdrawalError"),
             "updatedAt": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
         }
     )
 
 
-def update_dashboard_schedule(next_purchase_at, status, forecast_plan=None):
+def update_dashboard_schedule(next_purchase_at, status: PurchaseStatus, forecast_plan=None, *, detail=""):
     snapshot = read_dashboard_snapshot()
     snapshot["nextPurchaseAt"] = (
         next_purchase_at.astimezone(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
         if next_purchase_at is not None
         else None
     )
-    snapshot["nextPurchaseStatus"] = status
+    snapshot["nextPurchaseStatusCode"] = status.value
+    snapshot["nextPurchaseStatus"] = PURCHASE_LABELS[status].format(detail=detail)
     snapshot["withdrawalForecastPlan"] = forecast_plan
     write_dashboard_snapshot(snapshot)
 
@@ -612,7 +618,7 @@ def _run_once(
     deposit_overdue, deposit_received = account_cycle.deposit_overdue, account_cycle.deposit_received
     update_dashboard_snapshot(settings, balance, price, exchange_btc, market_prices)
     if state.get("fiat_observation", {}).get("pending"):
-        update_dashboard_schedule(None, "Verifying deposit")
+        update_dashboard_schedule(None, PurchaseStatus.VERIFYING_DEPOSIT)
         log_transition(
             LOG,
             api,
@@ -623,12 +629,20 @@ def _run_once(
         )
         return check_interval
     clear_transition(api, "deposit-verification")
+    withdrawal_error = None
     try:
         maybe_withdraw_btc(api, state, settings)
     except requests.RequestException as exc:
         LOG.warning("Automatic BTC withdrawal check failed; will retry: %s", exc)
+        withdrawal_error = WITHDRAWAL_FAILED
+    if state.get("pending_withdrawal") and state.get("pending_withdrawal_context", {}).get("result") is None:
+        withdrawal_error = WITHDRAWAL_UNCERTAIN
+    snapshot = read_dashboard_snapshot()
+    if snapshot.get("withdrawalError") != withdrawal_error:
+        snapshot["withdrawalError"] = withdrawal_error
+        write_dashboard_snapshot(snapshot)
     if market.get("status") != "trading":
-        update_dashboard_schedule(None, f"Waiting for market status: {market.get('status')}")
+        update_dashboard_schedule(None, PurchaseStatus.MARKET_UNAVAILABLE, detail=str(market.get("status")))
         log_transition(
             LOG,
             api,
@@ -655,7 +669,7 @@ def _run_once(
     order_amount, order_quote, estimated_fee, planned_cost = plan.quantity, plan.quote, plan.fee, plan.cost
     possible_buys = plan.affordable
     if possible_buys < 1:
-        update_dashboard_schedule(None, "Waiting for deposit", forecast_plan)
+        update_dashboard_schedule(None, PurchaseStatus.WAITING_DEPOSIT, forecast_plan)
         if settings["live"]:
             state["deposit_tracking"]["waiting"] = True
         save_state(state_path, state)
@@ -749,7 +763,7 @@ def _run_once(
         lastPurchaseAt=last_buy.isoformat() if last_buy else None,
         dueAt=due.isoformat(),
     )
-    update_dashboard_schedule(due, "Scheduled" if remaining else "Due now", forecast_plan)
+    update_dashboard_schedule(due, PurchaseStatus.SCHEDULED if remaining else PurchaseStatus.DUE, forecast_plan)
     startup_alignment = settings.pop("startup_schedule_log_pending", False)
     log_label = "Restart alignment" if startup_alignment else "Purchase schedule"
     local_zone = ZoneInfo(settings["timezone"])
@@ -781,7 +795,7 @@ def _run_once(
         return remaining
 
     if transactions_paused(settings):
-        update_dashboard_schedule(due, "Transactions paused", forecast_plan)
+        update_dashboard_schedule(due, PurchaseStatus.PAUSED, forecast_plan)
         return check_interval
 
     if schedule_only:
@@ -791,7 +805,7 @@ def _run_once(
 
     if settings["live"]:
         if available < planned_cost:
-            update_dashboard_schedule(None, "Waiting for deposit")
+            update_dashboard_schedule(None, PurchaseStatus.WAITING_DEPOSIT)
             log_transition(
                 LOG,
                 api,
@@ -815,7 +829,7 @@ def _run_once(
         }
         state["pending_order"] = pending
         save_state(state_path, state)
-        update_dashboard_schedule(None, "Submitting the order and waiting for its status check")
+        update_dashboard_schedule(None, PurchaseStatus.SUBMITTING)
         try:
             result = api.buy_btc(quote, order_amount, pending["clientOrderId"])
         except DefinitiveRejection as exc:
@@ -826,6 +840,7 @@ def _run_once(
                 "at": utc_iso_from_ms(int(time.time() * 1000)),
             }
             save_state(state_path, state)
+            update_dashboard_schedule(None, PurchaseStatus.REJECTED)
             LOG.warning("Order rejected by %s: %s; no pending order remains.", settings["exchange"], exc)
             return check_interval
         except requests.RequestException as exc:

@@ -175,14 +175,16 @@ def withdrawal_forecast(
         _invalid_input(exc)
         return None, "Forecast unavailable: invalid account or order data"
     _LAST_INVALID = None
-    return _project_forecast(settings, inputs)
+    target, description, _ = _project_forecast(settings, inputs)
+    return target, description
 
 
-def _project_forecast(settings: Mapping[str, Any], inputs: ForecastInputs) -> tuple[str | None, str]:
+def _project_forecast(settings: Mapping[str, Any], inputs: ForecastInputs) -> tuple[str | None, str, int | None]:
     """Advance monthly funding and purchases without catching programming failures."""
     quantity, cost, budget = inputs.quantity, inputs.cost, inputs.budget
     funding, due, interval = inputs.funding, inputs.due, inputs.interval
     remaining = inputs.remaining_btc
+    purchases = 0
     description = DESCRIPTION + (" · assumes overdue deposit arrives now" if inputs.overdue else "")
     for _ in range(1200):
         slots = max(0, int((funding - due).total_seconds() // interval) + 1)
@@ -200,13 +202,14 @@ def _project_forecast(settings: Mapping[str, Any], inputs: ForecastInputs) -> tu
                 tail_quantity, tail_cost = tail.quantity, tail.cost
             regular = min(count - 1, int((remaining / quantity).to_integral_value(rounding=ROUND_CEILING)))
             if remaining <= quantity * regular:
-                return (due + timedelta(seconds=(regular - 1) * interval)).isoformat(), description
+                return (due + timedelta(seconds=(regular - 1) * interval)).isoformat(), description, purchases + regular
             if remaining <= quantity * (count - 1) + tail_quantity:
-                return (due + timedelta(seconds=(count - 1) * interval)).isoformat(), description
+                return (due + timedelta(seconds=(count - 1) * interval)).isoformat(), description, purchases + count
+            purchases += count
             remaining -= quantity * (count - 1) + tail_quantity
             budget -= cost * (count - 1) + tail_cost
         if inputs.monthly_deposit == 0:
-            return None, "Enter an expected monthly deposit to project further purchases"
+            return None, "Enter an expected monthly deposit to project further purchases", None
         budget += inputs.monthly_deposit
         start = funding.astimezone(inputs.zone)
         year, month = (start.year + 1, 1) if start.month == 12 else (start.year, start.month + 1)
@@ -219,10 +222,12 @@ def _project_forecast(settings: Mapping[str, Any], inputs: ForecastInputs) -> tu
         # share the rest of the calendar period and finish before its boundary.
         due = start.astimezone(UTC)
         interval = max(60, int((funding - due).total_seconds() / max(1, count)))
-    return None, "Estimate exceeds the 100-year forecast horizon"
+    return None, "Estimate exceeds the 100-year forecast horizon", None
 
 
-def forecast_details(settings: Mapping[str, Any], snapshot: Mapping[str, Any]) -> dict[str, Any] | None:
+def forecast_details(
+    settings: Mapping[str, Any], snapshot: Mapping[str, Any], now: datetime | None = None
+) -> dict[str, Any] | None:
     """Reporting-only explanation; never creates or advances a purchase schedule."""
     try:
         price = Decimal(str(snapshot["price"]))
@@ -237,9 +242,18 @@ def forecast_details(settings: Mapping[str, Any], snapshot: Mapping[str, Any]) -
         if not all(x.is_finite() for x in (price, balance, threshold, quantity)) or price <= 0 or quantity <= 0:
             return None
         remaining = max(Decimal(0), threshold / price - balance)
+        purchases = 0
+        if remaining:
+            inputs = _forecast_inputs(
+                settings, snapshot, settings.get("expected_monthly_deposit") or "0", now or datetime.now(UTC)
+            )
+            _, _, projected_purchases = _project_forecast(settings, inputs)
+            if projected_purchases is None:
+                return None
+            purchases = projected_purchases
         return {
             "remainingBtc": str(remaining),
-            "remainingPurchases": int((remaining / quantity).to_integral_value(rounding=ROUND_CEILING)),
+            "remainingPurchases": purchases,
             "price": str(price),
             "threshold": str(threshold),
             "quote": settings["quote"],
@@ -249,7 +263,7 @@ def forecast_details(settings: Mapping[str, Any], snapshot: Mapping[str, Any]) -
             "timezone": settings["timezone"],
             "quantity": str(quantity),
         }
-    except KeyError:
+    except (KeyError, MissingForecastData):
         return None
     except (ValueError, DecimalException) as exc:
         _invalid_input(exc)

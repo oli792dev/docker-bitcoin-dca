@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from app.core.logging_utils import log_transition
+from app.core.purchase_status import PurchaseStatus
 
 LOG = logging.getLogger("bitcoin-dca")
 
@@ -23,7 +24,7 @@ class ReconciliationIO:
     """Explicit effects keep recovery independently testable without importing the engine."""
 
     save: Callable[[Path, dict[str, Any]], None]
-    update_schedule: Callable[[None, str], None]
+    update_schedule: Callable[[None, PurchaseStatus], None]
     persist_buy: Callable[[OrderReader, dict[str, Any], Mapping[str, Any], str, int], tuple[list[dict[str, Any]], int]]
     transport_error: type[Exception]
 
@@ -46,7 +47,7 @@ def reconcile_pending_order(
     pending = state["pending_order"]
     symbol = f"BTC-{settings['quote']}"
     delay = int(settings["order_status_check_seconds"])
-    io.update_schedule(None, "Waiting for confirmation that the previous order has ended")
+    io.update_schedule(None, PurchaseStatus.VERIFYING_ORDER)
     if pending.get("exchange", settings["exchange"]) != settings["exchange"] or pending.get("symbol") != symbol:
         LOG.error("Pending order belongs to a different exchange or market; refusing another purchase.")
         return delay

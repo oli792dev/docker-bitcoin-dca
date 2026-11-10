@@ -24,10 +24,7 @@ def check_permissions(api, quote):
         except (ValueError, RuntimeError, requests.RequestException) as exc:
             # Only an explicit permission denial proves missing access. Outages,
             # unsupported endpoints and malformed replies leave permission unknown.
-            denied = any(
-                token in str(exc).lower()
-                for token in ("permission denied", "permissiondenied", "not permitted", "insufficient permissions")
-            )
+            denied = getattr(exc, "category", None) == "permission_denied"
             result[name] = {
                 "status": "denied" if denied else "unknown",
                 "evidence": "Exchange denied permission." if denied else "Read-only request could not verify access.",

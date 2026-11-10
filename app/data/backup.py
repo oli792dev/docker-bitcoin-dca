@@ -128,37 +128,9 @@ def _records(path):
     with closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True)) as db:
         db.execute("PRAGMA trusted_schema=OFF")
         db.execute("PRAGMA query_only=ON")
-        if db.execute("PRAGMA integrity_check").fetchone() != ("ok",) or db.execute(
-            "PRAGMA user_version"
-        ).fetchone() != (1,):
+        if db.execute("PRAGMA integrity_check").fetchone() != ("ok",):
             raise ValueError("Invalid Activity database.")
-        objects = db.execute("SELECT type,name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'").fetchall()
-        allowed = {
-            ("table", "activity"),
-            ("table", "metadata"),
-            ("table", "cache"),
-            ("index", "activity_period"),
-            ("index", "activity_type"),
-        }
-        if set(objects) != allowed:
-            raise ValueError("Unsupported Activity schema.")
-        columns = [r[1] for r in db.execute("PRAGMA table_info(activity)")]
-        if columns != [
-            "id",
-            "timestamp",
-            "kind",
-            "asset",
-            "simulated",
-            "exchange",
-            "currency",
-            "shares",
-            "amount",
-            "fee",
-            "gross",
-            "status",
-            "payload",
-        ]:
-            raise ValueError("Unsupported Activity columns.")
+        activity.validate_schema(db)
         records = {}
         for values in db.execute("SELECT * FROM activity"):
             if len(values[-1]) > 262144:

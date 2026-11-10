@@ -102,7 +102,7 @@ async function refreshPurchaseSchedule(){
   nextPurchaseTimestamp=Number.isFinite(target)?target:null;
 
   nextPurchaseMessage=schedule.nextPurchaseStatus||"Not scheduled";
-  $('purchaseOrderDetails').hidden=schedule.startupDelayActive===true||nextPurchaseMessage===t('Waiting for startup delay');
+  $('purchaseOrderDetails').hidden=schedule.startupDelayActive===true||schedule.nextPurchaseStatusCode==='startup_delay';
   $("nextPurchaseAt").textContent=t(nextPurchaseTimestamp===null?nextPurchaseMessage:new Date(nextPurchaseTimestamp).toLocaleString(locale,{timeZone:schedule.timezone||"UTC",timeZoneName:"short"}));
   exchangeBtcBalance=schedule.btcBalance!=null&&Number.isFinite(Number(schedule.btcBalance))?Number(schedule.btcBalance):null;
   $("exchangeBtcBalance").textContent=t(exchangeBtcBalance===null?"—":btc(exchangeBtcBalance));
@@ -116,6 +116,7 @@ async function refreshPurchaseSchedule(){
   renderWithdrawalProgress(exchangeBtcBalance,Number(schedule.purchaseCurrencyPrice),Number(schedule.withdrawalThreshold),schedule.withdrawalsEnabled);
   renderPurchaseCountdown();
   $('automaticWithdrawalCard').classList.toggle('withdrawal-disabled',!schedule.withdrawalsEnabled);
+  $('withdrawalDisabledHint').hidden=!!schedule.withdrawalsEnabled;
   $('withdrawalHeading').textContent=t(schedule.withdrawalsEnabled?'Automatic withdrawal':'Automatic withdrawal disabled');
  }catch(e){if(request===scheduleRequest){$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");updateStatusLight("error")}}
  finally{if(request===scheduleRequest){clearTimeout(scheduleRefreshTimer);scheduleRefreshTimer=setTimeout(refreshPurchaseSchedule,dashboardRefreshSeconds*1000)}}

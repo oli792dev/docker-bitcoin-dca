@@ -506,3 +506,39 @@ test('planning cards share collapsed height and expand independently',async({pag
  await page.locator('.purchase-explanation>summary').click();
  await check();
 });
+
+
+test('financial failures replace active status and misleading withdrawal countdowns', async ({page})=>{
+  const buyError='Purchase rejected; check exchange permissions, balance and order limits.';
+  const withdrawalError='Automatic withdrawal failed; check exchange status and settings.';
+  let mode='buy';
+  await page.route('**/api/schedule',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({
+    quote:'EUR',withdrawalsEnabled:true,botStatusTone:mode==='recovered'?'active':'error',
+    botStatusLabel:mode==='buy'?buyError:mode==='withdrawal'?withdrawalError:'Bot active',
+    nextPurchaseAt:null,nextPurchaseStatus:mode==='buy'?buyError:'Scheduled',
+    estimatedWithdrawalAt:null,estimatedWithdrawalStatus:mode==='withdrawal'?withdrawalError:'Waiting for account check'
+  })}));
+  await page.goto('/');
+  await expect(page.locator('#botStatusLabel')).toHaveText(buyError);
+  await expect(page.locator('#nextPurchaseAt')).toHaveText(buyError);
+  await expect(page.locator('#botStatusLight')).toHaveClass(/status-error/);
+  mode='withdrawal';await page.evaluate(()=>refreshPurchaseSchedule());
+  await expect(page.locator('#botStatusLabel')).toHaveText(withdrawalError);
+  await expect(page.locator('#estimatedWithdrawalStatus')).toHaveText(withdrawalError);
+  await expect(page.locator('#withdrawalCountdown')).toBeHidden();
+  mode='recovered';await page.evaluate(()=>refreshPurchaseSchedule());
+  await expect(page.locator('#botStatusLabel')).toHaveText('Bot active');
+  await expect(page.locator('#botStatusLight')).toHaveClass(/status-active/);
+});
+
+
+test('disabled withdrawals explain the next step with quiet dashboard typography', async ({page})=>{
+  await page.goto('/');
+  await expect(page.locator('#withdrawalDisabledHint')).toBeVisible();
+  await expect(page.locator('#withdrawalDisabledHint')).toHaveText('Enable automatic withdrawals in Settings');
+  await expect(page.locator('.report-primary')).toContainText('BTC purchased');
+  await expect(page.locator('.report-primary')).toContainText('Purchases');
+  expect(await page.locator('.dashboard-brand h1').evaluate(element=>getComputedStyle(element).fontWeight)).toBe('600');
+  await noPageOverflow(page);
+  await page.screenshot({path:test.info().outputPath('dashboard-refined.png'),fullPage:true});
+});

@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 
 import requests
 
-from app.exchanges.exchange_errors import DefinitiveRejection
+from app.exchanges.exchange_errors import DefinitiveRejection, ExchangeError
 from app.exchanges.read_cache import ReadCache
 
 BASE_URL = "https://api.bitvavo.com/v2"
@@ -63,7 +63,8 @@ class Bitvavo:
             if path == "/crypto/withdrawal" and response.status_code == 201 and response.content == b"":
                 return {}  # Accepted; match destination/time/gross amount in history later.
             raise
-        code = payload.get("errorCode") if isinstance(payload, dict) else None
+        raw_code = payload.get("errorCode") if isinstance(payload, dict) else None
+        code = raw_code if type(raw_code) is int else None
         safe = {
             102,
             200,
@@ -89,6 +90,19 @@ class Bitvavo:
             304,
             305,
             306,
+            307,
+            308,
+            309,
+            310,
+            311,
+            312,
+            313,
+            314,
+            317,
+            318,
+            319,
+            320,
+            322,
             402,
             403,
             405,
@@ -108,8 +122,15 @@ class Bitvavo:
         }
         if response.status_code < 500 and code in safe:
             self.invalidate_market()
-            raise DefinitiveRejection(str(payload.get("error", code)))
-        response.raise_for_status()
+            category = "permission_denied" if code in (307, 310, 311, 312, 319, 320) else "rejected"
+            raise DefinitiveRejection(str(payload.get("error", code)), code=code, category=category)
+        if response.status_code >= 400:
+            raise ExchangeError(
+                str(payload.get("error", "Exchange request failed"))
+                if isinstance(payload, dict)
+                else "Exchange request failed",
+                code=code,
+            )
         return payload
 
     @contextmanager

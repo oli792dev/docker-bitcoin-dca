@@ -295,7 +295,7 @@ class ReviewTests(unittest.TestCase):
             state=json.loads(json.dumps(state))
             api.balance.return_value=D('0')
             bot.run_once(api,self.settings,300)
-            self.assertEqual(schedule.call_args.args[:2],(None,'Waiting for deposit'))
+            self.assertEqual(schedule.call_args.args[:2],(None,'waiting_deposit'))
             self.assertEqual(D(schedule.call_args.args[2]['budget']),D(0))
             self.assertEqual(datetime.fromisoformat(state['deposit_tracking']['dueAt']).month,11)
             state=json.loads(json.dumps(state))

@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 
 import requests
 
-from app.exchanges.exchange_errors import DefinitiveRejection, WithdrawalNotReady
+from app.exchanges.exchange_errors import DefinitiveRejection, ExchangeError, WithdrawalNotReady
 from app.exchanges.read_cache import ReadCache
 
 BASE_URL = "https://api.kraken.com/0"
@@ -39,7 +39,7 @@ _READ_ONLY_PRIVATE_METHODS = frozenset(
 )
 
 
-class KrakenAPIError(requests.RequestException):
+class KrakenAPIError(ExchangeError):
     pass
 
 
@@ -110,8 +110,9 @@ class Kraken:
             )
             if not payload.get("result") and all(str(e).startswith(definitive) for e in errors):
                 self.invalidate_market()
-                raise DefinitiveRejection(message)
-            raise KrakenAPIError(message)
+                category = "permission_denied" if all(e == "EGeneral:Permission denied" for e in errors) else "rejected"
+                raise DefinitiveRejection(message, code=errors[0], category=category)
+            raise KrakenAPIError(message, code=errors[0])
         return payload.get("result", {})
 
     def _reset_http_session(self):
@@ -391,7 +392,9 @@ class Kraken:
             )
         return deposits
 
-    def non_deposit_balance_change(self, currency, start_ms, end_ms, baseline, current, deposit_total=Decimal(0)):
+    def non_deposit_balance_change(
+        self, currency, start_ms, end_ms, baseline, current, deposit_total=Decimal(0), *, baseline_end_ms=None
+    ):
         """Reconcile the full ledger chain, including independently confirmed deposits.
 
         Empty reads or a missing/delayed ledger row never release the funding gate.
@@ -419,14 +422,27 @@ class Kraken:
             entries.append((timestamp, amount - fee, balance))
         if not entries:
             return baseline == current and deposit_total == 0
-        # Equal-time rows may have unspecified API ordering. A mismatched chain
-        # remains blocked rather than guessing an ordering or omitting a row.
-        running = baseline
-        for _, change, balance in sorted(entries, key=lambda row: row[0]):
+        ordered = sorted(entries, key=lambda row: row[0])
+        opening = ordered[0][2] - ordered[0][1]
+        running = opening
+        checkpoints = []
+        for timestamp, change, balance in ordered:
             running += change
             if running != balance:
                 return False
-        return running == current and ledger_deposits == deposit_total
+            if balance == baseline:
+                checkpoints.append(timestamp)
+        # A read can already include a ledger prefix; accept only a proven checkpoint.
+        return (
+            (
+                opening == baseline
+                or len(checkpoints) == 1
+                and baseline_end_ms is not None
+                and checkpoints[0] <= baseline_end_ms
+            )
+            and running == current
+            and ledger_deposits == deposit_total
+        )
 
     def btc_withdrawals(self, start_ms=0, end_ms=None):
         params = {
@@ -533,7 +549,7 @@ class Kraken:
             try:
                 result = self.private(method, {"userref": userref})
             except (KrakenAPIError, DefinitiveRejection) as exc:
-                if "Permission denied" in str(exc):
+                if exc.category == "permission_denied":
                     continue
                 raise
             orders = result.get(bucket, {})

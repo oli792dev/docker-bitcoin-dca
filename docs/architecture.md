@@ -27,9 +27,9 @@ The named volume `bitcoin-dca` mounts at `/webui-data`:
 - `activity.sqlite3`: activity and historical FX cache.
 - Other files: dashboard snapshot, `report-preferences.json`, first-start timestamp, heartbeat and `tls/` certificates/keys.
 
-JSON writes use private temporary files, atomic replacement and filesystem synchronization. SQLite writes are transactional.
+JSON writes use private temporary files, atomic replacement and filesystem synchronization. SQLite writes are transactional. Activity owns the schema definitions used by both database creation and strict backup validation.
 
-Test connection reports funds, orders, history, trade and withdrawal access as proven, denied or unknown using read-only requests. Kraken key metadata can prove write scopes; Bitvavo write scopes remain unknown.
+Exchange errors retain their machine-readable code and rejection, permission-denial or uncertain category. Test connection uses that category to report funds, orders, history, trade and withdrawal access as proven, denied or unknown using read-only requests. Kraken key metadata can prove write scopes; Bitvavo write scopes remain unknown.
 
 Exchange, currency and active API-key fingerprints separate scheduling/account state and export cycles. Changing the active key is treated as a new account, even for a key rotation; historical activity remains. Secret-only rotation preserves the binding. Unresolved transactions block account changes.
 
@@ -58,6 +58,7 @@ Stop the container before making an independent filesystem backup of the volume.
 - Purchase interval = UTC time from the last purchase to the active deposit deadline ÷ `(affordable purchases + 1)`, minimum 60 seconds. Fees and exchange limits apply; the final purchase can use the remaining budget.
 - Deposit dates use the configured timezone and local time. Short months use their last day; daylight-saving gaps move forward and repeated times use the first occurrence.
 - Every account check polls paginated fiat deposit history from the persisted first-observation timestamp, so purchases cannot hide incoming deposits and delayed history is retried. Exchange IDs make replay idempotent. Booked fiat increases additionally trigger a complete ledger check for the pending window. Released order holds are not deposits. Confirmed early deposits advance the deadline; overdue deposits remain pending. Sale proceeds require matching account-history evidence. Unknown credits or incomplete history keep automatic transactions paused; a timeout never confirms funding.
+- Balance observations retain their read-completion boundary. Kraken can reconcile a ledger prefix already reflected in the saved balance only with a unique checkpoint inside that boundary, a complete balance chain and matching confirmed deposits. Ambiguous or incomplete evidence stays blocked.
 - Forecasts use saved balances/prices and assumed monthly deposits. Dashboard polling revalues reports without changing exchange-check deadlines or trading.
 - Interrupted settings writes pause trading until durable configuration is verified. SIGTERM/SIGINT stop new work and allow up to 45 seconds for the active worker operation; Compose allows 60 seconds before termination.
 
@@ -81,7 +82,7 @@ Sessions last 30 minutes and use `Secure`, `HttpOnly` and `SameSite=Strict` cook
 docker compose logs --tail=200
 ```
 
-INFO records scheduling, transactions and explicit UI actions; WARNING covers recoverable failures; ERROR covers unexpected or uncertain outcomes; DEBUG adds request details and repeated waiting states. Logs can contain balances and transaction IDs.
+INFO records scheduling, transactions and explicit UI actions; WARNING covers recoverable failures; ERROR covers unexpected or uncertain outcomes; DEBUG adds request details and repeated waiting states. Logs can contain balances and transaction IDs. Purchase status codes are separate from display labels and translations. The dashboard shows sanitized purchase rejections and automatic withdrawal failures; successful retries clear the warning. Uncertain submissions remain blocked for verification.
 
 Heartbeat and Docker health checks run every five minutes. A supervisor exits after a ten-minute worker stall so Docker can restart it. Health measures worker responsiveness, not successful trading; Docker’s unhealthy status alone does not restart the container.
 
@@ -102,4 +103,4 @@ npx playwright install --with-deps chromium webkit
 npm run test:browser
 ```
 
-Tests use synthetic exchange data; Chromium/WebKit cover desktop/mobile layout and interactions. No real transactions are submitted. Browser tools are development-only and are excluded from the runtime image.
+Tests use synthetic exchange data; Chromium/WebKit cover desktop/mobile layout and interactions. A separate integration test runs the real HTTPS application and worker against an offline exchange, covering account setup, a rejected purchase and successful recovery. No real transactions are submitted. Browser tools are development-only and are excluded from the runtime image.

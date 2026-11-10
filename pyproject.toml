@@ -16,6 +16,7 @@ strict = true
 follow_imports = "silent"
 files = [
   "app/core/contracts.py",
+  "app/core/purchase_status.py",
   "app/core/security.py",
   "app/core/logging_utils.py",
   "app/data/storage.py",

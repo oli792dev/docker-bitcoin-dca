@@ -2,7 +2,7 @@
 :root{--button-height:44px;--corner-radius:12px;--space-xs:4px;--space-sm:8px;--space-md:12px;--space-lg:16px;--space-xl:24px;color-scheme:light dark;--panel-padding:20px;--section-space:24px;--subsection-space:16px;--tile-gap:16px;--section-gap:24px;--field-gap:16px;--card-padding:16px;--control-gap:8px;font-size:106.25%;accent-color:var(--primary);}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;font-size:1rem;line-height:1.5;letter-spacing:normal;}
-h1{font-family:inherit;font-size:clamp(1.5rem,3vw,2rem);font-weight:700;line-height:1.2;letter-spacing:-.025em;}
+h1{font-family:inherit;font-size:clamp(1.5rem,3vw,2rem);font-weight:600;line-height:1.2;letter-spacing:-.025em;}
 h2{font-size:1.18rem;font-weight:600;line-height:1.35;letter-spacing:-.015em;}
 h3,.summary-subheading{font-size:1rem;font-weight:600;line-height:1.4;letter-spacing:normal;}
 p{line-height:1.55;}

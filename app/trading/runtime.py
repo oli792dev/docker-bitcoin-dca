@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from app.core.configuration import ConfigStore, ConfigurationError, account_values, runtime_settings, validate
+from app.core.purchase_status import PurchaseStatus
 from app.core.security import AttemptLimiter, PasswordConfirmationError
 from app.data.storage import STATE_PATH
 from app.exchanges.exchange import create_exchange
@@ -32,8 +33,8 @@ class Runtime:
         from app.trading.controls import PauseControl
 
         self.controls = PauseControl(self.state_path.with_name("controls.json"))
-        self.settings["transaction_gate"] = (
-            lambda: self.controls.snapshot()["paused"] or self.state_path.with_name(".restore-journal").exists()
+        self.settings["transaction_gate"] = lambda: (
+            self.controls.snapshot()["paused"] or self.state_path.with_name(".restore-journal").exists()
         )
         self.api = None
         self.service = None
@@ -191,13 +192,13 @@ class Runtime:
                 return self.worker.interval
             remaining = self.ready_at - time.monotonic()
             if remaining > 0:
-                update_dashboard_schedule(None, "Waiting for startup delay")
+                update_dashboard_schedule(None, PurchaseStatus.STARTUP_DELAY)
                 return max(1, remaining)
             self._synchronize_state()
             if self.exchange_check_pending:
-                update_dashboard_schedule(None, "Checking exchange for open orders and withdrawals")
+                update_dashboard_schedule(None, PurchaseStatus.EXCHANGE_CHECK)
                 if not self._check_exchange_activity():
-                    update_dashboard_schedule(None, "Waiting for open exchange orders or withdrawals")
+                    update_dashboard_schedule(None, PurchaseStatus.OPEN_TRANSACTIONS)
                     return self.worker.interval
             if self.startup_pending:
                 self.settings["startup_last_buy_at"] = latest_recorded_buy_time(

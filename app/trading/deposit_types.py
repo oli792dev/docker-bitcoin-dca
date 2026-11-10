@@ -30,6 +30,7 @@ class PendingDeposit(TypedDict):
     start: str
     balanceBaseline: NotRequired[str]
     bookedBaseline: NotRequired[str]
+    baselineReadUntil: NotRequired[str]
 
 
 class FiatObservation(TypedDict):
@@ -37,6 +38,7 @@ class FiatObservation(TypedDict):
     checkedAt: str
     balance: str
     booked: NotRequired[str]
+    readUntil: NotRequired[str]
     historyStartAt: str
     confirmed: NotRequired[list[DepositActivity]]
     pending: NotRequired[PendingDeposit]

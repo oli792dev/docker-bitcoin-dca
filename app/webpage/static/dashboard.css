@@ -352,7 +352,7 @@ __DESIGN_CSS__
 .redesigned .plan-card.withdrawal-disabled{background:var(--panel);border-color:transparent;}
 .redesigned .withdrawal-disabled .plan-title h2,.redesigned .withdrawal-disabled>#estimatedWithdrawalAt{color:var(--muted);}
 .redesigned .withdrawal-disabled>#estimatedWithdrawalAt{font-size:1.1rem;font-weight:500;}
-.redesigned .withdrawal-disabled>:not(.plan-title):not(#estimatedWithdrawalAt),.redesigned .withdrawal-disabled #withdrawalBadge{display:none!important;}
+.redesigned .withdrawal-disabled>:not(.plan-title):not(#estimatedWithdrawalAt):not(#withdrawalDisabledHint),.redesigned .withdrawal-disabled #withdrawalBadge{display:none!important;}
 .report-range-dialog{width:min(620px,calc(100vw - 32px));}
 .report-range-dialog .controls{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:var(--space-lg);gap:var(--space-lg);}
 .report-range-dialog .controls .field:first-child{grid-column:1/-1;}
@@ -366,6 +366,8 @@ __DESIGN_CSS__
 }
 .redesigned .plan-card .small{margin-top:var(--space-xs);}
 .redesigned .withdrawal-disabled .plan-title{margin-bottom:0;}
+.redesigned #withdrawalDisabledHint{margin:var(--dashboard-caption-gap) 0 0;font-size:.82rem;line-height:1.5;color:var(--muted);}
+
 .redesigned .withdrawal-disabled #estimatedWithdrawalAt{display:none!important;}
 /* Supplemental details stay within their section, without divider bars. */
 .redesigned .dashboard-footnotes>ol{padding-top:0;}

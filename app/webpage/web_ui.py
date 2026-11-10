@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlparse
 
 import requests
 
+from app.core.purchase_status import PurchaseStatus
 from app.core.security import AttemptLimiter, PasswordConfirmationError, string_object
 from app.data.activity import parqet_interval_records, read_dashboard_snapshot, read_report, withdrawal_records
 from app.data.analytics import report as build_report
@@ -87,11 +88,19 @@ class Handler(BaseHTTPRequestHandler):
     def _handle_schedule(self) -> None:
         """Respond with saved account state and the current schedule forecast."""
         snapshot = read_dashboard_snapshot()
+        forecast_now = datetime.now(UTC)
         exchange_check_pending = bool(self.runtime and self.runtime.exchange_check_pending)
         startup_delay = exchange_check_pending and time.monotonic() < self.runtime.ready_at
         exchange_status = exchange_check_status(startup_delay=startup_delay)
         if exchange_check_pending:
-            snapshot = {**snapshot, "nextPurchaseAt": None, "nextPurchaseStatus": exchange_status}
+            snapshot = {
+                **snapshot,
+                "nextPurchaseAt": None,
+                "nextPurchaseStatus": exchange_status,
+                "nextPurchaseStatusCode": PurchaseStatus.STARTUP_DELAY
+                if startup_delay
+                else PurchaseStatus.EXCHANGE_CHECK,
+            }
         balance_matches = (
             snapshot.get("quote") == self.settings["quote"] and snapshot.get("exchange") == self.settings["exchange"]
         )
@@ -102,8 +111,15 @@ class Handler(BaseHTTPRequestHandler):
                 self.settings,
                 snapshot if balance_matches else {},
                 self.settings.get("expected_monthly_deposit") or "0",
-                datetime.now(UTC),
+                forecast_now,
             )
+        withdrawal_error = (
+            snapshot.get("withdrawalError")
+            if self.settings.get("live") and self.settings.get("withdrawals_enabled")
+            else None
+        )
+        if withdrawal_error:
+            forecast_at, forecast_status = None, withdrawal_error
         pause = self.runtime.controls.snapshot() if self.runtime else {"paused": False, "until": None}
         if pause["paused"]:
             forecast_at, forecast_status = None, "Transactions paused"
@@ -112,11 +128,13 @@ class Handler(BaseHTTPRequestHandler):
         status = dashboard_status(
             balance_matches=balance_matches,
             purchase_status=str(snapshot.get("nextPurchaseStatus", "")),
+            purchase_status_code=snapshot.get("nextPurchaseStatusCode", PurchaseStatus.UNKNOWN),
             live=bool(self.settings.get("live")),
             exchange_check_pending=exchange_check_pending,
             startup_delay=startup_delay,
             worker_healthy=not self.worker or self.worker.healthy(),
             worker_error=bool(self.worker and self.worker.last_error),
+            financial_error=withdrawal_error,
         )
         try:
             account_price = market_prices.snapshot_market_price(
@@ -147,11 +165,11 @@ class Handler(BaseHTTPRequestHandler):
                 else status.tone,
                 "botStatusWarning": status.warning,
                 "startupDelayActive": bool(
-                    startup_delay or snapshot.get("nextPurchaseStatus") == "Waiting for startup delay"
+                    startup_delay or snapshot.get("nextPurchaseStatusCode") == PurchaseStatus.STARTUP_DELAY
                 ),
                 "lastAccountCheckAt": checked_at,
                 "staleAfterSeconds": max(120, self.settings.get("check_interval_seconds", 300) * 2),
-                "forecastDetails": forecast_details(self.settings, snapshot)
+                "forecastDetails": forecast_details(self.settings, snapshot, forecast_now)
                 if forecast_at and balance_matches
                 else None,
                 "exchangeCheckPending": exchange_check_pending,
@@ -176,6 +194,7 @@ class Handler(BaseHTTPRequestHandler):
                 "estimatedWithdrawalAt": forecast_at,
                 "estimatedWithdrawalStatus": forecast_status,
                 "balanceUpdatedAt": snapshot.get("updatedAt") if balance_matches else None,
+                "nextPurchaseStatusCode": snapshot.get("nextPurchaseStatusCode", PurchaseStatus.UNKNOWN),
                 "nextPurchaseAt": snapshot.get("nextPurchaseAt"),
                 "nextPurchaseStatus": "Transactions paused"
                 if pause["paused"]
