@@ -344,6 +344,8 @@ class Runtime:
                 if pause_requested is True:
                     self.controls.set(True)
                 self.store.commit(values, account)
+                if account_changed:
+                    self.invalidate_sessions()
                 if pause_requested is False:
                     self.controls.set(False)
             except Exception:

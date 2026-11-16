@@ -1,10 +1,12 @@
 """Security regressions use local certificates and fake exchange adapters only."""
 import io
+import json
 import ssl
 import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event, RLock
 from unittest.mock import Mock, patch
 from urllib.parse import urlencode
 from app.data import activity
@@ -33,10 +35,10 @@ class AttemptLimitTests(unittest.TestCase):
         self.assertEqual(len(limiter.attempts),1)
         self.assertNotIn('X-Forwarded-For',web_ui.Handler._handle_login.__code__.co_consts)
 
-    def login(self, valid=False, credentials=None, store=None):
+    def login(self, valid=False, credentials=None, store=None, create_account=False):
         handler=object.__new__(web_ui.Handler)
         handler.client_address=('192.0.2.5',1000)
-        handler.runtime=Mock();handler.runtime.store.authenticate.return_value=valid
+        handler.runtime=Mock();handler.runtime.store.authenticate.return_value=valid;handler.runtime.store.lock=RLock()
         if store is not None:handler.runtime.store=store
         body=urlencode(credentials or {'username':'operator','password':'private-password'}).encode()
         handler.headers={'Content-Length':str(len(body))}
@@ -45,8 +47,57 @@ class AttemptLimitTests(unittest.TestCase):
         handler.send_response=handler.statuses.append
         handler.send_header=lambda key,value:handler.response_headers.update({key:value})
         handler.end_headers=lambda:None
-        handler._handle_login()
+        if create_account:
+            handler.path='/api/setup/account'
+            body=json.dumps(credentials).encode()
+            handler.headers={'Content-Length':str(len(body)),'Content-Type':'application/json','X-DCA-Action':'settings'}
+            handler.rfile=io.BytesIO(body)
+            handler._settings_post(handler.path)
+        else:handler._handle_login()
         return handler
+
+    def test_password_change_revokes_a_login_already_past_password_verification(self):
+        self.check_session_revocation_during_issuance(False)
+
+    def test_password_change_revokes_an_initial_account_session_being_issued(self):
+        self.check_session_revocation_during_issuance(True)
+
+    def check_session_revocation_during_issuance(self, create_account):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(web_ui,'_SESSIONS',{}), patch.object(web_ui,'_LOGIN_ATTEMPTS',security.AttemptLimiter()):
+            store=configuration.ConfigStore(Path(tmp)/'config.json')
+            if not create_account:store.create_account('operator',PASSWORD)
+            verified,release,change_ready=Event(),Event(),Event()
+            new_account=configuration.account_values('operator','replacement-private-password')
+            token_factory=web_ui.token_urlsafe
+            def paused_token(size):
+                verified.set()
+                if not release.wait(5):raise RuntimeError('Login synchronization timed out')
+                return token_factory(size)
+            def change_password():
+                acquired=store.lock.acquire(blocking=False)
+                if not acquired:
+                    change_ready.set()
+                    store.lock.acquire()
+                try:
+                    store.commit(store.snapshot()['settings'],new_account)
+                    with web_ui._SESSION_LOCK:web_ui._SESSIONS.clear()
+                finally:
+                    store.lock.release()
+                    change_ready.set()
+            with patch.object(web_ui,'token_urlsafe',side_effect=paused_token),ThreadPoolExecutor(2) as pool:
+                login=pool.submit(self.login,credentials={'username':'operator','password':PASSWORD},store=store,create_account=create_account)
+                try:
+                    self.assertTrue(verified.wait(5))
+                    change=pool.submit(change_password)
+                    self.assertTrue(change_ready.wait(5))
+                finally:release.set()
+                handler=login.result(5);change.result(5)
+            token=handler.response_headers['Set-Cookie'].split(';')[0].split('=',1)[1]
+            self.assertFalse(web_ui.session_is_valid(token))
+            self.assertFalse(store.authenticate('operator',PASSWORD))
+            current=self.login(credentials={'username':'operator','password':'replacement-private-password'},store=store)
+            self.assertEqual(current.statuses,[303])
+            self.assertTrue(web_ui.session_is_valid(current.response_headers['Set-Cookie'].split(';')[0].split('=',1)[1]))
 
     def test_login_accepts_the_maximum_allowed_unicode_credentials(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(web_ui,'_LOGIN_ATTEMPTS',security.AttemptLimiter()):
@@ -89,6 +140,14 @@ class SensitiveSettingsTests(unittest.TestCase):
         self.store=configuration.ConfigStore(root/'config.json');self.store.create_account('operator',PASSWORD)
         self.app=runtime.Runtime(self.store,root/'state.json')
         self.app.save({'settings':{'kraken_api_key':'fictional','kraken_api_secret':'c2VjcmV0'}})
+
+    def test_committed_login_change_revokes_sessions_even_if_later_save_fails(self):
+        self.app.invalidate_sessions=Mock()
+        with patch.object(self.app.controls,'set',side_effect=OSError('controls unavailable')):
+            with self.assertRaises(OSError):
+                self.app.save({'settings':{},'username':'replacement-user','current_password':PASSWORD,'pause':False})
+        self.assertEqual(self.store.snapshot()['account']['username'],'replacement-user')
+        self.app.invalidate_sessions.assert_called_once()
 
     def test_sensitive_changes_cannot_be_saved_without_current_password(self):
         before=self.store.path.read_bytes()

@@ -318,19 +318,24 @@ class Handler(BaseHTTPRequestHandler):
             self._send(400, self._login_page("Please enter your username and password."), "text/html; charset=utf-8")
             return
 
-        valid = bool(self.runtime and self.runtime.store.authenticate(username, password))
+        if not self.runtime:
+            self._send(401, self._login_page("The username or password is incorrect."), "text/html; charset=utf-8")
+            return
+        # Credential updates use this lock too; insert old sessions before revocation.
+        with self.runtime.store.lock:
+            valid = self.runtime.store.authenticate(username, password)
+            if valid:
+                _LOGIN_ATTEMPTS.clear(client)
+                token = token_urlsafe(32)
+                now = time.monotonic()
+                with _SESSION_LOCK:
+                    expired = [key for key, expiry in _SESSIONS.items() if expiry <= now]
+                    for key in expired:
+                        _SESSIONS.pop(key, None)
+                    _SESSIONS[token] = now + SESSION_TTL_SECONDS
         if not valid:
             self._send(401, self._login_page("The username or password is incorrect."), "text/html; charset=utf-8")
             return
-
-        _LOGIN_ATTEMPTS.clear(client)
-        token = token_urlsafe(32)
-        now = time.monotonic()
-        with _SESSION_LOCK:
-            expired = [key for key, expiry in _SESSIONS.items() if expiry <= now]
-            for key in expired:
-                _SESSIONS.pop(key, None)
-            _SESSIONS[token] = now + SESSION_TTL_SECONDS
         self.send_response(303)
         self.send_header(
             "Set-Cookie",
@@ -413,10 +418,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.runtime.reserve_setup_restore()
             payload = self._settings_body()
             if path == "/api/setup/account":
-                self.runtime.store.create_account(payload.get("username"), payload.get("password"))
-                token = token_urlsafe(32)
-                with _SESSION_LOCK:
-                    _SESSIONS[token] = time.monotonic() + SESSION_TTL_SECONDS
+                with self.runtime.store.lock:
+                    self.runtime.store.create_account(payload.get("username"), payload.get("password"))
+                    token = token_urlsafe(32)
+                    with _SESSION_LOCK:
+                        _SESSIONS[token] = time.monotonic() + SESSION_TTL_SECONDS
                 self.send_response(200)
                 self.send_header(
                     "Set-Cookie",
@@ -442,8 +448,6 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 changed = self.runtime.save(payload)
                 if changed:
-                    with _SESSION_LOCK:
-                        _SESSIONS.clear()
                     LOG.info("Dashboard account credentials updated; all dashboard sessions invalidated")
                 self._json(200, {"saved": True, "signInRequired": changed})
         except PasswordConfirmationError as exc:

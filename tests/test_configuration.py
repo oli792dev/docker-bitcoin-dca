@@ -604,6 +604,9 @@ class ConfigurationTests(unittest.TestCase):
 
     def server(self):
         # Exercise the real HTTP handlers in memory; no listening socket or exchange.
+        def invalidate_sessions():
+            with web_ui._SESSION_LOCK:web_ui._SESSIONS.clear()
+        self.app.invalidate_sessions = invalidate_sessions
         self.cookie = ''
         def request(path, payload=None, header=True):
             h = object.__new__(web_ui.Handler)
