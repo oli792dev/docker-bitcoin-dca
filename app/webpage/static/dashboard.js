@@ -119,7 +119,7 @@ async function refreshPurchaseSchedule(){
   $('withdrawalDisabledHint').hidden=!!schedule.withdrawalsEnabled;
   $('withdrawalHeading').textContent=t(schedule.withdrawalsEnabled?'Automatic withdrawal':'Automatic withdrawal disabled');
  }catch(e){if(request===scheduleRequest){$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");updateStatusLight("error")}}
- finally{if(request===scheduleRequest){clearTimeout(scheduleRefreshTimer);scheduleRefreshTimer=setTimeout(refreshPurchaseSchedule,dashboardRefreshSeconds*1000)}}
+ finally{if(request===scheduleRequest){clearTimeout(scheduleRefreshTimer);scheduleRefreshTimer=setTimeout(refreshDashboard,dashboardRefreshSeconds*1000)}}
 }
 setInterval(renderPurchaseCountdown,1000);
 
@@ -179,9 +179,9 @@ async function loadIntervals(){
  for(const withdrawal of withdrawals){const start=Number(withdrawal.startTimestamp),end=Number(withdrawal.timestamp);if(!(start>0&&end>start))continue;const o=document.createElement("option");o.value=start+","+end;o.textContent=t(dateLabel(start)+" → "+dateLabel(end));select.appendChild(o)}
  select.value="";
 }
-let selectedQuickRange='customRange',rangeDraft=null,customPeriod=null;
-function captureCustomPeriod(){return {start:$('start').value,end:$('end').value,interval:$('interval').value}}
-function restoreCustomPeriod(){if(customPeriod)for(const key of ['start','end','interval'])$(key).value=customPeriod[key]}
+let selectedQuickRange='customRange',rangeDraft=null,customPeriod=null,reportThroughNow=true;
+function captureCustomPeriod(){return {start:$('start').value,end:$('end').value,interval:$('interval').value,throughNow:reportThroughNow}}
+function restoreCustomPeriod(){if(customPeriod){for(const key of ['start','end','interval'])$(key).value=customPeriod[key];reportThroughNow=customPeriod.throughNow}}
 const quickRangeIds=['monthRange','yearRange','days30Range','days90Range','oneYearRange','customRange'];
 function rollingRangeStart(id,now){
  if(id==='days30Range'||id==='days90Range'){const start=new Date(now);start.setDate(start.getDate()-(id==='days30Range'?30:90));return start;}
@@ -196,7 +196,7 @@ for(const id of quickRangeIds)$(id).addEventListener('click',async()=>{
  if(id==='customRange'){
   restoreCustomPeriod();selectQuickRange(id);await saveReportFrom();currentPage=1;loadAnalytics();return
  }
- selectQuickRange(id);
+ selectQuickRange(id);reportThroughNow=true;
  const now=new Date(),start=['days30Range','days90Range','oneYearRange'].includes(id)?rollingRangeStart(id,now):new Date(now.getFullYear(),id==='yearRange'?0:now.getMonth(),1);
  $('start').value=localInput(start.getTime());$('end').value=localInput(now.getTime());$('interval').value='';
  await saveReportFrom();currentPage=1;loadAnalytics();
@@ -210,12 +210,12 @@ $("interval").addEventListener("change",()=>{applySelectedInterval();$('rangeErr
 ["start","end"].forEach(id=>$(id).addEventListener("change",()=>{$("interval").value="";$('rangeError').textContent=''}));
 $('cancelRange').addEventListener('click',()=>$('rangeDialog').close('cancel'));
 $('rangeDialog').addEventListener('close',()=>{
- if($('rangeDialog').returnValue!=='apply'&&rangeDraft){$('start').value=rangeDraft.start;$('end').value=rangeDraft.end;$('interval').value=rangeDraft.interval;selectQuickRange(rangeDraft.selected)}
+ if($('rangeDialog').returnValue!=='apply'&&rangeDraft){$('start').value=rangeDraft.start;$('end').value=rangeDraft.end;$('interval').value=rangeDraft.interval;reportThroughNow=rangeDraft.throughNow;selectQuickRange(rangeDraft.selected)}
  rangeDraft=null;
 });
 $('rangeForm').addEventListener('submit',event=>{
  event.preventDefault();try{selectedPeriod()}catch(error){$('rangeError').textContent=t(error.message);return}
- customPeriod=captureCustomPeriod();selectQuickRange('customRange');$('rangeDialog').close('apply');saveReportFrom();saveReportView();currentPage=1;loadAnalytics();
+ reportThroughNow=false;customPeriod=captureCustomPeriod();selectQuickRange('customRange');$('rangeDialog').close('apply');saveReportFrom();saveReportView();currentPage=1;loadAnalytics();
 });
 function activityStatus(row){
  if(row.type==="Deposit")return row.depositStatus==="confirmed"?{label:"Confirmed ✓",tone:"confirmed"}:{label:"—",tone:"muted"};
@@ -410,7 +410,19 @@ async function requestManualWithdrawal(){
  }catch(e){showWithdrawalMessage(e.message)}
  finally{actionFeedback("withdraw",null,false,false)}
 }
-window.DCA_DASHBOARD_ACTIONS={refreshSchedule:refreshPurchaseSchedule,withdraw:requestManualWithdrawal,export:requestParqetExport};
+async function refreshDashboard(){
+ await refreshPurchaseSchedule();
+ if(rangeDraft||$('periodReport').ariaBusy==='true'||!$('start').value||!$('end').value)return;
+ if(reportThroughNow){
+  const now=new Date();$('end').value=localInput(now.getTime());
+  if(selectedQuickRange!=='customRange'){
+   const start=['days30Range','days90Range','oneYearRange'].includes(selectedQuickRange)?rollingRangeStart(selectedQuickRange,now):new Date(now.getFullYear(),selectedQuickRange==='yearRange'?0:now.getMonth(),1);
+   $('start').value=localInput(start.getTime());
+  }
+ }
+ await loadAnalytics();
+}
+window.DCA_DASHBOARD_ACTIONS={refreshSchedule:refreshDashboard,withdraw:requestManualWithdrawal,export:requestParqetExport};
 refreshPurchaseSchedule();
 
 (async()=>{

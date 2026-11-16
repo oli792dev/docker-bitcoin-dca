@@ -66,6 +66,19 @@ class Tests(unittest.TestCase):
             self.state.clear()
         self.s['live']=False
         with self.assertRaises(ValueError):service('preview','session')
+    def test_confirmation_rejects_balance_change_during_final_submission_check(self):
+        for exchange in ('KRAKEN','BITVAVO'):
+            for final_balance in (D('0'),D('.004'),D('.000000001')):
+                with self.subTest(exchange=exchange,balance=final_balance):
+                    self.state.clear()
+                    activity.ACTIVITY_PATH.unlink(missing_ok=True)
+                    service=self.service(exchange);preview=service('preview','session')
+                    with patch.object(self.api,'balance',side_effect=[D('.0045'),final_balance]):
+                        with self.assertRaisesRegex(ValueError,'balance.*changed'):
+                            service('confirm','session',preview['token'])
+                    self.assertEqual(self.api.sent,[])
+                    self.assertEqual(activity.read_activity_records(),[])
+
     def test_uncertain_submission_blocks_retry(self):
         service=self.service();p=service('preview','session');self.api.fail=True
         with self.assertRaises(ValueError):service('confirm','session',p['token'])

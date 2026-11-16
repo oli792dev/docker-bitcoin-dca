@@ -351,6 +351,12 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
         return
 
     available = api.balance("BTC")
+    if manual_request is not None:
+        expected = Decimal(manual_request["amount"])
+        if settings["exchange"] == "KRAKEN":
+            expected += Decimal(manual_request.get("fee", "0"))
+        if available.quantize(Decimal("0.00000001"), rounding=ROUND_DOWN) != expected:
+            raise ValueError("The balance changed. Review a new withdrawal preview.")
     if available <= 0:
         if not state.get("withdrawal_armed", True):
             state["withdrawal_armed"] = True
