@@ -2,6 +2,7 @@ const {test,expect}=require('playwright/test');
 const {spawn}=require('node:child_process');
 const {once}=require('node:events');
 const path=require('node:path');
+const http=require('node:http');
 
 test.use({ignoreHTTPSErrors:true});
 test('real HTTPS setup, rejected purchase and successful recovery reach the browser',async({page})=>{
@@ -9,6 +10,7 @@ test('real HTTPS setup, rejected purchase and successful recovery reach the brow
   const child=spawn(process.env.PYTHON||'python3',['-m','tests.browser.live_server'],{
     cwd:path.resolve(__dirname,'../..'),stdio:['ignore','pipe','pipe']
   });
+  let attacker;
   let stderr='';child.stderr.on('data',chunk=>stderr+=chunk);
   try{
     const url=await new Promise((resolve,reject)=>{
@@ -46,7 +48,22 @@ test('real HTTPS setup, rejected purchase and successful recovery reach the brow
     await page.evaluate(()=>refreshPurchaseSchedule());
     await expect(page.locator('#botStatusLabel')).toHaveText('Bot active');
     await expect(page.locator('#botStatusLight')).toHaveClass(/status-active/);
+    attacker=http.createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html'});res.end('<form method="POST" action="'+url+'/logout"><button>Foreign form</button></form>')});
+    await new Promise(resolve=>attacker.listen(0,'127.0.0.1',resolve));
+    const hostile=await page.context().newPage();
+    await hostile.goto('http://127.0.0.1:'+attacker.address().port);
+    const rejected=hostile.waitForResponse(response=>response.url()===url+'/logout');
+    await hostile.locator('button').click();
+    expect((await rejected).status()).toBe(403);
+    expect((await page.request.get(url+'/api/settings')).status()).toBe(200);
+    await hostile.close();
+    await page.locator('#openSettings').click();
+    await page.locator('form[action="/logout"] button').click();
+    await expect(page.locator('form[action="/login"]')).toBeVisible();
+    expect((await page.request.get(url+'/api/settings')).status()).toBe(401);
+
   }finally{
+    if(attacker)await new Promise(resolve=>attacker.close(resolve));
     if(child.exitCode===null){
       const exited=once(child,'exit');child.kill('SIGTERM');
       const timer=setTimeout(()=>child.kill('SIGKILL'),10000);

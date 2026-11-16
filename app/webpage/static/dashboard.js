@@ -183,7 +183,8 @@ let selectedQuickRange='customRange',rangeDraft=null,customPeriod=null,reportThr
 function captureCustomPeriod(){return {start:$('start').value,end:$('end').value,interval:$('interval').value,throughNow:reportThroughNow}}
 function restoreCustomPeriod(){if(customPeriod){for(const key of ['start','end','interval'])$(key).value=customPeriod[key];reportThroughNow=customPeriod.throughNow}}
 const quickRangeIds=['monthRange','yearRange','days30Range','days90Range','oneYearRange','customRange'];
-function rollingRangeStart(id,now){
+function quickRangeStart(id,now){
+ if(id==='monthRange'||id==='yearRange')return new Date(now.getFullYear(),id==='yearRange'?0:now.getMonth(),1);
  if(id==='days30Range'||id==='days90Range'){const start=new Date(now);start.setDate(start.getDate()-(id==='days30Range'?30:90));return start;}
  const start=new Date(now);start.setDate(1);start.setFullYear(now.getFullYear()-1);start.setDate(Math.min(now.getDate(),new Date(start.getFullYear(),start.getMonth()+1,0).getDate()));return start;
 }
@@ -197,7 +198,7 @@ for(const id of quickRangeIds)$(id).addEventListener('click',async()=>{
   restoreCustomPeriod();selectQuickRange(id);await saveReportFrom();currentPage=1;loadAnalytics();return
  }
  selectQuickRange(id);reportThroughNow=true;
- const now=new Date(),start=['days30Range','days90Range','oneYearRange'].includes(id)?rollingRangeStart(id,now):new Date(now.getFullYear(),id==='yearRange'?0:now.getMonth(),1);
+ const now=new Date(),start=quickRangeStart(id,now);
  $('start').value=localInput(start.getTime());$('end').value=localInput(now.getTime());$('interval').value='';
  await saveReportFrom();currentPage=1;loadAnalytics();
 });
@@ -416,8 +417,7 @@ async function refreshDashboard(){
  if(reportThroughNow){
   const now=new Date();$('end').value=localInput(now.getTime());
   if(selectedQuickRange!=='customRange'){
-   const start=['days30Range','days90Range','oneYearRange'].includes(selectedQuickRange)?rollingRangeStart(selectedQuickRange,now):new Date(now.getFullYear(),selectedQuickRange==='yearRange'?0:now.getMonth(),1);
-   $('start').value=localInput(start.getTime());
+   $('start').value=localInput(quickRangeStart(selectedQuickRange,now).getTime());
   }
  }
  await loadAnalytics();
@@ -444,7 +444,7 @@ refreshPurchaseSchedule();
    previous.set(element,text);
    const unit=text.match(/(\sBTC|\/BTC)$/);
    if(unit&&!element.querySelector('.value-unit')){const suffix=document.createElement('span');suffix.className='value-unit';suffix.textContent=unit[0];element.replaceChildren(document.createTextNode(text.slice(0,-unit[0].length)),suffix)}
-   if(text!==old&&old&&old!=='—'&&/\d/.test(text)&&element.animate){animation?.cancel();animation=element.animate([{opacity:.6},{opacity:1}],{duration:180,easing:'ease-out'})}
+   if(text!==old&&old&&old!=='—'&&/\d/.test(text)&&element.animate&&!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches){animation?.cancel();animation=element.animate([{opacity:.6},{opacity:1}],{duration:180,easing:'ease-out'})}
   };
   update();new MutationObserver(update).observe(element,{childList:true,characterData:true,subtree:true});
  }

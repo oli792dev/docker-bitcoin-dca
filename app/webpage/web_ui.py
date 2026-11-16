@@ -347,6 +347,10 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _handle_logout(self):
+        host = self.headers.get("Host", "")
+        if not host or self.headers.get("Origin", "").lower() != f"https://{host}".lower():
+            self._json(403, {"error": "Invalid logout request."})
+            return
         try:
             cookies = SimpleCookie(self.headers.get("Cookie", ""))
             morsel = cookies.get("dca_session")

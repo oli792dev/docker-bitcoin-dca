@@ -22,7 +22,7 @@
  const observer=new MutationObserver((records=[])=>{
   update();
   for(const {target:dialog} of records){
-   if(dialog.open&&dialog.animate){
+   if(dialog.open&&dialog.animate&&!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches){
     dialog.getAnimations().forEach(animation=>animation.cancel());
     dialog.animate([{opacity:0,transform:'translateY(10px)'},{opacity:1,transform:'translateY(0)'}],{duration:220,easing:'cubic-bezier(.2,.8,.2,1)'});
    }

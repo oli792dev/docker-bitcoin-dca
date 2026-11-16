@@ -250,3 +250,7 @@ details:is(.report-details,.period-activities,.dashboard-footnotes)[open]::detai
 button,.button{box-sizing:border-box;min-height:var(--button-height);height:auto;max-height:none;padding-block:8px}
 
 button.secondary,.button.secondary,.confirmation-actions button.secondary{border-color:transparent;}
+
+@media (prefers-reduced-motion:reduce){
+*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important;}
+}

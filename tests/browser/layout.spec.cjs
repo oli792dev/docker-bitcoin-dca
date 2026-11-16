@@ -542,3 +542,23 @@ test('disabled withdrawals explain the next step with quiet dashboard typography
   await noPageOverflow(page);
   await page.screenshot({path:test.info().outputPath('dashboard-refined.png'),fullPage:true});
 });
+
+
+test('reduced motion disables scripted and CSS animations while dialogs remain usable',async({page})=>{
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.addInitScript(()=>{
+    window.auditAnimations=[];const animate=Element.prototype.animate;
+    Element.prototype.animate=function(frames,options){window.auditAnimations.push(this.id);return animate.call(this,frames,options)};
+  });
+  await page.goto('/');
+  await page.locator('#openSettings').click();
+  await expect(page.frameLocator('#settingsFrame').locator('#settingsForm')).toBeVisible();
+  const state=await page.evaluate(()=>({animations:window.auditAnimations,transition:getComputedStyle(document.getElementById('settingsDialog')).transitionDuration}));
+  expect(state.animations).not.toContain('settingsDialog');
+  expect(state.transition).toBe('0s');
+  await page.evaluate(()=>document.getElementById('buyCount').textContent='42');
+  await page.evaluate(()=>new Promise(requestAnimationFrame));
+  expect(await page.evaluate(()=>window.auditAnimations)).not.toContain('buyCount');
+  await page.locator('#closeSettings').click();
+  await expect(page.locator('#settingsDialog')).not.toBeVisible();
+});

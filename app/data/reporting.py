@@ -84,12 +84,6 @@ def _purchase_cost_eur(row, rates):
     return cost * rates[trade_date]
 
 
-def _withdrawal_net_btc(record):
-    row = record["row"]
-    amount = Decimal(str(row.get("shares", "0")))
-    return max(amount, Decimal(0))
-
-
 def parqet_aggregate_rows(records, exchange):
     """Consolidate the last completed withdrawal cycle, excluding later activity."""
     records = bitcoin_activity_records(records)
@@ -128,7 +122,7 @@ def parqet_aggregate_rows(records, exchange):
     rates = _usd_eur_rates(purchases)
     total_cost_eur = sum((_purchase_cost_eur(row, rates) for row in purchases), Decimal(0))
     net_withdrawn_btc = sum(
-        (_withdrawal_net_btc(record) for record in withdrawals),
+        (max(Decimal(str(record["row"].get("shares", "0"))), Decimal(0)) for record in withdrawals),
         Decimal(0),
     )
     if total_cost_eur <= 0 or net_withdrawn_btc <= 0:

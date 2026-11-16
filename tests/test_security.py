@@ -130,6 +130,29 @@ class AttemptLimitTests(unittest.TestCase):
             self.assertTrue(handler._has_valid_session())
             with patch.object(web_ui.time,'monotonic',return_value=1900):self.assertFalse(handler._has_valid_session())
 
+    def test_logout_rejects_foreign_or_missing_origin_without_revoking_session(self):
+        for origin in (None,'null','https://attacker.test','http://dca.test:6890','https://dca.test:6890/','https://dca.test:6890.attacker.test'):
+            for cookie in ('','dca_session=active'):
+                with self.subTest(origin=origin,cookie=bool(cookie)),patch.object(web_ui,'_SESSIONS',{'active':float('inf')}):
+                    h=object.__new__(web_ui.Handler);h.headers={'Host':'dca.test:6890','Cookie':cookie}
+                    if origin is not None:h.headers['Origin']=origin
+                    h.send_response=Mock();h.send_header=Mock();h.end_headers=Mock();h._json=Mock()
+                    h._handle_logout()
+                    h._json.assert_called_once()
+                    self.assertEqual(h._json.call_args.args[0],403)
+                    self.assertTrue(web_ui.session_is_valid('active'))
+                    h.send_header.assert_not_called()
+
+    def test_native_logout_revokes_session_and_clears_cookie(self):
+        with patch.object(web_ui,'_SESSIONS',{'active':float('inf')}):
+            h=object.__new__(web_ui.Handler)
+            h.headers={'Host':'dca.test:6890','Origin':'https://dca.test:6890','Cookie':'dca_session=active'}
+            h.send_response=Mock();h.send_header=Mock();h.end_headers=Mock()
+            h._handle_logout()
+            h.send_response.assert_called_once_with(303)
+            self.assertFalse(web_ui.session_is_valid('active'))
+            self.assertTrue(any(call.args[0]=='Set-Cookie' and 'Max-Age=0' in call.args[1] for call in h.send_header.call_args_list))
+
 
 class SensitiveSettingsTests(unittest.TestCase):
     def setUp(self):
