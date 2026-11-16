@@ -52,6 +52,26 @@ class AuditFixTests(unittest.TestCase):
         handler._handle_schedule()
         return results[0]
 
+    def test_bitvavo_purchase_waits_for_all_fill_fees_before_recording(self):
+        adapter = Bitvavo(api_key='fictional', api_secret='fictional')
+        self.addCleanup(adapter.session.close)
+        order = dict(status='filled', filledAmount='.001', filledAmountQuote='80',
+                     feePaid='0', feeCurrency='EUR', fills=[
+                         dict(amount='.0005', price='80000', settled=True, fee='.10', feeCurrency='EUR'),
+                         dict(amount='.0005', price='80000', settled=False)])
+        adapter.get_order = Mock(return_value=order)
+        state = {'pending_order': dict(clientOrderId='test', symbol='BTC-EUR', submittedAt=0)}
+        settings = {**self.settings, 'exchange':'BITVAVO'}
+        wait = bot.reconcile_pending_order(adapter, state, bot.STATE_PATH, settings, 300)
+        self.assertEqual(wait, 30)
+        self.assertIn('pending_order', state)
+        self.assertEqual(activity.read_activity_records(), [])
+        order['fills'][1].update(settled=True, fee='.10', feeCurrency='EUR')
+        with patch.object(bot.time, 'time', return_value=state['pending_order']['nextStatusCheckAt']/1000+1):
+            bot.reconcile_pending_order(adapter, state, bot.STATE_PATH, settings, 300)
+        self.assertNotIn('pending_order', state)
+        self.assertEqual(activity.read_activity_records()[0]['row']['fee'], '0.20')
+
     def test_bitvavo_permission_rejection_does_not_leave_a_pending_order(self):
         import requests
         adapter = Bitvavo(api_key='fictional', api_secret='fictional')

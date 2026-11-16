@@ -66,6 +66,16 @@ class ReviewTests(unittest.TestCase):
         out['withdrawalStatus']='failed';activity.update_activity_record(out)
         self.assertEqual(activity.ledger_balance(),D('.0045'))
 
+    def test_cancelled_filter_matches_both_status_spellings(self):
+        activity.append_activity_records([
+            self.record('one','TransferOut',status='canceled'),
+            self.record('two','TransferOut',status='cancelled')])
+        for status in ('canceled','cancelled'):
+            with self.subTest(status=status):
+                rows,total,*_ = activity.read_report(0,2**62,status=status)
+                self.assertEqual(total,2)
+                self.assertEqual({row['id'] for row in rows},{'one','two'})
+
     def test_only_confirmed_withdrawals_can_be_exported(self):
         for status in (None,'unverified','submitted','failed','canceled'):
             self.assertEqual(reporting.parqet_aggregate_rows([self.record(),self.record('w','TransferOut',status=status)],'KRAKEN'),[])

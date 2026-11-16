@@ -286,7 +286,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn('pending_withdrawal', json.loads(self.app.state_path.read_text()))
 
     def test_startup_delay_is_applied_after_setup_not_before(self):
-        self.ready(startup_delay_seconds=60)
+        self.ready(startup_delay_seconds=60, live=True)
         with patch.object(bot, 'run_once') as run:
             self.app.cycle(); run.assert_not_called()
             self.app.ready_at = 0
@@ -296,7 +296,7 @@ class ConfigurationTests(unittest.TestCase):
             run.assert_called_once()
 
     def test_exchange_switch_resets_old_schedule_without_changing_history(self):
-        self.ready(startup_delay_seconds=0)
+        self.ready(startup_delay_seconds=0, live=True)
         self.app._synchronize_state()
         self.app.state_path.write_text(json.dumps({'configuration_account': ['KRAKEN', 'EUR'], 'last_order_at': '2026-10-01', 'spent': '20'}))
         self.app.save({'current_password':PASSWORD,'settings': {'exchange': 'BITVAVO', 'bitvavo_api_key': 'b-key', 'bitvavo_api_secret': 'b-secret'}})
@@ -495,8 +495,30 @@ class ConfigurationTests(unittest.TestCase):
         write.assert_not_called()
         self.assertEqual(self.app.state_path.read_bytes(),before)
 
-    def test_active_runtime_logs_startup_purchase_history(self):
+    def test_simulation_restart_preserves_saved_schedule_despite_live_history(self):
+        from decimal import Decimal as D
+        from datetime import timedelta
         self.ready(startup_delay_seconds=0)
+        now = datetime(2026,11,16,12,tzinfo=timezone.utc)
+        state = {'cycle':'2026-11-01', 'last_order_at':(now-timedelta(minutes=1)).isoformat(), 'spent':'8.02'}
+        self.app.api.balance.return_value = D('100')
+        self.app.api.price.return_value = D('80000')
+        self.app.api.fiat_deposits.return_value = []
+        self.app.api.estimate_taker_fee.return_value = D('.0025')
+        self.app.api.market.return_value = dict(status='trading',minOrderInBaseAsset='.0001',
+            minOrderInQuoteAsset='5',quantityDecimals=8,notionalDecimals=2)
+        with patch.object(bot,'STATE_PATH',self.app.state_path),patch.object(bot,'local_now',return_value=now):
+            bot.save_state(self.app.state_path,state)
+            bot.run_once(self.app.api,self.app.settings,300,schedule_only=True)
+            expected = json.loads(self.app.state_path.read_text())['schedule']['dueAt']
+            with patch.object(bot,'latest_recorded_buy_time',return_value=now-timedelta(days=10)):
+                self.app.cycle()
+        saved = json.loads(self.app.state_path.read_text())
+        self.assertEqual(saved['schedule']['dueAt'],expected)
+        self.assertEqual(saved['spent'],'8.02')
+
+    def test_active_runtime_logs_startup_purchase_history(self):
+        self.ready(startup_delay_seconds=0, live=True)
         last=datetime(2026,10,28,11,tzinfo=timezone.utc)
         with patch.object(bot,'latest_recorded_buy_time',return_value=last),patch.object(bot,'run_once'):
             with self.assertLogs(runtime.LOG,level='INFO') as logs:self.app.cycle()

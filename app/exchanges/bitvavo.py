@@ -366,6 +366,8 @@ class Bitvavo:
         filled = Decimal(str(order.get("filledAmount", "0")))
         quote_amount = Decimal(str(order.get("filledAmountQuote", "0")))
         fills = order.get("fills") or []
+        if any(fill.get("settled") is False for fill in fills):
+            return []
         if quote_amount <= 0 and fills:
             quote_amount = sum(
                 (Decimal(str(fill.get("amount", "0"))) * Decimal(str(fill.get("price", "0"))) for fill in fills),

@@ -331,6 +331,7 @@ def read_report(start, end, page=1, limit=20, kind="", status="", search="", sea
         elif status == "confirmed":
             where += " AND ((kind='Buy' AND simulated=0 AND coalesce(json_extract(payload,'$.purchaseStatus'),'confirmed')='confirmed') OR (kind='Deposit' AND json_extract(payload,'$.depositStatus')='confirmed') OR (kind='TransferOut' AND simulated=0 AND status='completed'))"
         elif status:
+            status = "canceled" if status == "cancelled" else status
             where += " AND CASE WHEN kind='Deposit' THEN json_extract(payload,'$.depositStatus') WHEN kind='Buy' AND simulated=0 THEN coalesce(json_extract(payload,'$.purchaseStatus'),'confirmed') WHEN status='cancelled' THEN 'canceled' ELSE status END=?"
             args.append(status)
         if search.strip():

@@ -201,8 +201,12 @@ class Runtime:
                     update_dashboard_schedule(None, PurchaseStatus.OPEN_TRANSACTIONS)
                     return self.worker.interval
             if self.startup_pending:
-                self.settings["startup_last_buy_at"] = latest_recorded_buy_time(
-                    self.settings["exchange"], account_identity=self.settings["account_identity"]
+                self.settings["startup_last_buy_at"] = (
+                    latest_recorded_buy_time(
+                        self.settings["exchange"], account_identity=self.settings["account_identity"]
+                    )
+                    if self.settings["live"]
+                    else None
                 )
                 self.settings["startup_schedule_log_pending"] = True
                 LOG.info(
