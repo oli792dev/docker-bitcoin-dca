@@ -68,6 +68,7 @@ class ConfigurationTests(unittest.TestCase):
         self.ready()
         handler=object.__new__(web_ui.Handler)
         handler.runtime=self.app;handler._json=Mock();handler._require_authentication=lambda:True
+        handler._has_valid_session=lambda:True
         handler._settings_body=lambda:{'settings':{'deposit_time':'25:00'}}
         handler._settings_post('/api/settings')
         status,body=handler._json.call_args.args
