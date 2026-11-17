@@ -36,7 +36,12 @@ from app.exchanges.exchange_errors import DefinitiveRejection, UncertainWithdraw
 from app.trading.account import serialized
 from app.trading.deposits import sync_deposits
 from app.trading.funding import observe_deposit
-from app.trading.withdrawals import reconcile_withdrawals
+from app.trading.withdrawals import (
+    KRAKEN_WITHDRAWAL_WINDOW_MS,
+    match_kraken_withdrawal,
+    reconcile_withdrawals,
+    withdrawal_status,
+)
 
 LOG = logging.getLogger("bitcoin-dca")
 WITHDRAWAL_FAILED = "Automatic withdrawal failed; check exchange status and settings."
@@ -174,6 +179,11 @@ def persist_bot_withdrawal(api, withdrawal, result, settings, context):
         "firstSubmittedAt": timestamp_ms,
         "lastSubmittedAt": int(context.get("last_submission_at", timestamp_ms)),
     }
+    if result.get("exchangeStatus"):
+        record["withdrawalStatus"] = withdrawal_status(result["exchangeStatus"])
+        record["exchangeStatus"] = result["exchangeStatus"]
+        record["txId"] = result.get("txId", "")
+        record["lastVerifiedAt"] = datetime.now(UTC).isoformat()
     if settings.get("account_identity"):
         record["accountIdentity"] = settings["account_identity"]
     context["record_id"] = record["id"]
@@ -256,8 +266,63 @@ def transactions_paused(settings):
     return bool(settings.get("transaction_gate", lambda: False)())
 
 
+def _finish_pending_withdrawal(api, state, settings, pending, context, result, state_path):
+    persist_bot_withdrawal(api, pending, result, settings, context)
+    state["last_withdrawal"] = {
+        "id": result.get("id"),
+        "amount": pending["amount"],
+        "activityId": context.get("record_id"),
+        "balanceBefore": context.get("balanceBefore", pending["amount"]),
+        "createdAt": result.get("createdAt"),
+    }
+    state["withdrawal_armed"] = False
+    state.pop("pending_withdrawal", None)
+    state.pop("pending_withdrawal_context", None)
+    save_state(state_path, state)
+
+
+def recover_pending_kraken_withdrawal(api, state, settings, *, state_path: Path | None = None) -> bool:
+    """Resolve a saved Kraken attempt using only verified withdrawal history."""
+    if settings["exchange"] != "KRAKEN" or not settings["live"]:
+        return False
+    pending = state.get("pending_withdrawal") or {}
+    context = state.get("pending_withdrawal_context") or {}
+    if pending.get("asset") != "XBT" or context.get("exchange") != "KRAKEN":
+        return False
+    account = settings.get("account_identity")
+    configuration = state.get("configuration_account")
+    if account and configuration is not None and configuration != ["KRAKEN", settings["quote"], account]:
+        return False
+    state_path = STATE_PATH if state_path is None else state_path
+    result = context.get("result")
+    if result is not None:
+        if not result.get("exchangeStatus"):
+            return False
+    else:
+        try:
+            match = match_kraken_withdrawal(api, pending, context)
+        except requests.RequestException:
+            LOG.warning("Kraken withdrawal history could not be verified; the saved request remains blocked.")
+            return False
+        if match is None or get_activity_record(f"withdrawal:{match['id']}") is not None:
+            return False
+        result = {
+            "id": match["id"],
+            "createdAt": match["timestamp"],
+            "exchangeStatus": match["status"],
+            "txId": match.get("txId", ""),
+        }
+        context["result"] = result
+        save_state(state_path, state)
+    _finish_pending_withdrawal(api, state, settings, pending, context, result, state_path)
+    LOG.info("Recovered Kraken BTC withdrawal %s using exchange history.", result["id"])
+    return True
+
+
 def maybe_withdraw_btc(api, state, settings, manual_request=None):
     if manual_request is None and settings["live"]:
+        if recover_pending_kraken_withdrawal(api, state, settings):
+            return
         reconcile_withdrawals(api, settings)
         last_record = get_activity_record(state.get("last_withdrawal", {}).get("activityId", ""))
         if (
@@ -307,12 +372,12 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
         if result is None:
             if transactions_paused(settings):
                 return
-            if not getattr(api, "supports_withdrawal_idempotency", False):
+            if settings["exchange"] == "KRAKEN" or getattr(api, "supports_withdrawal_idempotency", False) is not True:
                 log_transition(
                     LOG,
                     api,
                     "withdrawal-unknown",
-                    str(pending),
+                    "blocked",
                     logging.ERROR,
                     "A previous withdrawal request has an unknown outcome. Verify its status with the exchange; it will not be resent.",
                 )
@@ -334,18 +399,7 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
             context["result"] = result
             state["pending_withdrawal_context"] = context
             save_state(STATE_PATH, state)
-        persist_bot_withdrawal(api, pending, result, settings, context)
-        state["last_withdrawal"] = {
-            "id": result.get("id"),
-            "amount": pending["amount"],
-            "activityId": context.get("record_id"),
-            "balanceBefore": context.get("balanceBefore", pending["amount"]),
-            "createdAt": result.get("createdAt"),
-        }
-        state["withdrawal_armed"] = False
-        state.pop("pending_withdrawal", None)
-        state.pop("pending_withdrawal_context", None)
-        save_state(STATE_PATH, state)
+        _finish_pending_withdrawal(api, state, settings, pending, context, result, STATE_PATH)
         LOG.info("BTC withdrawal submitted: amount=%s BTC, withdrawalId=%s", pending["amount"], result.get("id"))
         return
 
@@ -407,15 +461,18 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
     except WithdrawalNotReady as exc:
         log_transition(LOG, api, "withdrawal-wait", "fee-exceeds-balance", logging.INFO, "%s", exc)
         return
+    submitted = int(time.time() * 1000)
     state["pending_withdrawal"] = withdrawal
     state["pending_withdrawal_context"] = {
         "exchange": settings["exchange"],
         "quote": settings["quote"],
         "price": format(price, "f"),
-        "timestamp_ms": int(time.time() * 1000),
+        "timestamp_ms": submitted,
         "manual": manual_request is not None,
         "balanceBefore": format(available, "f"),
     }
+    if settings["exchange"] == "KRAKEN":
+        state["pending_withdrawal_context"]["kraken_recovery_until_ms"] = submitted + KRAKEN_WITHDRAWAL_WINDOW_MS
     save_state(STATE_PATH, state)
     try:
         result = api.withdraw_btc(withdrawal)
@@ -620,6 +677,7 @@ def _run_once(
     deposit_overdue, deposit_received = account_cycle.deposit_overdue, account_cycle.deposit_received
     update_dashboard_snapshot(settings, balance, price, cycle_data["btc_balance"])
     if state.get("fiat_observation", {}).get("pending"):
+        recover_pending_kraken_withdrawal(api, state, settings)
         update_dashboard_schedule(None, PurchaseStatus.VERIFYING_DEPOSIT)
         log_transition(
             LOG,
