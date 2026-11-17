@@ -674,7 +674,6 @@
   "Create your account": "Konto erstellen",
   "Use a Full or Config backup to restore your login credentials. Activities-only backups cannot set up the bot. Sign in with the username and password saved in the backup afterward.": "Stelle deine Zugangsdaten aus einem Full- oder Config-Backup wieder her. Ein reines Aktivitäten-Backup reicht zur Einrichtung nicht aus. Melde dich anschließend mit dem Benutzernamen und Passwort aus dem Backup an.",
   "Restore backup and sign in": "Backup wiederherstellen und anmelden",
-  "Saving settings…": "Einstellungen werden gespeichert …",
   "Restoring backup…": "Backup wird wiederhergestellt…",
   "Initial setup requires a Full or Config backup with login credentials.": "Die Ersteinrichtung erfordert ein Full- oder Config-Backup mit Zugangsdaten.",
   "Initial backup restore is available only on an empty installation without an account.": "Die Wiederherstellung bei der Ersteinrichtung ist nur auf einer leeren Installation ohne Konto verfügbar.",

@@ -199,14 +199,13 @@ function cancelSettingsReview(event){
 $('cancel').addEventListener('click',cancelSettingsReview);
 $('review').addEventListener('cancel',cancelSettingsReview);
 $('confirm').addEventListener('click',async()=>{
- const confirm=$('confirm'),cancel=$('cancel'),progress=$('settingsSaveProgress');
+ const confirm=$('confirm'),cancel=$('cancel');
  if(!pending||confirm.disabled)return;
  if(needsPassword()&&!pending.current_password){
   if(!$('sensitivePassword').value){$('passwordConfirmationError').textContent=t('Enter your current login password to confirm these changes.');return}
   pending.current_password=$('sensitivePassword').value;
  }
  confirm.disabled=cancel.disabled=true;
- progress.textContent=t('Saving settings…');progress.focus();
  if(initial.embedded)window.parent.postMessage({type:'dca-settings-busy',active:true},location.origin);
  try{
   await request('/api/settings',pending);
@@ -218,7 +217,7 @@ $('confirm').addEventListener('click',async()=>{
   $('review').close();message(err.message,true,err.field);
   if(initial.embedded)window.parent.postMessage({type:'dca-settings-busy',active:false},location.origin);
  }finally{
-  $('sensitivePassword').value='';progress.textContent='';confirm.disabled=cancel.disabled=false;
+  $('sensitivePassword').value='';confirm.disabled=cancel.disabled=false;
  }
 });
 

@@ -55,7 +55,7 @@ async function event(id,name='click'){if(id==='confirm'&&!elements.passwordConfi
  await event('cancel');assert.equal(elements.review.open,false);await event('confirm');assert.equal(requests.filter(r=>r.url==='/api/settings').length,0,'Cancelled review must not submit');assert.equal(requests.at(-1).body.event,'settings_save_cancelled');
  await event('settingsForm','submit');
  const saving=event('confirm');
- assert.equal(elements.settingsSaveProgress.textContent,'Saving settings…');
+ assert.equal(elements.confirm.disabled,true);
  assert.equal(elements.cancel.disabled,true);
  let prevented=false;elements.review.listeners.cancel({preventDefault(){prevented=true}});
  assert(prevented);assert.equal(elements.review.open,true);
