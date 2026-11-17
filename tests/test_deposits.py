@@ -1,7 +1,7 @@
 """Offline exchange fixtures for confirmed fiat deposits and scheduled price snapshots."""
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -9,9 +9,10 @@ import requests
 from app.exchanges.kraken import Kraken, KrakenAPIError
 from app.exchanges.bitvavo import Bitvavo
 from app.trading.deposits import sync_deposits
+from app.trading import deposits
 from app.trading.funding import observe_deposit
 from app.data import activity
-from app.exchanges.market_prices import collect_prices
+from app.exchanges import market_prices
 
 
 class DepositTests(unittest.TestCase):
@@ -89,6 +90,49 @@ class DepositTests(unittest.TestCase):
         self.assertEqual(api.fiat_deposits.call_count,4)
         self.assertEqual(api.fiat_deposits.call_args.args[1],int(now.timestamp()*1000))
 
+    def test_replayed_ledger_deposits_verify_funding_but_only_new_ids_are_written(self):
+        now = datetime(2026, 11, 1, 9, tzinfo=timezone.utc)
+        first_check = now + timedelta(minutes=5)
+        settings = {"exchange": "KRAKEN", "quote": "EUR", "account_identity": "account"}
+        state = {}
+        api = Mock()
+        first = {
+            "id": "first",
+            "timestamp": int(first_check.timestamp() * 1000),
+            "status": "completed",
+            "symbol": "EUR",
+            "amount": "100",
+        }
+        with tempfile.TemporaryDirectory() as root, patch.object(activity, "ACTIVITY_PATH", Path(root) / "activity.sqlite3"):
+            sync_deposits(api, settings, state, now, Decimal(100))
+            api.fiat_deposits.return_value = [first]
+            _, inserted = sync_deposits(api, settings, state, first_check, Decimal(100))
+            self.assertEqual(inserted, 1)
+            # Activity history may already contain this ID while the state has no saved evidence.
+            state["fiat_observation"].pop("confirmed")
+            api.fiat_deposits.return_value = [first, {**first, "id": "delayed", "amount": "200"}]
+            with patch.object(deposits, "_persist_deposits", wraps=deposits._persist_deposits) as persist:
+                records, inserted = sync_deposits(api, settings, state, now + timedelta(minutes=10), Decimal(400))
+                self.assertEqual(inserted, 1)
+                persist.assert_called_once_with([records[1]])
+                self.assertEqual(records[0]["id"], "fiat-deposit:KRAKEN:EUR:account:first")
+                self.assertEqual(records[1]["id"], "fiat-deposit:KRAKEN:EUR:account:delayed")
+                self.assertNotIn("pending", state["fiat_observation"])
+                self.assertEqual(api.fiat_deposits.call_args.args[1], int(now.timestamp() * 1000))
+                persist.reset_mock()
+                self.assertEqual(
+                    sync_deposits(api, settings, state, now + timedelta(minutes=15), Decimal(400)),
+                    (records, 0),
+                )
+                persist.assert_not_called()
+                # A restored ledger row with the same ID must not replace current exchange evidence.
+                activity.update_activity_record({**records[0], "row": {**records[0]["row"], "fee": "100"}})
+                self.assertEqual(
+                    sync_deposits(api, settings, state, now + timedelta(minutes=20), Decimal(400)),
+                    (records, 0),
+                )
+                persist.assert_not_called()
+
     def test_released_hold_does_not_create_unverified_deposit(self):
         now=datetime(2026,11,1,9,tzinfo=timezone.utc)
         settings={'exchange':'KRAKEN','quote':'EUR'}
@@ -165,15 +209,39 @@ class DepositTests(unittest.TestCase):
         self.assertEqual(state['fiat_observation']['confirmed'],[])
         self.assertTrue(all(call.args[1]==int(now.timestamp()*1000) for call in api.fiat_deposits.call_args_list))
 
-    def test_worker_prices_keep_purchase_price_if_conversion_is_unavailable(self):
-        api=Mock();api.price.return_value=Decimal(88000)
-        self.assertEqual(collect_prices(api,{'quote':'EUR','exchange':'KRAKEN'},Decimal(80000)),{'EUR':'80000','USD':'88000'})
-        api.price.assert_called_once_with('BTC-USD')
-        api.price.side_effect=requests.ReadTimeout()
-        with self.assertLogs('bitcoin-dca.prices',level='DEBUG') as logs:
-            self.assertEqual(collect_prices(api,{'quote':'EUR','exchange':'KRAKEN'},Decimal(80000)),{'EUR':'80000'})
-        self.assertFalse(any(':WARNING:' in line for line in logs.output))
-        api._logged_states={}
-        with self.assertLogs('bitcoin-dca.prices',level='DEBUG') as logs:
-            for _ in range(2):collect_prices(api,{'quote':'EUR','exchange':'KRAKEN','display_currency':'USD'},Decimal(80000))
-        self.assertEqual(sum(line.startswith('WARNING:') for line in logs.output),1)
+    def test_display_price_refresh_retains_last_good_rate_across_failure(self):
+        prices = market_prices.DisplayPrices()
+        response = Mock()
+        response.json.return_value = {"error": [], "result": {"XXBTZUSD": {"c": ["88000", "1"]}}}
+        with patch.object(market_prices.requests, "get", side_effect=[response, requests.ReadTimeout()]) as fetch:
+            prices.refresh("EUR")
+            quote = prices.latest("EUR")
+            self.assertEqual(quote[0], Decimal("88000"))
+            prices.refresh("EUR")
+            self.assertEqual(prices.latest("EUR"), quote)
+            self.assertIsNone(prices.latest("USD"))
+        self.assertEqual(fetch.call_args.kwargs["params"], {"pair": "XBTUSD"})
+        self.assertEqual(fetch.call_args.kwargs["timeout"], 15)
+
+    def test_only_required_prices_determine_market_freshness(self):
+        now = datetime.now(timezone.utc)
+        older = now.timestamp() - 601
+        snapshot = {
+            "exchange": "KRAKEN",
+            "quote": "EUR",
+            "marketPrices": {"EUR": "80000"},
+            "updatedAt": now.isoformat(),
+        }
+        alternate = (Decimal("88000"), older)
+        account = market_prices.snapshot_market_price(snapshot, "KRAKEN", "EUR", "EUR", alternate=alternate)
+        self.assertFalse(account["stale"])
+        self.assertEqual(account["updatedAt"], now.timestamp())
+        self.assertEqual(account["conversionRatesUpdatedAt"], {"EUR": now.timestamp(), "USD": older})
+        historical = market_prices.snapshot_market_price(snapshot, "KRAKEN", "EUR", "EUR", ["USD"], alternate=alternate)
+        self.assertTrue(historical["stale"])
+        self.assertEqual(historical["updatedAt"], older)
+        self.assertEqual(historical["conversionRates"]["USD"], str(Decimal("80000") / Decimal("88000")))
+        display = market_prices.snapshot_market_price(snapshot, "KRAKEN", "USD", "EUR", alternate=alternate)
+        self.assertTrue(display["stale"])
+        self.assertEqual(display["updatedAt"], older)
+        self.assertEqual(display["conversionRate"], "1.1")
