@@ -8,6 +8,17 @@ from pathlib import Path
 from app.data.storage import write_json_atomic
 
 
+PAUSE_UNAVAILABLE = "Transaction controls unavailable; trading is blocked"
+
+
+def pause_status(controls):
+    """Keep account status visible when transaction controls fail closed."""
+    try:
+        return controls.snapshot() if controls else {"paused": False, "until": None}, False
+    except (OSError, ValueError, OverflowError):
+        return {"paused": True, "until": None}, True
+
+
 class PauseControl:
     """Pause new financial work while preserving account observations and due dates."""
 
