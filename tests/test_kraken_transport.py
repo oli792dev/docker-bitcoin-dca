@@ -54,6 +54,21 @@ class KrakenTransportTests(unittest.TestCase):
         self.assertEqual(self.sessions[1].post.call_count, 1)
         failed.close.assert_called_once()
 
+    def test_diagnostic_reads_share_a_budget_and_skip_retries(self):
+        self.api.probe_deadline = 15
+        failed = self.api.session
+        failed.post.side_effect = requests.ReadTimeout("offline exchange")
+        with patch.object(kraken.time, "monotonic", return_value=5), patch.object(kraken.time, "sleep") as sleep:
+            with self.assertRaises(kraken.KrakenAPIError):
+                self.api.private("BalanceEx")
+        self.assertEqual(failed.post.call_args.kwargs["timeout"], (5, 5))
+        failed.post.assert_called_once()
+        sleep.assert_not_called()
+        with patch.object(kraken.time, "monotonic", return_value=15):
+            with self.assertRaisesRegex(kraken.KrakenAPIError, "budget exhausted"):
+                self.api.private("OpenOrders")
+        self.assertEqual(sum(session.post.call_count for session in self.sessions), 1)
+
     def test_recent_connection_is_reused(self):
         current = self.api.session
         self.api._last_http_activity = 50
