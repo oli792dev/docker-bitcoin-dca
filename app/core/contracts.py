@@ -22,7 +22,6 @@ class ForecastPlan(TypedDict):
 class AccountCycleData(TypedDict):
     """Exchange values reused only within one serialized account cycle."""
 
-    market_prices: dict[str, str]
     balance: Decimal
     price: Decimal
     market: dict[str, Any]

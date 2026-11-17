@@ -4,7 +4,7 @@
 
 ## Components
 
-One Python process runs an HTTPS dashboard and a single account worker. The worker serializes exchange checks, purchases and withdrawals; settings changes use the same account lock. Web actions enter a bounded queue. Reports read saved data; browser refreshes do not request exchange prices.
+One Python process runs an HTTPS dashboard and a single account worker. The worker serializes exchange checks, purchases and withdrawals; settings changes use the same account lock. Web actions enter a bounded queue. Reports read saved data. A separate background refresh fetches the alternate public display quote, so browser requests and the trading worker never wait on it.
 
 | Directory | Responsibility |
 | --- | --- |
@@ -59,7 +59,7 @@ Stop the container before making an independent filesystem backup of the volume.
 - Deposit dates use the configured timezone and local time. Short months use their last day; daylight-saving gaps move forward and repeated times use the first occurrence.
 - Every account check polls paginated fiat deposit history from the persisted first-observation timestamp, so purchases cannot hide incoming deposits and delayed history is retried. Exchange IDs make replay idempotent. Booked fiat increases additionally trigger a complete ledger check for the pending window. Released order holds are not deposits. Confirmed early deposits advance the deadline; overdue deposits remain pending. Sale proceeds require matching account-history evidence. Unknown credits or incomplete history keep automatic transactions paused; a timeout never confirms funding.
 - Balance observations retain their read-completion boundary. Kraken can reconcile a ledger prefix already reflected in the saved balance only with a unique checkpoint inside that boundary, a complete balance chain and matching confirmed deposits. Ambiguous or incomplete evidence stays blocked.
-- Forecasts use saved balances/prices and assumed monthly deposits. Dashboard polling revalues reports without changing exchange-check deadlines or trading.
+- Forecasts use saved balances/prices and assumed monthly deposits. Dashboard polling revalues reports from cached prices and uses the ledger revision to refresh changed activity. Rolling date ranges are still recalculated as their boundaries move.
 - Interrupted settings writes pause trading until durable configuration is verified. SIGTERM/SIGINT stop new work and allow up to 45 seconds for the active worker operation; Compose allows 60 seconds before termination.
 
 ## HTTPS and session security

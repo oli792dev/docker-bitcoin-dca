@@ -64,6 +64,50 @@ class PauseTests(unittest.TestCase):
             account.controls.set.assert_called_with(False,None)
 
 class ActivityFilterTests(unittest.TestCase):
+    def test_report_and_worker_share_the_dedicated_exact_balance_query(self):
+        from decimal import Decimal
+        from app.data import activity
+
+        rows = [
+            ("buy", "Buy", "BTC", "0.12345678", False),
+            ("simulation", "Buy", "BTC", "9", True),
+            ("other", "Buy", "ETH", "9", False),
+            ("withdrawal", "TransferOut", "BTC", "0.01234567", False),
+        ]
+        records = [
+            {"id": identifier, "simulated": simulated, "row": {
+                "datetime": "2026-01-01T00:00:00Z", "type": kind,
+                "identifier": asset, "shares": shares, "currency": "EUR",
+            }}
+            for identifier, kind, asset, shares, simulated in rows
+        ]
+        with tempfile.TemporaryDirectory() as tmp, patch.object(activity, "ACTIVITY_PATH", Path(tmp) / "activity.sqlite3"):
+            activity.append_activity_records(records)
+            with patch.object(activity, "_totals", wraps=activity._totals) as totals:
+                self.assertEqual(activity.ledger_balance(), Decimal("0.11111111"))
+                totals.assert_not_called()
+                self.assertEqual(activity.read_report(0, 2000000000000)[-1], Decimal("0.11111111"))
+                totals.assert_called_once()
+
+    def test_ledger_revision_changes_only_after_activity_writes(self):
+        from app.data import activity
+
+        record = {"id": "buy", "row": {
+            "datetime": "2026-01-01T00:00:00Z", "type": "Buy",
+            "identifier": "BTC", "shares": "1", "currency": "EUR",
+        }}
+        with tempfile.TemporaryDirectory() as tmp, patch.object(activity, "ACTIVITY_PATH", Path(tmp) / "activity.sqlite3"):
+            before = activity.activity_revision()
+            activity.append_activity_records([record])
+            appended = activity.activity_revision()
+            self.assertNotEqual(before, appended)
+            activity.append_activity_records([record])
+            activity.cache_put_many({"test": {}})
+            self.assertEqual(appended, activity.activity_revision())
+            record["row"]["shares"] = "2"
+            activity.update_activity_record(record)
+            self.assertNotEqual(appended, activity.activity_revision())
+
     def test_filters_are_server_side_and_totals_remain_unfiltered(self):
         from app.data import activity
         with tempfile.TemporaryDirectory() as tmp, patch.object(activity, 'ACTIVITY_PATH', Path(tmp)/'activity.sqlite3'):

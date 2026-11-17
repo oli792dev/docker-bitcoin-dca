@@ -6,11 +6,12 @@ from contextlib import ExitStack
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from app.core import configuration
 from app.core.lifecycle import shutdown_signals
 from app.data import activity, storage
+from app.exchanges import market_prices
 from app.exchanges.exchange_errors import DefinitiveRejection
 from app.exchanges.kraken import Kraken
 from app.trading import bot, runtime, worker
@@ -30,7 +31,8 @@ class OfflineExchange:
         return self.btc if currency == 'BTC' else self.fiat
 
     def price(self, symbol):
-        return Decimal('80000') if symbol == 'BTC-EUR' else Decimal('95000')
+        assert symbol == "BTC-EUR"
+        return Decimal("80000")
 
     def market(self, symbol, refresh=False):
         return dict(status='trading', minOrderInBaseAsset='.0001', minOrderInQuoteAsset='5',
@@ -79,6 +81,11 @@ def main():
         patches.enter_context(patch('requests.sessions.Session.request', side_effect=AssertionError('External requests are forbidden in the HTTPS fixture')))
         storage.prepare_storage(root)
         app = runtime.Runtime(configuration.ConfigStore(root/'config.json'), root/'state.json')
+        display_prices = market_prices.DisplayPrices()
+        response = Mock()
+        response.json.return_value = {"error": [], "result": {"XXBTZUSD": {"c": ["95000", "1"]}}}
+        with patch.object(market_prices.requests, "get", return_value=response):
+            display_prices.refresh("EUR")
         real_server = tls.HTTPSWebServer
 
         def server(address, handler):
@@ -90,7 +97,10 @@ def main():
         with shutdown_signals(app.worker) as stop:
             app.worker.start()
             try:
-                web_ui.serve(app.settings, 0, app.worker.submit, worker=app.worker, runtime=app, stop=stop)
+                web_ui.serve(
+                    app.settings, 0, app.worker.submit, worker=app.worker, runtime=app, stop=stop,
+                    display_prices=display_prices,
+                )
             finally:
                 app.shutdown()
 

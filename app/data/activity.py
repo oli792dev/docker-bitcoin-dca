@@ -9,6 +9,7 @@ from contextlib import closing, contextmanager
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from secrets import token_hex
 from threading import RLock
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -18,6 +19,7 @@ ACTIVITY_PATH = Path("/webui-data/activity.sqlite3")
 SNAPSHOT_PATH = Path("/webui-data/dashboard.json")
 _ACTIVITY_LOCK = RLock()
 _REPORT_LOCK = RLock()
+_activity_revision = token_hex(16)
 
 
 SCHEMA_VERSION = 1
@@ -111,8 +113,17 @@ def _values(record):
 _INSERT = "INSERT OR IGNORE INTO activity VALUES(" + ",".join("?" for _ in SCHEMA_TABLES["activity"]) + ")"
 
 
+def activity_revision():
+    return _activity_revision
+
+
+def _touch_activity():
+    global _activity_revision
+    _activity_revision = token_hex(16)
+
+
 @contextmanager
-def _db():
+def _db(*, activity_write=False):
     path = ACTIVITY_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     with _ACTIVITY_LOCK:
@@ -135,6 +146,8 @@ def _db():
                 connection.commit()
             yield connection
             connection.commit()
+            if activity_write and connection.total_changes:
+                _touch_activity()
         except BaseException:
             connection.rollback()
             raise
@@ -143,15 +156,14 @@ def _db():
 
 
 def append_activity_records(records):
-    with _db() as db:
-        before = db.total_changes
+    with _db(activity_write=True) as db:
         db.executemany(_INSERT, [_values(r) for r in records])
-        return db.total_changes - before
+        return db.total_changes
 
 
 def update_activity_record(record):
     values = _values(record)
-    with _db() as db:
+    with _db(activity_write=True) as db:
         db.execute(
             "UPDATE activity SET timestamp=?,kind=?,asset=?,simulated=?,exchange=?,currency=?,shares=?,amount=?,fee=?,gross=?,status=?,payload=? WHERE id=?",
             (*values[1:], values[0]),
@@ -230,20 +242,18 @@ def activity_totals(start=0, end=2**63 - 1):
         return _totals(db, start, end)
 
 
-def _balance(groups):
-    total = Decimal(0)
-    for group in groups:
-        if group["simulated"]:
-            continue
-        if group["kind"] == "Buy":
-            total += Decimal(group["shares"])
-        elif group["kind"] == "TransferOut":
-            total -= Decimal(group["gross"])
-    return total
+def _balance(db):
+    rows = db.execute(
+        "SELECT kind,decimal_sum(CASE kind WHEN 'Buy' THEN shares ELSE gross END) "
+        "FROM activity WHERE asset='BTC' AND simulated=0 AND timestamp>0 AND kind IN ('Buy','TransferOut') "
+        "GROUP BY currency,kind,status"
+    )
+    return sum((Decimal(value) if kind == "Buy" else -Decimal(value) for kind, value in rows), Decimal(0))
 
 
 def ledger_balance():
-    return _balance(activity_totals())
+    with _db() as db:
+        return _balance(db)
 
 
 def _matches_search(payload, query, zone=UTC):
@@ -377,7 +387,7 @@ def read_report(start, end, page=1, limit=20, kind="", status="", search="", sea
             total,
             page,
             _totals(db, start, end),
-            _balance(_totals(db, 0, 2**63 - 1)),
+            _balance(db),
         )
 
 
@@ -434,6 +444,17 @@ def get_activity_record(activity_id):
     with _db() as db:
         row = db.execute("SELECT payload FROM activity WHERE id=?", (activity_id,)).fetchone()
         return json.loads(row[0]) if row else None
+
+
+def activity_records_by_id(activity_ids: list[str]):
+    if not activity_ids:
+        return {}
+    with _db() as db:
+        rows = db.execute(
+            "SELECT id,payload FROM activity WHERE id IN (SELECT value FROM json_each(?))",
+            (json.dumps(activity_ids),),
+        )
+        return {activity_id: json.loads(payload) for activity_id, payload in rows}
 
 
 def latest_real_buy(exchange=None, account_identity=None):

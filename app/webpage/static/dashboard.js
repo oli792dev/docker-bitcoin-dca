@@ -1,12 +1,32 @@
 const {t,locale}=typeof DCA_I18N!=="undefined"?DCA_I18N:{t:value=>value,locale:"en-GB"};
 
 const $=id=>document.getElementById(id);
-let quote="EUR", displayCurrency="", fxRate=1, activityRows=[], currentPage=1, activityTotal=0, activityPages=1, activityRates={};
+let quote="EUR", displayCurrency="", activityRows=[], currentPage=1, activityTotal=0, activityPages=1, activityRates={};
 function localInput(ms){const d=new Date(ms);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,19)}
 function parseInput(el){return new Date(el.value).getTime()}
-function money(v,c){try{return new Intl.NumberFormat(locale,{style:"currency",currency:c,maximumFractionDigits:2}).format(Number(v||0))}catch(e){return Number(v||0).toFixed(2)+" "+c}}
-function btc(v){return Number(v||0).toLocaleString(locale,{minimumFractionDigits:0,maximumFractionDigits:8})+" BTC"}
-function dateLabel(ms,timeZone){return new Date(ms).toLocaleString(locale,{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',...(timeZone?{timeZone}:{})})}
+const moneyFormats=new Map(),dateFormats=new Map();
+const numberFormats={
+ btc:new Intl.NumberFormat(locale,{maximumFractionDigits:8}),
+ integer:new Intl.NumberFormat(locale),
+ minutes:new Intl.NumberFormat(locale,{maximumFractionDigits:1}),
+};
+const browserTimeZone=Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC";
+function money(v,c){
+ try{
+  if(!moneyFormats.has(c))moneyFormats.set(c,new Intl.NumberFormat(locale,{style:"currency",currency:c,maximumFractionDigits:2}));
+  return moneyFormats.get(c).format(Number(v||0));
+ }catch(e){return Number(v||0).toFixed(2)+" "+c}
+}
+function btc(v){return numberFormats.btc.format(Number(v||0))+" BTC"}
+function dateLabel(ms,timeZone,withZone=false){
+ if(!Number.isFinite(ms))return new Date(ms).toString();
+ const key=JSON.stringify([timeZone,withZone]);
+ if(!dateFormats.has(key)){
+  const width=withZone?'numeric':'2-digit';
+  dateFormats.set(key,new Intl.DateTimeFormat(locale,{year:'numeric',month:width,day:width,hour:width,minute:width,second:width,timeZone,...(withZone?{timeZoneName:'short'}:{})}));
+ }
+ return dateFormats.get(key).format(ms);
+}
 let exchangeBtcBalance=null, balanceDisplayPrice=null, balanceDisplayCurrency=null;
 function renderExchangeBtcValue(){
  $("exchangeBtcValue").textContent=t(exchangeBtcBalance!==null&&balanceDisplayPrice>0&&balanceDisplayCurrency===displayCurrency?money(exchangeBtcBalance*balanceDisplayPrice,displayCurrency):"—");
@@ -45,15 +65,16 @@ function purchaseExplanationText(schedule){
   return sentence('A reliable purchase schedule is not available yet. Current status: {status}.',{status:t(schedule.nextPurchaseStatus||'Waiting for account check')});
  }
  const text=[sentence('With {balance} available and a BTC price of {price}, the next purchase of {quantity} costs about {cost}, including trading fees.',{balance:money(plan.availableBalance,schedule.quote),price:money(plan.price,schedule.quote),quantity:btc(plan.plannedQuantity),cost:money(plan.plannedCost,schedule.quote)}),
- sentence('The remaining purchase budget covers {buys} purchases before the next expected deposit on {deposit}.',{buys:Number(plan.possibleBuys).toLocaleString(locale),deposit})];
- if(last)text.push(sentence('The time from the last purchase on {last} to that deposit is divided by {slots}, giving an interval of {minutes} minutes between purchases.',{last,slots:Number(plan.possibleBuys)+1,minutes:(plan.intervalSeconds/60).toLocaleString(locale,{maximumFractionDigits:1})}));
+ sentence('The remaining purchase budget covers {buys} purchases before the next expected deposit on {deposit}.',{buys:numberFormats.integer.format(plan.possibleBuys),deposit})];
+ if(last)text.push(sentence('The time from the last purchase on {last} to that deposit is divided by {slots}, giving an interval of {minutes} minutes between purchases.',{last,slots:Number(plan.possibleBuys)+1,minutes:numberFormats.minutes.format(plan.intervalSeconds/60)}));
  else text.push(t('No previous purchase is recorded, so the first purchase becomes due once startup and exchange checks are complete.'));
  text.push(sentence('The saved target time for the next purchase is {due}.',{due}));
  if(plan.useRemainingBudget)text.push(t('This final purchase uses the remaining budget within the exchange limits.'));
  text.push(t('Confirmed early deposits can bring the target time forward. Startup checks, pauses or open transactions can delay execution.'));
  return text.join(' ');
 }
-let dashboardRefreshSeconds=30,scheduleRefreshTimer=null,lastReportData=null,lastAccountMarket=null;
+let dashboardRefreshSeconds=30,scheduleRefreshTimer=null,lastReportData=null,lastAccountMarket=null,lastReportMarket=null,lastPurchaseMarket=null;
+let activityRevision,reportConfigurationRevision,lastReportKey,lastReportReadAt=0,lastReportEnd=0;
 async function refreshPurchaseSchedule(){
  const request=++scheduleRequest;
  try{
@@ -66,23 +87,25 @@ async function refreshPurchaseSchedule(){
   scheduleClockOffset=Number.isFinite(serverTime)?serverTime-Date.now():0;
   $('botStatusLabel').textContent=t(schedule.botStatusLabel||'Bot active');
   updateStatusLight(schedule.botStatusTone||(schedule.botStatusWarning?'error':'waiting'));
-  if(schedule.accountMarketPrice){
-   const market=schedule.accountMarketPrice;lastAccountMarket=market;
+  activityRevision=schedule.activityRevision;
+  reportConfigurationRevision=schedule.reportConfigurationRevision;
+  lastAccountMarket=schedule.accountMarketPrice?{...schedule.accountMarketPrice,exchange:schedule.exchange}:null;
+  const purchasePrice=Number(schedule.purchaseCurrencyPrice),purchaseUpdatedAt=Date.parse(schedule.balanceUpdatedAt)/1000;
+  if(purchasePrice>0&&Number.isFinite(purchasePrice)&&Number.isFinite(purchaseUpdatedAt)){
+   lastPurchaseMarket={exchange:schedule.exchange,currency:schedule.quote,price:purchasePrice,updatedAt:purchaseUpdatedAt};
+  }
+  if(lastAccountMarket&&!lastReportData){
+   const market=lastAccountMarket;
    balanceDisplayPrice=Number(market.price);balanceDisplayCurrency=market.currency;
    $('spot').textContent=money(market.price,market.currency)+'/BTC';
-
-   renderExchangeBtcValue();
-   if(lastReportData){
-    displayCurrency=market.currency;
-    const rates=Object.fromEntries(Object.entries(market.conversionRates||{[quote]:Number(market.conversionRate)||1}).map(([currency,rate])=>[currency,Number(rate)]));
-    rates[displayCurrency]=1;
-    renderReportMoney(lastReportData,Number(market.price),rates);
-    activityRates=rates;renderActivities();
-   }
+  }
+  if(lastReportData&&$('periodReport').ariaBusy!=='true'){
+   const market=reportAccountMarket(lastReportData);
+   if(market)updateReportMarket(lastReportData,market);
   }
   if($('purchaseExplanation'))$('purchaseExplanation').textContent=purchaseExplanationText(schedule);
   const detail=schedule.forecastDetails;
-  $('forecastProgress').textContent=detail?t('About {btc} BTC · {buys} purchases remaining'.replace('{btc}',Number(detail.remainingBtc).toLocaleString(locale,{maximumFractionDigits:8})).replace('{buys}',detail.remainingPurchases)):'';
+  $('forecastProgress').textContent=detail?t('About {btc} BTC · {buys} purchases remaining'.replace('{btc}',numberFormats.btc.format(detail.remainingBtc)).replace('{buys}',detail.remainingPurchases)):'';
   $('forecastAssumptions').hidden=!detail;
   if(detail)$('forecastAssumptionsText').textContent=t('Price: {price}/BTC · Buy: {quantity} · Threshold: {threshold} · Monthly deposit: {amount} · Day {day}, {time} ({zone}).'.replace('{price}',money(detail.price,detail.quote)).replace('{quantity}',btc(detail.quantity)).replace('{threshold}',money(detail.threshold,detail.quote)).replace('{amount}',detail.monthlyDeposit?money(detail.monthlyDeposit,detail.quote):t('Not configured')).replace('{day}',detail.depositDay).replace('{time}',detail.depositTime).replace('{zone}',detail.timezone));
   const depositDate=Date.parse(schedule.nextDepositAt);
@@ -103,14 +126,14 @@ async function refreshPurchaseSchedule(){
 
   nextPurchaseMessage=schedule.nextPurchaseStatus||"Not scheduled";
   $('purchaseOrderDetails').hidden=schedule.startupDelayActive===true||schedule.nextPurchaseStatusCode==='startup_delay';
-  $("nextPurchaseAt").textContent=t(nextPurchaseTimestamp===null?nextPurchaseMessage:new Date(nextPurchaseTimestamp).toLocaleString(locale,{timeZone:schedule.timezone||"UTC",timeZoneName:"short"}));
+  $("nextPurchaseAt").textContent=t(nextPurchaseTimestamp===null?nextPurchaseMessage:dateLabel(nextPurchaseTimestamp,schedule.timezone||'UTC',true));
   exchangeBtcBalance=schedule.btcBalance!=null&&Number.isFinite(Number(schedule.btcBalance))?Number(schedule.btcBalance):null;
   $("exchangeBtcBalance").textContent=t(exchangeBtcBalance===null?"—":btc(exchangeBtcBalance));
 
   renderExchangeBtcValue();
   const withdrawalTarget=Date.parse(schedule.estimatedWithdrawalAt);
   estimatedWithdrawalTimestamp=Number.isFinite(withdrawalTarget)?withdrawalTarget:null;
-  $("estimatedWithdrawalAt").textContent=t(estimatedWithdrawalTimestamp===null?"Not estimated":new Date(estimatedWithdrawalTimestamp).toLocaleString(locale,{timeZone:schedule.timezone||"UTC",timeZoneName:"short"}));
+  $("estimatedWithdrawalAt").textContent=t(estimatedWithdrawalTimestamp===null?"Not estimated":dateLabel(estimatedWithdrawalTimestamp,schedule.timezone||'UTC',true));
   $("estimatedWithdrawalStatus").textContent=t(estimatedWithdrawalTimestamp===null?(schedule.estimatedWithdrawalStatus||"Waiting for account check"):(schedule.estimatedWithdrawalStatus||"Estimate at the current BTC price, deposit and purchase interval"));
   $("withdrawalCountdownStatus").textContent=t(estimatedWithdrawalTimestamp===null?$("estimatedWithdrawalStatus").textContent:(schedule.estimatedWithdrawalStatus||"Estimate at the current BTC price, deposit and purchase interval"));
   renderWithdrawalProgress(exchangeBtcBalance,Number(schedule.purchaseCurrencyPrice),Number(schedule.withdrawalThreshold),schedule.withdrawalsEnabled);
@@ -118,7 +141,7 @@ async function refreshPurchaseSchedule(){
   $('automaticWithdrawalCard').classList.toggle('withdrawal-disabled',!schedule.withdrawalsEnabled);
   $('withdrawalDisabledHint').hidden=!!schedule.withdrawalsEnabled;
   $('withdrawalHeading').textContent=t(schedule.withdrawalsEnabled?'Automatic withdrawal':'Automatic withdrawal disabled');
- }catch(e){if(request===scheduleRequest){$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");updateStatusLight("error")}}
+ }catch(e){if(request===scheduleRequest){activityRevision=undefined;lastAccountMarket=null;$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");updateStatusLight("error")}}
  finally{if(request===scheduleRequest){clearTimeout(scheduleRefreshTimer);scheduleRefreshTimer=setTimeout(refreshDashboard,dashboardRefreshSeconds*1000)}}
 }
 setInterval(renderPurchaseCountdown,1000);
@@ -230,18 +253,32 @@ function activityStatus(row){
  if(status==="unverified")return {label:"Unverified",tone:"muted"};
  return {label:"Pending",tone:"pending"};
 }
+let renderedActivities;
 function renderActivities(){
- const body=$("activities");body.innerHTML="";
+ const body=$("activities");
  const pageSize=Number($("pageSize").value),total=activityTotal,totalPages=activityPages;
  currentPage=Math.min(Math.max(1,currentPage),totalPages);
  const start=(currentPage-1)*pageSize,end=Math.min(start+pageSize,total);
- for(const row of activityRows){
+ const rows=activityRows.map(row=>{
   const rate=Number.isFinite(activityRates[row.currency])?activityRates[row.currency]:1,currency=Number.isFinite(activityRates[row.currency])?displayCurrency:row.currency;
   const status=activityStatus(row);
-  const tr=document.createElement("tr"),type=row.simulated?"Buy (Simulation)":(row.type==="TransferOut"?"Withdrawal":row.type),vals=[Number.isFinite(Date.parse(row.datetime))?dateLabel(Date.parse(row.datetime)):"—",t(type||"—"),row.type==="Deposit"?"—":activityBtc(row.shares),row.type==="Deposit"?"—":activityMoney(row.price,rate,currency,"/BTC"),activityMoney(row.amount,rate,currency),(row.type==="Deposit"&&!row.depositStatus)?"—":(row.simulated&&knownNumber(row.fee)?"~":"")+activityMoney(row.fee,rate,currency),t(status.label)];
-  vals.forEach((v,i)=>{const td=document.createElement("td");td.textContent=v;if(i>=2&&i<=5)td.className="num";if(i===6)td.className="activity-status status-"+status.tone;tr.appendChild(td)});
-  const dateCell=tr.children[0];if(dateCell){const button=document.createElement('button');button.type='button';button.className='activity-date-link';button.textContent=vals[0];button.addEventListener('click',()=>showActivityDetail(row.activityId));dateCell.textContent='';dateCell.append(button)}
-  body.appendChild(tr)
+  const type=row.simulated?"Buy (Simulation)":(row.type==="TransferOut"?"Withdrawal":row.type),vals=[Number.isFinite(Date.parse(row.datetime))?dateLabel(Date.parse(row.datetime)):"—",t(type||"—"),row.type==="Deposit"?"—":activityBtc(row.shares),row.type==="Deposit"?"—":activityMoney(row.price,rate,currency,"/BTC"),activityMoney(row.amount,rate,currency),(row.type==="Deposit"&&!row.depositStatus)?"—":(row.simulated&&knownNumber(row.fee)?"~":"")+activityMoney(row.fee,rate,currency),t(status.label)];
+  return {id:row.activityId,vals,tone:status.tone};
+ });
+ const key=JSON.stringify([rows,total,totalPages,currentPage,pageSize]);
+ if(key===renderedActivities)return;
+ renderedActivities=key;
+ const focusedId=document.activeElement?.dataset?.activityId;
+ body.innerHTML="";
+ for(const {id,vals,tone} of rows){
+  const tr=document.createElement("tr");
+  vals.forEach((v,i)=>{const td=document.createElement("td");td.textContent=v;if(i>=2&&i<=5)td.className="num";if(i===6)td.className="activity-status status-"+tone;tr.appendChild(td)});
+  const dateCell=tr.children[0],button=document.createElement('button');
+  button.type='button';button.className='activity-date-link';button.textContent=vals[0];
+  if(id!==undefined)button.dataset.activityId=id;
+  button.addEventListener('click',()=>showActivityDetail(id));dateCell.textContent='';dateCell.append(button);
+  body.appendChild(tr);
+  if(focusedId!==undefined&&String(id)===focusedId)button.focus({preventScroll:true});
  }
  if(!total){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=7;td.textContent=t("No activity in this period.");td.className="notice";tr.appendChild(td);body.appendChild(tr)}
  $("pageInfo").textContent=t(total?("Showing "+(start+1)+"–"+end+" of "+total+" · Page "+currentPage+" of "+totalPages):"No entries");
@@ -257,36 +294,81 @@ $("pageJump").addEventListener("submit",event=>{
  if(!activityTotal||!Number.isInteger(page)||page<1||page>activityPages)return;
  if(page!==currentPage){currentPage=page;loadAnalytics()}
 });
-async function loadAnalytics(){
- const request=++reportRequest;$("periodReport").ariaBusy="true";saveReportView();sectionFeedback("reportFeedback","");
- try{showError("");const p=selectedPeriod();const response=await fetch("/api/analytics?start="+p.start+"&end="+p.end+"&page="+currentPage+"&limit="+$("pageSize").value+"&q="+encodeURIComponent($("activitySearch")?.value||"")+"&tz="+encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC"));const d=await response.json();if(!response.ok)throw new Error(d.error||"Could not load the report.");if(request!==reportRequest)return;quote=d.quote;$('selectedPeriodLabel').textContent=dateLabel(p.start)+' – '+dateLabel(p.end);
- displayCurrency=["EUR","USD"].includes(d.configuration.displayCurrency)?d.configuration.displayCurrency:(["EUR","USD"].includes(quote)?quote:"EUR");
- document.title="Bitcoin DCA Dashboard";
- let livePrice=Number((d.snapshot||{}).price||0),currencyRates={[quote]:1},marketUpdatedAt=Date.parse((d.snapshot||{}).updatedAt)/1000||0;
- const currencies=[...new Set([...Object.keys(d.summaryByCurrency||{}),...Object.keys(d.depositsByCurrency||{})])];
+function reportCurrency(d){
+ return ["EUR","USD"].includes(d.configuration.displayCurrency)?d.configuration.displayCurrency:(["EUR","USD"].includes(d.quote)?d.quote:"EUR");
+}
+function reportCurrencies(d){
+ return [...new Set([...Object.keys(d.summaryByCurrency||{}),...Object.keys(d.depositsByCurrency||{}),...d.activities.map(row=>row.currency).filter(code=>["EUR","USD"].includes(code))])];
+}
+function reportMarket(market,d,currency,currencies){
+ const rates=Object.fromEntries(Object.entries(market.conversionRates||{[d.quote]:market.conversionRate})
+  .map(([code,rate])=>[code,Number(rate)]).filter(([,rate])=>Number.isFinite(rate)&&rate>0));
+ rates[currency]=1;
+ const updatedAt=Number(market.updatedAt)||0;
+ const rateTimes=[...currencies,d.quote].map(code=>Number(market.conversionRatesUpdatedAt?.[code])||updatedAt);
+ return {currency,rates,price:Number(market.price),updatedAt:Math.min(updatedAt,...rateTimes)};
+}
+function reportAccountMarket(d,currency=reportCurrency(d),currencies=reportCurrencies(d)){
+ if(lastAccountMarket?.currency!==currency||(lastAccountMarket.exchange&&d.exchange&&lastAccountMarket.exchange!==d.exchange)||(lastAccountMarket.quoteCurrency&&lastAccountMarket.quoteCurrency!==d.quote))return null;
+ const market=reportMarket(lastAccountMarket,d,currency,currencies);
+ return Number.isFinite(market.price)&&market.price>0&&currencies.every(code=>market.rates[code]>0)?market:null;
+}
+async function loadReportMarket(d){
+ const currency=reportCurrency(d),currencies=reportCurrencies(d);
+ const accountMarket=reportAccountMarket(d,currency,currencies);
+ const previous=lastReportMarket?.currency===currency&&lastReportData?.quote===d.quote&&lastReportData?.exchange===d.exchange&&currencies.every(code=>lastReportMarket.rates[code]>0)?lastReportMarket:null;
+ if(accountMarket)return previous?.updatedAt>accountMarket.updatedAt?previous:accountMarket;
  try{
-  const priceResponse=await fetch("/api/market-price?currency="+displayCurrency+"&currencies="+encodeURIComponent(currencies.join(",")));const market=await priceResponse.json();if(!priceResponse.ok)throw new Error(market.error||"Could not load current BTC price.");
-  if(request!==reportRequest)return;
-  marketUpdatedAt=Number(market.updatedAt)||marketUpdatedAt;fxRate=Number(market.conversionRate);livePrice=Number(market.price);currencyRates=Object.fromEntries(Object.entries(market.conversionRates||{[quote]:fxRate})
-   .map(([currency,rate])=>[currency,Number(rate)]).filter(([,rate])=>Number.isFinite(rate)&&rate>0));
-  currencyRates[displayCurrency]=1;
-
+  const priceResponse=await fetch("/api/market-price?currency="+currency+"&currencies="+encodeURIComponent(currencies.join(",")));
+  const market=await priceResponse.json();if(!priceResponse.ok)throw new Error(market.error||"Could not load current BTC price.");
+  let priced=reportMarket(market,d,currency,currencies);
+  const latest=reportAccountMarket(d,currency,currencies);
+  if(latest?.updatedAt>priced.updatedAt)priced=latest;
+  return currencies.every(code=>priced.rates[code]>0)&&previous?.updatedAt>priced.updatedAt?previous:priced;
  }catch(priceError){
+  if(previous)return previous;
+  const snapshotUpdatedAt=Date.parse(d.snapshot?.updatedAt)/1000||0;
+  const purchase=lastPurchaseMarket?.currency===d.quote&&lastPurchaseMarket.exchange===d.exchange&&lastPurchaseMarket.updatedAt>=snapshotUpdatedAt?lastPurchaseMarket:null;
+  const price=purchase?.price||Number(d.snapshot?.price)||(balanceDisplayCurrency===d.quote?balanceDisplayPrice:0);
+  return {currency:d.quote,price,rates:{[d.quote]:1},updatedAt:purchase?.updatedAt||snapshotUpdatedAt};
+ }
+}
+function updateReportMarket(d,market,newReport=false){
+ const previous=lastReportMarket;
+ if(!newReport&&market.currency===previous?.currency&&market.updatedAt>0&&market.updatedAt<previous.updatedAt)return;
+ const ratesChanged=market.currency!==previous?.currency||JSON.stringify(market.rates)!==JSON.stringify(previous?.rates);
+ lastReportMarket=market;
+ if(!newReport&&!ratesChanged&&market.price===previous?.price)return;
+ displayCurrency=market.currency;activityRates=market.rates;
+ balanceDisplayPrice=market.price;balanceDisplayCurrency=displayCurrency;renderExchangeBtcValue();
+ $("spot").textContent=t(market.price>0?money(market.price,displayCurrency)+"/BTC":"—");
+ renderReportMoney(d,market.price,activityRates);
+ if(newReport||ratesChanged)renderActivities();
+}
+function reportQuery(period){
+ return {...period,page:currentPage,limit:$("pageSize").value,q:$("activitySearch")?.value||""};
+}
+function reportKey(query,revision,configurationRevision,throughNow){
+ return JSON.stringify([query.start,throughNow?null:query.end,query.page,query.limit,query.q,revision,configurationRevision]);
+}
+async function loadAnalytics(){
+ const request=++reportRequest,readAt=Date.now();
+ const revision=activityRevision,configurationRevision=reportConfigurationRevision,throughNow=reportThroughNow;
+ $("periodReport").ariaBusy="true";saveReportView();sectionFeedback("reportFeedback","");
+ try{
+  showError("");const query=reportQuery(selectedPeriod());
+  const response=await fetch("/api/analytics?"+new URLSearchParams({...query,tz:browserTimeZone}));
+  const d=await response.json();if(!response.ok)throw new Error(d.error||"Could not load the report.");if(request!==reportRequest)return;
+  await initialSchedule;
   if(request!==reportRequest)return;
-  displayCurrency=quote;fxRate=1;
-  if(!(livePrice>0)&&balanceDisplayCurrency===quote&&balanceDisplayPrice>0)livePrice=balanceDisplayPrice;
-
- }
- if(lastAccountMarket&&lastAccountMarket.currency===displayCurrency&&Number(lastAccountMarket.updatedAt)>marketUpdatedAt){
-  livePrice=Number(lastAccountMarket.price);
-  currencyRates=Object.fromEntries(Object.entries(lastAccountMarket.conversionRates||currencyRates).map(([currency,rate])=>[currency,Number(rate)]));
-  currencyRates[displayCurrency]=1;
- }
- balanceDisplayPrice=livePrice;balanceDisplayCurrency=displayCurrency;renderExchangeBtcValue();
- $("spot").textContent=t(livePrice>0?money(livePrice,displayCurrency)+"/BTC":"—");
- lastReportData=d;renderReportMoney(d,livePrice,currencyRates);
- activityRates=currencyRates;activityRows=d.activities;activityTotal=d.pagination.total;activityPages=d.pagination.pages;currentPage=d.pagination.page;renderActivities();
- }catch(e){if(request===reportRequest)showError(e.message)}
+  const market=await loadReportMarket(d);
+  if(request!==reportRequest)return;
+  quote=d.quote;$('selectedPeriodLabel').textContent=dateLabel(query.start)+' – '+dateLabel(query.end);
+  document.title="Bitcoin DCA Dashboard";
+  lastReportData=d;activityRows=d.activities;activityTotal=d.pagination.total;activityPages=d.pagination.pages;currentPage=d.pagination.page;
+  lastReportKey=reportKey({...query,page:currentPage},revision,configurationRevision,throughNow);lastReportReadAt=readAt;lastReportEnd=query.end;
+  updateReportMarket(d,market,true);
+ }catch(e){if(request===reportRequest){lastReportKey=undefined;showError(e.message)}}
  finally{if(request===reportRequest){$("periodReport").ariaBusy="false";sectionFeedback("reportFeedback","")}}
 }
 function renderReportMoney(d,livePrice,currencyRates){
@@ -302,7 +384,9 @@ function renderReportMoney(d,livePrice,currencyRates){
   if(!Number.isFinite(currencyRates[currency])){moneyAvailable=false;continue}
   for(const key of Object.keys(converted))converted[key]+=Number(values[key]||0)*currencyRates[currency];
  }
- if(!moneyAvailable)showError("A required currency conversion is unavailable; monetary totals are hidden.");
+ const currencyError="A required currency conversion is unavailable; monetary totals are hidden.";
+ if(!moneyAvailable)showError(currencyError);
+ else if($("error").textContent===t(currencyError))showError("");
  if(livePrice>0&&moneyAvailable){
   const periodPurchaseValue=Number(d.summary.boughtBtc)*livePrice;
   const periodPurchaseCosts=converted.buyVolume+converted.tradeFees;
@@ -411,8 +495,10 @@ async function requestManualWithdrawal(){
  }catch(e){showWithdrawalMessage(e.message)}
  finally{actionFeedback("withdraw",null,false,false)}
 }
-async function refreshDashboard(){
- await refreshPurchaseSchedule();
+async function refreshDashboard(force=false){
+ const scheduled=refreshPurchaseSchedule(),schedule=scheduleRequest;
+ await scheduled;
+ if(schedule!==scheduleRequest)return;
  if(rangeDraft||$('periodReport').ariaBusy==='true'||!$('start').value||!$('end').value)return;
  if(reportThroughNow){
   const now=new Date();$('end').value=localInput(now.getTime());
@@ -420,10 +506,20 @@ async function refreshDashboard(){
    $('start').value=localInput(quickRangeStart(selectedQuickRange,now).getTime());
   }
  }
- await loadAnalytics();
+ const request=reportRequest;
+ const query=reportQuery({start:parseInput($("start")),end:parseInput($("end"))});
+ // shortcut: future-dated rows can enter through-now reports between revisions, refresh periodically until the ledger exposes the next timestamp.
+ const throughNowChanged=reportThroughNow&&(query.end<lastReportEnd||Date.now()-lastReportReadAt>=300000);
+ if(force||!lastReportData||activityRevision==null||throughNowChanged||reportKey(query,activityRevision,reportConfigurationRevision,reportThroughNow)!==lastReportKey){
+  await loadAnalytics();return;
+ }
+ if(!reportAccountMarket(lastReportData)){
+  const market=await loadReportMarket(lastReportData);
+  if(request===reportRequest&&schedule===scheduleRequest)updateReportMarket(lastReportData,market);
+ }
 }
-window.DCA_DASHBOARD_ACTIONS={refreshSchedule:refreshDashboard,withdraw:requestManualWithdrawal,export:requestParqetExport};
-refreshPurchaseSchedule();
+window.DCA_DASHBOARD_ACTIONS={refreshSchedule:()=>refreshDashboard(true),withdraw:requestManualWithdrawal,export:requestParqetExport};
+const initialSchedule=refreshPurchaseSchedule();
 
 (async()=>{
  try{await loadIntervals()}catch(e){

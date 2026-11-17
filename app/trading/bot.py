@@ -33,7 +33,6 @@ from app.data.activity import (
 from app.data.storage import STATE_PATH, prepare_storage
 from app.exchanges.contracts import AccountReadExchange
 from app.exchanges.exchange_errors import DefinitiveRejection, UncertainWithdrawalError, WithdrawalNotReady
-from app.exchanges.market_prices import collect_prices
 from app.trading.account import serialized
 from app.trading.deposits import sync_deposits
 from app.trading.funding import observe_deposit
@@ -181,7 +180,7 @@ def persist_bot_withdrawal(api, withdrawal, result, settings, context):
     return append_activity_records([record])
 
 
-def update_dashboard_snapshot(settings, quote_balance, price, btc_balance=None, market_prices=None):
+def update_dashboard_snapshot(settings, quote_balance, price, btc_balance=None):
     tracked_btc = ledger_balance()
     previous = read_dashboard_snapshot()
     write_dashboard_snapshot(
@@ -191,7 +190,7 @@ def update_dashboard_snapshot(settings, quote_balance, price, btc_balance=None, 
             "trackedBtc": format(tracked_btc, "f"),
             "btcBalance": str(btc_balance) if btc_balance is not None else None,
             "price": format(price, "f"),
-            "marketPrices": market_prices or {settings["quote"]: format(price, "f")},
+            "marketPrices": {settings["quote"]: format(price, "f")},
             "value": format(tracked_btc * price, "f"),
             "quoteBalance": format(quote_balance, "f"),
             "withdrawThreshold": format(settings["withdraw_threshold"], "f"),
@@ -542,9 +541,7 @@ def _read_account_cycle(
     fee_rate = cycle_data["fee_rate"] if cycle_data else api.estimate_taker_fee(symbol, Decimal(1))
     price = cycle_data["price"] if cycle_data else api.price(symbol)
     market = cycle_data["market"] if cycle_data else api.market(symbol, refresh=True)
-    market_prices = cycle_data["market_prices"] if cycle_data else collect_prices(api, settings, price)
     cycle_data = {
-        "market_prices": market_prices,
         "balance": balance,
         "price": price,
         "market": market,
@@ -619,10 +616,9 @@ def _run_once(
     )
     cycle_data = account_cycle.data
     balance, price, market = cycle_data["balance"], cycle_data["price"], cycle_data["market"]
-    exchange_btc, market_prices = cycle_data["btc_balance"], cycle_data["market_prices"]
     next_deposit = account_cycle.next_deposit
     deposit_overdue, deposit_received = account_cycle.deposit_overdue, account_cycle.deposit_received
-    update_dashboard_snapshot(settings, balance, price, exchange_btc, market_prices)
+    update_dashboard_snapshot(settings, balance, price, cycle_data["btc_balance"])
     if state.get("fiat_observation", {}).get("pending"):
         update_dashboard_schedule(None, PurchaseStatus.VERIFYING_DEPOSIT)
         log_transition(
@@ -997,12 +993,31 @@ def main():
     if not 1 <= port <= 65535:
         raise ValueError("WEB_UI_PORT must be between 1 and 65535")
     from app.core.lifecycle import shutdown_signals
+    from app.exchanges.market_prices import DisplayPrices
+
+    display_prices = DisplayPrices()
+
+    def current_currencies():
+        if runtime.api is not None:
+            return runtime.settings["quote"], runtime.settings["display_currency"]
+        return None
 
     with shutdown_signals(runtime.worker) as stop:
         runtime.worker.start()
         threading.Thread(target=supervise, args=(runtime.worker,), daemon=True).start()
+        threading.Thread(
+            target=display_prices.run, args=(current_currencies, stop), name="display-prices", daemon=True
+        ).start()
         try:
-            serve(runtime.settings, port, runtime.worker.submit, worker=runtime.worker, runtime=runtime, stop=stop)
+            serve(
+                runtime.settings,
+                port,
+                runtime.worker.submit,
+                worker=runtime.worker,
+                runtime=runtime,
+                stop=stop,
+                display_prices=display_prices,
+            )
         finally:
             stop.set()
             runtime.shutdown()

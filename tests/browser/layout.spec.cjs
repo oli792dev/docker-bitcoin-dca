@@ -362,6 +362,36 @@ test('Activity dates are unboxed links and details use responsive columns', asyn
  await page.screenshot({path:test.info().outputPath('activity-details.png')});
 });
 
+test('unchanged polls preserve the activity date button and keyboard focus', async ({page})=>{
+ let revision='original',status='submitted',reports=0;
+ await page.route('**/api/schedule',route=>route.fulfill({json:{
+  activityRevision:revision,dashboardRefreshSeconds:3600,quote:'EUR',
+  accountMarketPrice:{price:60000,currency:'EUR',conversionRates:{EUR:1}},
+ }}));
+ await page.route('**/api/analytics?**',route=>{
+  reports++;
+  return route.fulfill({json:{...analytics,activities:[{activityId:'example',datetime:'2026-10-29T12:00:00Z',type:'TransferOut',shares:.001,amount:81,fee:.2,currency:'EUR',withdrawalStatus:status}],pagination:{total:1,pages:1,page:1}}});
+ });
+ await page.goto('/');
+ await page.locator('#activityHeading').click();
+ const date=page.locator('.activity-date-link');
+ await expect(date).toBeVisible();
+ // Synchronize the startup revision before measuring background polls.
+ await page.evaluate(()=>refreshDashboard());
+ const initialCount=reports;
+ await date.focus();
+ const original=await date.elementHandle();
+ await page.evaluate(()=>refreshDashboard());
+ expect(reports).toBe(initialCount);
+ expect(await original.evaluate(node=>node.isConnected)).toBe(true);
+ await expect(date).toBeFocused();
+ revision='completed';status='completed';
+ await page.evaluate(()=>refreshDashboard());
+ expect(reports).toBe(initialCount+1);
+ await expect(page.locator('.activity-status')).toHaveText('Confirmed ✓');
+ await expect(date).toBeFocused();
+});
+
 test('purchase explanation explains the saved schedule in prose',async({page})=>{
  await page.route('**/api/schedule',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({quote:'EUR',timezone:'UTC',purchaseExplanation:{availableBalance:'600',price:'60000',plannedQuantity:'.0001',plannedCost:'6.02',possibleBuys:99,intervalSeconds:3600,lastPurchaseAt:'2026-11-05T10:00:00Z',nextDepositAt:'2026-11-09T14:00:00Z',dueAt:'2026-11-05T11:00:00Z'}})}));
  await page.goto('/');
