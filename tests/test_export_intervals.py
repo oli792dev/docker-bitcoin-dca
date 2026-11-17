@@ -3,10 +3,12 @@ import csv
 import io
 import tempfile
 import unittest
-from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from unittest.mock import patch
+from threading import Event
+from unittest.mock import Mock, patch
 from app.data import activity
 from app.data import reporting
 from app.webpage import web_ui
@@ -42,6 +44,14 @@ class ExportIntervals(unittest.TestCase):
                    record('a-second', 8, 'TransferOut')]
         for item, identity in zip(records, ['secret-fingerprint-a', 'secret-fingerprint-b', 'secret-fingerprint-a']):
             item['accountIdentity'] = identity
+        buys = [
+            {**record('a-buy', 1), 'accountIdentity': 'secret-fingerprint-a'},
+            {**record('b-buy', 4), 'accountIdentity': 'secret-fingerprint-b'},
+            {**record('b-simulated', 1, simulated=True), 'accountIdentity': 'secret-fingerprint-b'},
+            {**record('b-unverified', 2), 'accountIdentity': 'secret-fingerprint-b', 'purchaseStatus': 'unverified'},
+            {**record('b-other-exchange', 3), 'accountIdentity': 'secret-fingerprint-b', 'exchange': 'BITVAVO'},
+        ]
+        activity.append_activity_records(buys)
         handler = object.__new__(web_ui.Handler)
         handler.path = '/api/withdrawals'
         handler.settings = {'exchange':'KRAKEN'}
@@ -51,8 +61,9 @@ class ExportIntervals(unittest.TestCase):
         with patch.object(web_ui, 'withdrawal_records', return_value=records):
             handler.do_GET()
         self.assertEqual([r['startTimestamp'] for r in results[0]], [0, 0, stamp(2)])
+        self.assertEqual([r['analysisStartTimestamp'] for r in results[0]], [stamp(1), stamp(4), stamp(2)])
         self.assertNotIn('secret-fingerprint', str(results))
-        self.assertTrue(all(set(r) == {'timestamp','startTimestamp','txId','exchange'} for r in results[0]))
+        self.assertTrue(all(set(r) == {'timestamp','startTimestamp','analysisStartTimestamp','txId','exchange'} for r in results[0]))
 
     def test_only_latest_cycle_even_when_selection_contains_multiple_withdrawals(self):
         row=self.export()[0]
@@ -103,6 +114,79 @@ class ExportIntervals(unittest.TestCase):
         self.assertEqual(activity.latest_real_buy('KRAKEN').day,11)
         self.assertEqual(activity.latest_real_buy('BITVAVO').day,7)
 
+
+    def test_selection_releases_ledger_write_lock_and_keeps_read_snapshot(self):
+        entered, release = Event(), Event()
+        decode = activity.json.loads
+
+        def pause_decode(payload):
+            entered.set()
+            if not release.wait(5):
+                raise TimeoutError("Export selection did not resume")
+            return decode(payload)
+
+        with patch.object(activity.json, "loads", side_effect=pause_decode), ThreadPoolExecutor(2) as pool:
+            reader = pool.submit(activity.parqet_interval_records, stamp(1), stamp(12))
+            try:
+                self.assertTrue(entered.wait(2))
+                writer = pool.submit(activity.append_activity_records, [record('concurrent', 7)])
+                self.assertEqual(writer.result(timeout=2), 1)
+            finally:
+                release.set()
+            self.assertEqual([item['id'] for item in reader.result()], ['buy-one', 'buy-two', 'last'])
+
+    def test_export_uses_settled_cached_fx_on_http_failure(self):
+        purchase = record("usd", 6, amount="100")
+        purchase["row"]["currency"] = "USD"
+        activity.append_activity_records([purchase])
+        self.cache_fx(6, stored_on=14)
+
+        response = Mock()
+        response.raise_for_status.side_effect = reporting.requests.HTTPError()
+        with (
+            patch.object(reporting.time, "time", return_value=self.fx_time(20)),
+            patch.object(reporting.requests, "get", return_value=response) as fetch,
+        ):
+            self.assertEqual(Decimal(self.export()[0]["amount"]), Decimal("330.58"))
+        fetch.assert_called_once()
+
+    def test_fx_outage_does_not_use_missing_invalid_or_provisional_rates(self):
+        for trade_day, stored_on, rate in [(6, None, ".9"), (6, 14, "NaN"), (6, 7, ".9"), (17, 17, ".9")]:
+            with self.subTest(trade_day=trade_day, stored_on=stored_on, rate=rate):
+                if stored_on:
+                    self.cache_fx(trade_day, stored_on, rate)
+                purchase = {**record("usd", trade_day)["row"], "currency": "USD"}
+                with (
+                    patch.object(reporting.time, "time", return_value=self.fx_time(20)),
+                    patch.object(reporting.requests, "get", side_effect=reporting.requests.Timeout),
+                    self.assertRaises(reporting.requests.Timeout),
+                ):
+                    reporting._usd_eur_rates([purchase])
+
+    def test_expired_provisional_rate_is_refreshed(self):
+        self.cache_fx(17, stored_on=17)
+        purchase = {**record("usd", 17)["row"], "currency": "USD"}
+        response = Mock()
+        response.json.return_value = {"rates": {"2026-10-16": {"EUR": ".95"}}}
+        with (
+            patch.object(reporting.time, "time", return_value=self.fx_time(20)),
+            patch.object(reporting.requests, "get", return_value=response) as fetch,
+        ):
+            self.assertEqual(list(reporting._usd_eur_rates([purchase]).values()), [Decimal(".95")])
+        fetch.assert_called_once()
+
+    @staticmethod
+    def fx_time(day):
+        return datetime(2026, 10, day, 12, tzinfo=UTC).timestamp()
+
+    def cache_fx(self, trade_day, stored_on, rate=".9"):
+        with patch.object(activity.time, "time", return_value=self.fx_time(stored_on)):
+            activity.cache_put_many({
+                f"fx:USD:EUR:2026-10-{trade_day:02d}": {
+                    "rate": rate,
+                    "referenceDate": f"2026-10-{trade_day - 1:02d}",
+                }
+            })
 
     def test_http_export_uses_complete_cycle_instead_of_selected_activity_range(self):
         handler=object.__new__(web_ui.Handler)
