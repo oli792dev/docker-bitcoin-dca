@@ -120,6 +120,39 @@ class SetupRestoreTests(unittest.TestCase):
         self.store.create_account('new-user', 'new-login-password')
         self.assertTrue(self.store.authenticate('new-user', 'new-login-password'))
 
+    def test_rejected_restore_preserves_exchange_check_and_withdrawal_service(self):
+        payload = self.archive("config")
+        self.store.create_account("current-user", "current-login-password")
+        self.runtime.exchange_check_pending = False
+        service = object()
+        self.runtime.service = service
+        payload.update(scope="config", current_password="current-login-password", password="wrong-backup-password")
+
+        with self.assertRaisesRegex(ValueError, "Backup password"):
+            self.runtime.backup(payload, restore=True)
+
+        self.assertFalse(self.runtime.exchange_check_pending)
+        self.assertIs(self.runtime.service, service)
+        self.assertFalse(self.runtime.worker.reconfigure.is_set())
+
+    def test_restore_failure_after_live_mutation_requires_a_new_exchange_check(self):
+        payload = self.archive("config")
+        self.store.create_account("current-user", "current-login-password")
+        self.runtime.exchange_check_pending = False
+        self.runtime.service = object()
+        payload.update(scope="config", current_password="current-login-password")
+
+        def fail_after_start(*args, before_mutation):
+            before_mutation()
+            raise OSError("fixture write failure")
+
+        with patch.object(Backups, "restore", side_effect=fail_after_start):
+            with self.assertRaisesRegex(OSError, "fixture write failure"):
+                self.runtime.backup(payload, restore=True)
+
+        self.assertTrue(self.runtime.exchange_check_pending)
+        self.assertIsNone(self.runtime.service)
+
     def test_setup_restore_requires_the_action_header(self):
         status, _ = self.request(self.archive('config'), action_header=False)
         self.assertEqual(status, 400)
