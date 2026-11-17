@@ -30,7 +30,9 @@ from app.data.analytics import report as build_report
 from app.data.reporting import parqet_aggregate_rows, parqet_csv
 from app.exchanges import market_prices
 from app.exchanges.exchange_errors import UncertainWithdrawalError
-from app.trading.forecast import forecast_details, withdrawal_forecast
+from app.trading.controls import PAUSE_UNAVAILABLE, pause_status
+from app.trading.forecast import forecast_details, withdrawal_projection
+from app.trading.forecast import withdrawal_forecast as withdrawal_forecast
 from app.webpage.design_system import DESIGN_CSS, apply_appearance
 from app.webpage.favicon_assets import APPLE_TOUCH_ICON_PNG, FAVICON_ICO, FAVICON_MASK_SVG, FAVICON_PNG, FAVICON_SVG
 from app.webpage.i18n import localize_page, translate
@@ -124,10 +126,11 @@ class Handler(BaseHTTPRequestHandler):
         balance_matches = (
             snapshot.get("quote") == self.settings["quote"] and snapshot.get("exchange") == self.settings["exchange"]
         )
+        projected_purchases = None
         if exchange_check_pending:
             forecast_at, forecast_status = None, exchange_status
         else:
-            forecast_at, forecast_status = withdrawal_forecast(
+            forecast_at, forecast_status, projected_purchases = withdrawal_projection(
                 self.settings,
                 snapshot if balance_matches else {},
                 self.settings.get("expected_monthly_deposit") or "0",
@@ -140,8 +143,10 @@ class Handler(BaseHTTPRequestHandler):
         )
         if withdrawal_error:
             forecast_at, forecast_status = None, withdrawal_error
-        pause = self.runtime.controls.snapshot() if self.runtime else {"paused": False, "until": None}
-        if pause["paused"]:
+        pause, pause_unavailable = pause_status(self.runtime.controls if self.runtime else None)
+        if pause_unavailable:
+            forecast_at, forecast_status = None, PAUSE_UNAVAILABLE
+        elif pause["paused"]:
             forecast_at, forecast_status = None, "Transactions paused"
         recovery_required = bool(getattr(self.runtime, "recovery_required", False))
         checked_at = snapshot.get("updatedAt") if balance_matches else None
@@ -185,26 +190,31 @@ class Handler(BaseHTTPRequestHandler):
                     separators=(",", ":"),
                 ),
                 "pause": pause,
+                "pauseUnavailable": pause_unavailable,
                 "purchaseExplanation": snapshot.get("withdrawalForecastPlan") if balance_matches else None,
                 "recoveryRequired": recovery_required,
                 "botStatusLabel": "Restore recovery required; restart container"
                 if recovery_required
+                else PAUSE_UNAVAILABLE
+                if pause_unavailable
                 else "Transactions paused"
                 if pause["paused"] and status.tone != "error"
                 else status.label,
                 "dashboardRefreshSeconds": self.settings.get("dashboard_refresh_seconds", 30),
                 "botStatusTone": "error"
-                if recovery_required
+                if recovery_required or pause_unavailable
                 else "waiting"
                 if pause["paused"] and status.tone != "error"
                 else status.tone,
-                "botStatusWarning": status.warning,
+                "botStatusWarning": status.warning or pause_unavailable,
                 "startupDelayActive": bool(
                     startup_delay or snapshot.get("nextPurchaseStatusCode") == PurchaseStatus.STARTUP_DELAY
                 ),
                 "lastAccountCheckAt": checked_at,
                 "staleAfterSeconds": max(120, self.settings.get("check_interval_seconds", 300) * 2),
-                "forecastDetails": forecast_details(self.settings, snapshot, forecast_now)
+                "forecastDetails": forecast_details(
+                    self.settings, snapshot, forecast_now, projected_purchases=projected_purchases
+                )
                 if forecast_at and balance_matches
                 else None,
                 "exchangeCheckPending": exchange_check_pending,
@@ -230,8 +240,10 @@ class Handler(BaseHTTPRequestHandler):
                 "estimatedWithdrawalStatus": forecast_status,
                 "balanceUpdatedAt": snapshot.get("updatedAt") if balance_matches else None,
                 "nextPurchaseStatusCode": snapshot.get("nextPurchaseStatusCode", PurchaseStatus.UNKNOWN),
-                "nextPurchaseAt": snapshot.get("nextPurchaseAt"),
-                "nextPurchaseStatus": "Transactions paused"
+                "nextPurchaseAt": None if pause_unavailable else snapshot.get("nextPurchaseAt"),
+                "nextPurchaseStatus": PAUSE_UNAVAILABLE
+                if pause_unavailable
+                else "Transactions paused"
                 if pause["paused"]
                 else snapshot.get("nextPurchaseStatus", "Schedule pending"),
                 "timezone": self.settings["timezone"],
@@ -868,8 +880,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200 if record else 404, record or {"error": "Activity record not found."})
                 return
             if parsed.path == "/api/controls":
+                pause, pause_unavailable = pause_status(self.runtime.controls)
                 self._json(
-                    200, {**self.runtime.controls.snapshot(), "recoveryRequired": self.runtime.recovery_required}
+                    200,
+                    {
+                        **pause,
+                        "pauseUnavailable": pause_unavailable,
+                        "recoveryRequired": self.runtime.recovery_required,
+                    },
                 )
                 return
             if parsed.path == "/api/schedule":
