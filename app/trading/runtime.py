@@ -602,7 +602,7 @@ class Runtime:
                 )
             except BaseException:
                 recovery_required = self.recovery_required
-                if mutation_started and (self.state_path.parent / ".restore-completed").exists():
+                if mutation_started and not recovery_required and (not setup or self.store.path.exists()):
                     self._configuration_uncertain = True
                 if mutation_started or recovery_required:
                     self.exchange_check_pending = True
