@@ -42,11 +42,7 @@ class Worker:
             if not self.running or self.stop.is_set():
                 raise ValueError("Bot worker is unavailable; check container health.")
             now = time.monotonic()
-            self.jobs = {
-                k: v
-                for k, v in self.jobs.items()
-                if v["expires"] is None or v["expires"] > now
-            }
+            self.jobs = {k: v for k, v in self.jobs.items() if v["expires"] is None or v["expires"] > now}
             if len(self.jobs) >= 128:
                 raise ValueError("Too many queued or recent requests; try again later.")
             job = {"session": session, "state": "queued", "expires": None}
