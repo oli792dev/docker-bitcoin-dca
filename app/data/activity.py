@@ -182,8 +182,7 @@ def read_activity_records():
 
 def parqet_interval_records(start, end):
     """Return the complete cycle ending at the last selected confirmed withdrawal."""
-    with _db() as db:
-        db.execute("BEGIN")
+    with _report_db() as db:
         completed = "asset='BTC' AND kind='TransferOut' AND simulated=0 AND status='completed'"
         ending = db.execute(
             "SELECT timestamp,exchange,json_extract(payload,'$.accountIdentity') FROM activity WHERE "
@@ -398,6 +397,41 @@ def withdrawal_records(unresolved=False):
     query += " ORDER BY timestamp,id"
     with _db() as db:
         return [json.loads(r[0]) for r in db.execute(query)]
+
+
+def withdrawal_cycle_bounds():
+    """Read matching purchase and withdrawal bounds in the same report snapshot."""
+    intervals = []
+    previous = {}
+    with _report_db() as db:
+        withdrawals = db.execute(
+            "SELECT timestamp,id,exchange,coalesce(json_extract(payload,'$.accountIdentity'),'')"
+            " FROM activity WHERE asset='BTC' AND kind='TransferOut' AND simulated=0 AND status='completed'"
+            " ORDER BY timestamp,id"
+        )
+        for timestamp, tx_id, exchange, identity in withdrawals:
+            scope = (exchange, identity)
+            start = previous.get(scope, 0)
+            analysis_start = start
+            if not start:
+                analysis_start = db.execute(
+                    "SELECT min(timestamp) FROM activity WHERE asset='BTC' AND kind='Buy' AND simulated=0"
+                    " AND exchange=? AND coalesce(json_extract(payload,'$.accountIdentity'),'')=?"
+                    " AND coalesce(json_extract(payload,'$.purchaseStatus'),'confirmed')='confirmed'"
+                    " AND timestamp<=?",
+                    (*scope, timestamp),
+                ).fetchone()[0]
+            intervals.append(
+                {
+                    "timestamp": timestamp,
+                    "startTimestamp": start,
+                    "analysisStartTimestamp": analysis_start,
+                    "txId": tx_id,
+                    "exchange": exchange,
+                }
+            )
+            previous[scope] = timestamp
+    return intervals
 
 
 def read_dashboard_snapshot():

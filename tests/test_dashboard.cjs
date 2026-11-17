@@ -19,13 +19,13 @@ const elements={},get=id=>{assert(!["balance","balanceValue"].includes(id),"Remo
 get('settingsFrame').contentWindow={postMessage:message=>actionFeedbacks.push(message)};
 get('reportFrom').value='2020-10-01T12:34:56Z';
 const records=Array.from({length:45},(_,i)=>({activityId:String(i),datetime:'2026-10-22T12:00:00Z',type:'Buy',identifier:'BTC',shares:'.001',currency:i<22?'EUR':'USD',price:i<22?'80000':'100000',amount:i<22?'80':'100',fee:i<22?'.2':'.25'}));
-const stored=new Map([['bitcoinDcaMonthlyDeposit','999']]);let expiryCallback;let configuredMonthlyDeposit='',forecastSaveFails=false;const forecastSaves=[];
+const stored=new Map([['bitcoinDcaMonthlyDeposit','999']]);let expiryCallback, slowWithdrawalPolls=0, slowerPolls=0;let configuredMonthlyDeposit='',forecastSaveFails=false;const forecastSaves=[];
 let forecastAt='2027-01-10T12:00:00Z',automaticWithdrawals=true;
 let activityRevision,reportConfigurationRevision,purchasePrice="84000",balanceUpdatedAt="2026-10-29T12:00:00Z",reportMarketAt=null,scheduleMarket=null,configuredOrder="0",effectiveOrder="0.00006";const dashboardPollTimers=[],dashboardPollCallbacks=[];let dashboardRefreshSeconds=30;
 const requests=[];let waitingStartup=false,waitingDeposit=false,reportFails=false,scheduleFails=false,checks=0,eurOnly=false,priceUnavailable=false,invalidUsdRate=false,withdrawalUnavailable=false,configuredDisplayCurrency="EUR",withdrawalExchange="KRAKEN",withdrawalTarget="Example wallet",withdrawalNetwork="BTC",withdrawalHistoryEmpty=false;
-let withdrawalHistory=[{timestamp:Date.parse('2026-10-20T12:00:00Z'),startTimestamp:0},{timestamp:Date.parse('2026-10-23T12:00:00Z'),startTimestamp:Date.parse('2026-10-20T12:00:00Z')}];
+let withdrawalHistory=[{timestamp:Date.parse('2026-10-20T12:00:00.456Z'),startTimestamp:0,analysisStartTimestamp:Date.parse('2026-10-17T12:00:00Z')},{timestamp:Date.parse('2026-10-23T12:00:00Z'),startTimestamp:Date.parse('2026-10-20T12:00:00Z')}];
 const response=data=>({ok:true,json:async()=>data});
-const context={document:{getElementById:get,createElement:()=>new Element()},localStorage:{getItem:key=>stored.get(key)??null,setItem:(key,value)=>stored.set(key,value)},Intl,Date,URL,URLSearchParams,console,alert(){throw Error('Withdrawal must not use a browser alert')},confirm:()=>false,setInterval(){},setTimeout(fn,ms){if(['refreshPurchaseSchedule','refreshDashboard'].includes(fn.name)){dashboardPollTimers.push(ms);dashboardPollCallbacks.push(fn);return dashboardPollTimers.length}if(ms===120000){expiryCallback=fn;return 1}queueMicrotask(fn)},clearTimeout(){},window:{location:{reload(){throw Error('Unexpected reload')}}},fetch:async(url,options)=>{
+const context={document:{getElementById:get,createElement:()=>new Element()},localStorage:{getItem:key=>stored.get(key)??null,setItem:(key,value)=>stored.set(key,value)},Intl,Date,URL,URLSearchParams,console,alert(){throw Error('Withdrawal must not use a browser alert')},confirm:()=>false,setInterval(){},setTimeout(fn,ms){if(['refreshPurchaseSchedule','refreshDashboard'].includes(fn.name)){dashboardPollTimers.push(ms);dashboardPollCallbacks.push(fn);return dashboardPollTimers.length}if(ms===120000){expiryCallback=fn;return 1}if(ms===10000)slowerPolls++;queueMicrotask(fn)},clearTimeout(){},window:{location:{reload(){throw Error('Unexpected reload')}}},fetch:async(url,options)=>{
  requests.push(url);const parsed=new URL(url,'http://example.test');
  if(parsed.pathname==='/api/schedule'&&scheduleFails)throw Error('Schedule offline');
  if(parsed.pathname==='/api/settings/report-period')return response({from:JSON.parse(options.body).from});
@@ -44,7 +44,7 @@ const context={document:{getElementById:get,createElement:()=>new Element()},loc
  }
  if(parsed.pathname==='/api/withdrawal/confirm')return response({message:'Withdrawal submitted.'});
  if(parsed.pathname==='/api/withdrawal/preview')return response({jobId:'fictional-job'});
- if(parsed.pathname==='/api/withdrawal/jobs/fictional-job')return response(++checks===1?{state:'queued'}:{state:'completed',result:{token:'single-use'}});
+ if(parsed.pathname==='/api/withdrawal/jobs/fictional-job')return response(++checks===1||slowWithdrawalPolls-->0?{state:'queued'}:{state:'completed',result:{token:'single-use'}});
  throw Error('Unexpected URL '+url);
 }};
 const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
@@ -156,6 +156,9 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  const preview=await vm.runInContext("withdrawalPost('/api/withdrawal/preview',{})",context);
  assert.equal(preview.token,'single-use');assert.equal(checks,2);
  assert.equal(requests.filter(u=>u==='/api/withdrawal/preview').length,1);
+ slowWithdrawalPolls=601;
+ assert.equal((await vm.runInContext("withdrawalPost('/api/withdrawal/preview',{})",context)).token,'single-use');
+ assert.equal(slowerPolls,2);
  eurOnly=true;await vm.runInContext('loadAnalytics()',context);
  assert.equal(get('buyVolume').textContent,'€3,600.00','EUR string rate must retain monetary totals');
  assert.equal(get('error').textContent,'','EUR-only history must not report mixed currencies');
@@ -211,7 +214,7 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  await get('customRange').handlers.click();await settle();
  const beforeCancel=get('start').value,savedCount=requests.filter(url=>url==='/api/settings/report-period').length;
  await get('editCustomRange').handlers.click();assert.equal(get('rangeDialog').open,true);get('start').value='2026-10-03T10:00:00';get('start').handlers.change();get('cancelRange').handlers.click();assert.equal(get('start').value,beforeCancel);assert.equal(requests.filter(url=>url==='/api/settings/report-period').length,savedCount);
- await get('editCustomRange').handlers.click();get('interval').value=get('interval').children[1].value;get('interval').handlers.change();assert.equal(Date.parse(get('start').value),Number(get('interval').value.split(',')[0]));
+ await get('editCustomRange').handlers.click();get('interval').value=get('interval').children[2].value;get('interval').handlers.change();assert.equal(Date.parse(get('start').value),Number(get('interval').value.split(',')[0]));
  get('start').value='2026-10-04T11:12:13';get('start').handlers.change();get('rangeForm').handlers.submit({preventDefault(){}});await settle();
  assert.equal(get('rangeDialog').open,false);assert.equal(requests.filter(url=>url==='/api/settings/report-period').length,savedCount+1);
  const customStart=get('start').value,customEnd=get('end').value;await get('monthRange').handlers.click();await settle();await get('customRange').handlers.click();await settle();assert.equal(get('start').value,customStart);assert.equal(get('end').value,customEnd);assert.equal(get('rangeDialog').open,false);await get('yearRange').handlers.click();await settle();await get('editCustomRange').handlers.click();assert.equal(get('start').value,customStart);get('cancelRange').handlers.click();assert.equal(vm.runInContext('selectedQuickRange',context),'yearRange');await get('customRange').handlers.click();await settle();
@@ -315,6 +318,12 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  await dashboardPollCallbacks.at(-1)();
  assert.equal(get('periodValue').textContent,'€3,690.00','Price changes still update the report');
  assert.equal(get('activities').children,renderedRows,'BTC spot price does not change historical activity cells');
+ assert.match(get('marketDataAge').textContent,/Market data updated/);
+ vm.runInContext('scheduleClockOffset=displayedMarketUpdatedAt*1000-Date.now()+650000;renderMarketAge()',context);
+ assert.match(get('marketDataAge').textContent,/Market data is stale.*1[01] minutes ago/);
+ scheduleMarket={...scheduleMarket,updatedAt:scheduleMarket.updatedAt+1};
+ await dashboardPollCallbacks.at(-1)();
+ assert.match(get('marketDataAge').textContent,/Market data updated/,'An identical price and rates with fresh timestamps clear the stale notice');
  const currentScheduleMarket=scheduleMarket;
  scheduleMarket={...scheduleMarket,price:'99000',updatedAt:scheduleMarket.updatedAt+2,conversionRatesUpdatedAt:{EUR:scheduleMarket.updatedAt+2,USD:scheduleMarket.updatedAt-1}};
  await dashboardPollCallbacks.at(-1)();
@@ -344,7 +353,7 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  await dashboardPollCallbacks.at(-1)();
  assert.equal(countRequests('/api/analytics'),analyticsRequests+3,'Fallback valuation does not require reloading the report');
  assert.equal(get('periodValue').textContent,'€4,095.00');
- const chosenInterval=get('interval').children[1].value;
+ const chosenInterval=get('interval').children[2].value;
  get('interval').value=chosenInterval;get('interval').handlers.change();
  const selectedStart=get('start').value,selectedEnd=get('end').value;
  vm.runInContext('currentPage=2;reportThroughNow=false',context);
@@ -366,6 +375,17 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  assert(Number(liveWithdrawalReport.searchParams.get('end'))>Date.parse(selectedEnd));
  assert.equal(get('end').value,selectedEnd);
 
+ assert.equal(get('interval').children.length,3);
+ const firstCycle=get('interval').children[1];
+ assert.match(firstCycle.textContent,/First recorded purchase/);
+ assert.deepEqual(firstCycle.value.split(',').map(Number),[withdrawalHistory[0].analysisStartTimestamp-1,withdrawalHistory[0].timestamp,withdrawalHistory[0].analysisStartTimestamp]);
+ get('interval').value=firstCycle.value;get('interval').handlers.change();
+ assert.equal(get('start').value,vm.runInContext('localInput('+withdrawalHistory[0].analysisStartTimestamp+')',context));
+ get('rangeForm').handlers.submit({preventDefault(){}});await settle();
+ const firstCycleReport=new URL(requests.filter(url=>url.startsWith('/api/analytics?')).at(-1),'https://example.test');
+ assert.equal(Number(firstCycleReport.searchParams.get('start')),withdrawalHistory[0].analysisStartTimestamp-1);
+ assert.equal(Number(firstCycleReport.searchParams.get('end')),withdrawalHistory[0].timestamp);
+
  console.log('Dashboard regressions passed: interval dates, server pages, mixed-currency rows/totals and queued preview polling');
 })().catch(e=>{console.error(e);process.exit(1)});
 
@@ -383,6 +403,8 @@ assert.match(vm.runInContext("money(1234.5,'EUR')",germanContext),/1\.234,50/);
 assert.equal(vm.runInContext("btc('.00006')",germanContext),'0,00006 BTC');
 assert.equal(vm.runInContext('activityRows[0].type',germanContext),'Buy');
 assert.equal(vm.runInContext('activityRows[0].currency',germanContext),'EUR');
+vm.runInContext('displayedMarketUpdatedAt=Date.now()/1000-700;renderMarketAge()',germanContext);
+assert.match(germanElements.marketDataAge.textContent,/Marktdaten sind veraltet.*vor 11 Minuten/);
 console.log('German dashboard passed: labels, pagination, numbers and stable ledger values');
 
 
