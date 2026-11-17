@@ -28,7 +28,7 @@ def match_kraken_withdrawal(api, pending: dict, context: dict) -> dict | None:
     key = pending.get("key")
     if type(submitted) is not int or submitted <= 0 or not isinstance(key, str) or not key:
         return None
-    # Kraken reports creation times at whole-second precision. Legacy state saved only the start.
+    # Query the first second, but only match timestamps at or after the saved submission.
     start = submitted // 1000 * 1000
     end = context.get("kraken_recovery_until_ms", submitted + KRAKEN_WITHDRAWAL_WINDOW_MS)
     if type(end) is not int or not submitted <= end <= submitted + KRAKEN_WITHDRAWAL_WINDOW_MS:
@@ -46,7 +46,7 @@ def match_kraken_withdrawal(api, pending: dict, context: dict) -> dict | None:
     matches = []
     for row in rows:
         timestamp = row.get("timestamp")
-        if type(timestamp) is int and timestamp > 0 and not start <= timestamp <= end:
+        if type(timestamp) is int and timestamp > 0 and not submitted <= timestamp <= end:
             continue
         if row.get("symbol") not in (None, "", "BTC") or row.get("key") not in (None, "", key):
             continue
@@ -61,7 +61,7 @@ def match_kraken_withdrawal(api, pending: dict, context: dict) -> dict | None:
             continue
         if (
             type(timestamp) is not int
-            or not start <= timestamp <= end
+            or not submitted <= timestamp <= end
             or row.get("symbol") != "BTC"
             or row.get("key") != key
             or not isinstance(row.get("id"), str)
