@@ -35,6 +35,10 @@ class AttemptLimiter:
             self.attempts.pop(key, None)
 
 
+class SessionExpiredError(PermissionError):
+    """The dashboard session was revoked before the operation began."""
+
+
 class PasswordConfirmationError(ValueError):
     def __init__(self, message: str, retry_after: int = 0) -> None:
         super().__init__(message)
