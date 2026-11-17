@@ -210,7 +210,7 @@ def recover_restore(directory):
         or any(type(value) is not bool for value in manifest.values())
     ):
         raise ValueError("Invalid restore recovery journal; transactions remain blocked.")
-    with activity._ACTIVITY_LOCK:
+    with activity._REPORT_LOCK, activity._ACTIVITY_LOCK:
         for name, existed in manifest.items():
             target = directory / name
             if existed:
@@ -239,15 +239,21 @@ class Backups:
             raise ValueError("Invalid backup scope.")
         with activity._ACTIVITY_LOCK, tempfile.TemporaryDirectory(dir=self.directory, prefix=".backup-") as tmp:
             data = {}
+            remaining = MAX_BYTES
             if "activity.sqlite3" in SCOPES[scope]:
                 with activity._db():
                     pass
                 database = Path(tmp) / "activity.sqlite3"
                 sqlite_snapshot(self.directory / "activity.sqlite3", database)
+                remaining -= database.stat().st_size
+                if remaining < 0:
+                    raise ValueError("Backup exceeds the 32 MiB limit.")
                 data["activity.sqlite3"] = database.read_bytes()
             if scope != "activity":
                 for name in SCOPES[scope] - {"activity.sqlite3"}:
                     path = self.directory / name
+                    if path.exists() and path.stat().st_size > remaining:
+                        raise ValueError("Backup exceeds the 32 MiB limit.")
                     data[name] = (
                         path.read_bytes()
                         if path.exists()
@@ -261,6 +267,7 @@ class Backups:
                             else {}
                         ).encode()
                     )
+                    remaining -= len(data[name])
             manifest = {
                 "version": 1,
                 "scope": scope,
@@ -272,6 +279,8 @@ class Backups:
                 archive.writestr("manifest.json", json.dumps(manifest))
                 for name, value in data.items():
                     archive.writestr(name, value)
+            if output.tell() > MAX_BYTES:
+                raise ValueError("Backup exceeds the 32 MiB limit.")
             encrypted = encrypt(output.getvalue(), password)
             suffix = "activities" if scope == "activity" else scope
             filename = "bitcoin-dca-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ") + "-" + suffix + ".dcabackup"
@@ -289,7 +298,11 @@ class Backups:
         if not required <= data.keys():
             raise ValueError("Backup does not contain the selected restore scope.")
         restore_files = SCOPES[scope] & data.keys()
-        with activity._ACTIVITY_LOCK, tempfile.TemporaryDirectory(dir=self.directory, prefix=".restore-") as tmp:
+        with (
+            activity._REPORT_LOCK,
+            activity._ACTIVITY_LOCK,
+            tempfile.TemporaryDirectory(dir=self.directory, prefix=".restore-") as tmp,
+        ):
             recover_restore(self.directory)
             if (self.directory / COMPLETED).exists():
                 raise ValueError("Previous restore cleanup could not finish; check persistent storage.")
