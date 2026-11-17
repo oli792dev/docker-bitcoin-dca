@@ -19,6 +19,8 @@ from app.data.storage import installation_started_at, write_json_atomic
 
 LOG = logging.getLogger("bitcoin-dca.settings")
 CONFIG_PATH = Path("/webui-data/config.json")
+PASSWORD_SALT_BYTES = 16
+PASSWORD_DIGEST_BYTES = 64
 
 SECRET_FIELDS = tuple(f"{exchange}_api_{part}" for exchange in ("kraken", "bitvavo") for part in ("key", "secret"))
 DEFAULTS = dict(
@@ -57,15 +59,18 @@ class ConfigurationError(ValueError):
 
 
 def password_hash(password):
-    salt = secrets.token_bytes(16)
-    digest = hashlib.scrypt(password.encode(), salt=salt, n=16384, r=8, p=1)
+    salt = secrets.token_bytes(PASSWORD_SALT_BYTES)
+    digest = hashlib.scrypt(password.encode(), salt=salt, n=16384, r=8, p=1, dklen=PASSWORD_DIGEST_BYTES)
     return base64.b64encode(salt + digest).decode()
 
 
 def password_matches(password, encoded):
     try:
         raw = base64.b64decode(encoded, validate=True)
-        return hmac.compare_digest(hashlib.scrypt(password.encode(), salt=raw[:16], n=16384, r=8, p=1), raw[16:])
+        digest = hashlib.scrypt(
+            password.encode(), salt=raw[:PASSWORD_SALT_BYTES], n=16384, r=8, p=1, dklen=PASSWORD_DIGEST_BYTES
+        )
+        return hmac.compare_digest(digest, raw[PASSWORD_SALT_BYTES:])
     except (ValueError, TypeError, AttributeError):
         return False
 
@@ -76,6 +81,23 @@ def account_values(username, password):
     if not isinstance(password, str) or not 12 <= len(password) <= 1024:
         raise ConfigurationError("Password must contain 12–1024 characters.", "password")
     return dict(username=username.strip(), password_hash=password_hash(password))
+
+
+def validate_restored_account(account):
+    """Require credentials in the format written by account setup and settings."""
+    try:
+        username = account.get("username") if isinstance(account, dict) else None
+        if not isinstance(username, str) or username != username.strip() or not 3 <= len(username) <= 64:
+            raise ValueError
+        username.encode()
+        encoded = account.get("password_hash")
+        if not isinstance(encoded, str):
+            raise ValueError
+        size = PASSWORD_SALT_BYTES + PASSWORD_DIGEST_BYTES
+        if len(encoded) != 4 * ((size + 2) // 3) or len(base64.b64decode(encoded, validate=True)) != size:
+            raise ValueError
+    except ValueError:
+        raise ValueError("Invalid backup login credentials.") from None
 
 
 def validate(values, previous=None, require_credentials=True):
