@@ -126,3 +126,110 @@ class WorkerErrorTests(TestCase):
                 self.assertEqual(result['state'],'failed')
                 if isinstance(error,ValueError):self.assertEqual(result['error'],'Action unavailable')
                 else:self.assertNotIn('private',result['error'])
+
+
+class WorkerJobRetentionTests(TestCase):
+    def test_active_jobs_remain_visible_and_terminal_jobs_expire_from_finish(self):
+        for error in (None, ValueError("Action unavailable")):
+            with self.subTest(error=error):
+                self._check_terminal_retention(error)
+
+    def _check_terminal_retention(self, error):
+        clock = Mock(return_value=100)
+        account = worker.Worker(Mock(return_value=300), Mock(), 300)
+        account.running = True
+
+        with patch.object(worker.time, "monotonic", clock), patch.object(worker, "write_json_atomic"):
+            active = account.submit("preview", "owner")["jobId"]
+            queued = account.submit("confirm", "owner", "token")["jobId"]
+            clock.return_value = 1100
+            self.assertEqual(account.get_job(active, "owner"), {"state": "queued"})
+            with self.assertRaises(ValueError):
+                account.get_job(active, "different-session")
+
+            def action(*args):
+                account.stop.set()
+                clock.return_value = 2100
+                self.assertEqual(account.get_job(active, "owner"), {"state": "running"})
+                self.assertEqual(account.get_job(queued, "owner"), {"state": "queued"})
+                with self.assertRaises(ValueError):
+                    account.get_job(active, "different-session")
+                if error:
+                    raise error
+                return {"ok": True}
+
+            account.action.side_effect = action
+            account.run()
+
+            clock.return_value = 2999
+            expected = (
+                {"state": "failed", "error": str(error)}
+                if error
+                else {"state": "completed", "result": {"ok": True}}
+            )
+            self.assertEqual(account.get_job(active, "owner"), expected)
+            self.assertEqual(account.get_job(queued, "owner")["state"], "failed")
+            clock.return_value = 3000
+            for job_id in (active, queued):
+                with self.assertRaises(ValueError):
+                    account.get_job(job_id, "owner")
+
+    def test_active_jobs_keep_their_queue_slots_and_expired_jobs_free_capacity(self):
+        clock = Mock(return_value=100)
+        account = worker.Worker(Mock(return_value=300), Mock(return_value={}), 100_000)
+        account.running = True
+
+        with patch.object(worker.time, "monotonic", clock), patch.object(worker, "write_json_atomic"):
+            first = account.submit("preview", "owner")["jobId"]
+            for _ in range(15):
+                account.submit("preview", "owner")
+            clock.return_value = 1100
+            with self.assertRaisesRegex(ValueError, "busy"):
+                account.submit("preview", "owner")
+            self.assertEqual(len(account.jobs), 16)
+            self.assertEqual(account.get_job(first, "owner"), {"state": "queued"})
+
+            admitted_after_expiry = []
+
+            def fill_job_history(*args):
+                if len(account.jobs) < 128:
+                    account.submit("preview", "owner")
+                else:
+                    try:
+                        with self.assertRaisesRegex(ValueError, "Too many"):
+                            account.submit("preview", "owner")
+                        clock.return_value += 900
+                        admitted_after_expiry.append(account.submit("preview", "owner"))
+                    finally:
+                        account.stop.set()
+                return {}
+
+            account.action.side_effect = fill_job_history
+            account.run()
+            self.assertEqual(len(admitted_after_expiry), 1)
+            self.assertEqual(account.queue.unfinished_tasks, 0)
+
+    def test_job_dequeued_during_shutdown_expires_from_cancellation(self):
+        clock = Mock(return_value=100)
+        account = worker.Worker(Mock(return_value=300), Mock(), 300)
+        account.running = True
+        get = account.queue.get
+
+        def stop_on_get(*args, **kwargs):
+            account.stop.set()
+            return get(*args, **kwargs)
+
+        with (
+            patch.object(worker.time, "monotonic", clock),
+            patch.object(worker, "write_json_atomic"),
+            patch.object(account.queue, "get", side_effect=stop_on_get),
+        ):
+            job_id = account.submit("preview", "owner")["jobId"]
+            clock.return_value = 1100
+            account.run()
+            account.action.assert_not_called()
+            self.assertEqual(account.get_job(job_id, "owner")["state"], "failed")
+            self.assertEqual(account.queue.unfinished_tasks, 0)
+            clock.return_value = 2000
+            with self.assertRaises(ValueError):
+                account.get_job(job_id, "owner")
