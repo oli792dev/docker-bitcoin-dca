@@ -102,6 +102,52 @@ class MonthlyForecastTests(unittest.TestCase):
         self.assertEqual(self.snapshot,snapshot)
         self.assertIsNone(forecast_details(settings,{}))
 
+    def test_schedule_projects_withdrawal_date_and_details_together(self):
+        from app.trading import forecast
+
+        handler = object.__new__(web_ui.Handler)
+        handler.path = "/api/schedule"
+        handler.settings = {
+            **self.settings,
+            "quote": "EUR",
+            "exchange": "KRAKEN",
+            "expected_monthly_deposit": "202",
+        }
+        handler._require_authentication = lambda: True
+        handler._json = Mock()
+        snapshot = {**self.snapshot, "quote": "EUR", "exchange": "KRAKEN"}
+        cases = (
+            ({}, forecast.DESCRIPTION, "2026-11-16T00:00:00+00:00", 4, 1),
+            ({"btcBalance": ".005"}, "Threshold reached", self.now.isoformat(), 0, 0),
+            (
+                {"withdrawalForecastPlan": None},
+                "Waiting for account price and order minimums",
+                None,
+                None,
+                0,
+            ),
+            ({"price": "invalid"}, "Forecast unavailable: invalid account or order data", None, None, 0),
+        )
+        for fields, message, target, purchases, projection_calls in cases:
+            with (
+                self.subTest(message=message),
+                patch.object(web_ui, "read_dashboard_snapshot", return_value={**snapshot, **fields}),
+                patch.object(web_ui, "datetime", wraps=datetime) as clock,
+                patch.object(forecast, "_project_forecast", wraps=forecast._project_forecast) as project,
+            ):
+                clock.now.return_value = self.now
+                handler.do_GET()
+
+                status, body = handler._json.call_args.args
+                self.assertEqual(status, 200)
+                self.assertEqual(body["estimatedWithdrawalAt"], target)
+                self.assertTrue(body["estimatedWithdrawalStatus"].startswith(message))
+                if purchases is None:
+                    self.assertIsNone(body["forecastDetails"])
+                else:
+                    self.assertEqual(body["forecastDetails"]["remainingPurchases"], purchases)
+                self.assertEqual(project.call_count, projection_calls)
+
     def test_no_assumed_funding_means_no_date_beyond_budget(self):
         self.assertIsNone(withdrawal_forecast(self.settings,self.snapshot,"0",self.now)[0])
     def test_existing_balance_and_funded_purchases(self):
@@ -141,6 +187,32 @@ class ScheduleBalanceTests(unittest.TestCase):
         status,body=handler._json.call_args.args
         self.assertEqual(status,200)
         return body
+
+    def test_unreadable_pause_controls_keep_account_data_and_show_trading_block(self):
+        from types import SimpleNamespace
+
+        handler = object.__new__(web_ui.Handler)
+        handler.path = "/api/schedule"
+        handler._require_authentication = lambda: True
+        handler._json = Mock()
+        handler.runtime = SimpleNamespace(
+            controls=SimpleNamespace(snapshot=Mock(side_effect=OSError("private path"))),
+            exchange_check_pending=False, recovery_required=False,
+            store=SimpleNamespace(snapshot=lambda: {"settings": DEFAULTS}),
+        )
+        snapshot = {"exchange": "KRAKEN", "quote": "EUR", "quoteBalance": "25",
+                    "nextPurchaseAt": "2026-11-20T00:00:00Z"}
+        with patch.object(web_ui, "read_dashboard_snapshot", return_value=snapshot):
+            handler.do_GET()
+        status, result = handler._json.call_args.args
+        self.assertEqual(status, 200)
+        self.assertTrue(result["pauseUnavailable"])
+        self.assertTrue(result["pause"]["paused"])
+        self.assertEqual(result["botStatusTone"], "error")
+        self.assertEqual(result["quoteBalance"], "25")
+        self.assertIsNone(result["nextPurchaseAt"])
+        self.assertIn("controls", result["botStatusLabel"])
+        self.assertNotIn("private path", str(result))
 
     def test_startup_delay_is_shown_before_the_exchange_check(self):
         from types import SimpleNamespace
