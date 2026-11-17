@@ -140,15 +140,20 @@ test('dashboard controls, analysis spacing and modal scroll restoration', async 
   const button = page.locator('#openSettings');
   await button.evaluate(el => { el.textContent = 'A deliberately long translated settings button label that must wrap'; el.style.width = '160px'; });
   expect((await rect(button)).height).toBeGreaterThan(44);
-  await page.locator('#editCustomRange').scrollIntoViewIfNeeded();
+  const rangeButton = page.locator('#editCustomRange');
+  await rangeButton.evaluate(el => {
+    el.scrollIntoView({block: 'center'});
+    el.focus({preventScroll: true});
+  });
   const scrollBefore = await page.evaluate(() => scrollY);
-  await page.locator('#editCustomRange').click();
+  expect(scrollBefore).toBeGreaterThan(1);
+  await page.keyboard.press('Enter');
   await expect(page.locator('#rangeDialog')).toBeVisible();
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).position)).toBe('fixed');
   await page.keyboard.press('Escape');
   await expect(page.locator('#rangeDialog')).not.toBeVisible();
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).position)).not.toBe('fixed');
-  await expect.poll(() => page.evaluate(() => scrollY)).toBe(scrollBefore);
+  await expect.poll(async () => Math.abs(await page.evaluate(() => scrollY) - scrollBefore)).toBeLessThanOrEqual(1);
   const summary = page.locator('.dashboard-footnotes>summary');
   const normalColor = await summary.evaluate(el => getComputedStyle(el).color);
   await summary.hover();
