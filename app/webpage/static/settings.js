@@ -198,7 +198,7 @@ function updatePauseDependency(){
  $('pauseTransactions').disabled=!live||!pauseState.known||pauseState.recovery;
  $('pauseCard').classList.toggle('setting-inactive',!live);
  $('pauseHint').textContent=t(live?'Exchange transactions are paused. Account checks continue.':'Enable live trading to pause transactions.');
- $('pauseStatus').textContent=t(pauseState.recovery?'Restore recovery required; restart container':!pauseState.known?'Connection unavailable':'');
+ $('pauseStatus').textContent=t(pauseState.recovery?'Restore recovery required; restart container':!pauseState.known?'Transaction controls unavailable; trading is blocked':'');
 }
 function updateDependencies(){
  updatePauseDependency();
@@ -278,7 +278,7 @@ function backupFieldError(field,text,restore=false){
 }
 function clearBackupErrors(){for(const field of ['backupPassword','backupLoginPassword','restorePassword','restoreLoginPassword','restoreFile'])backupFieldError(field,'')}
 for(const field of ['backupPassword','backupLoginPassword','restorePassword','restoreLoginPassword'])$(field)?.addEventListener('input',()=>backupFieldError(field,''));
-function backupCredentials(restore=false){return {scope:$('backupScope').value,password:$(restore?'restorePassword':'backupPassword').value,current_password:$(restore?'restoreLoginPassword':'backupLoginPassword').value}}
+function backupCredentials(restore=false){return {scope:$(restore?'restoreScope':'backupScope').value,password:$(restore?'restorePassword':'backupPassword').value,current_password:$(restore?'restoreLoginPassword':'backupLoginPassword').value}}
 $('createBackup')?.addEventListener('click',async()=>{
  clearBackupErrors();const credentials=backupCredentials();
  if(!credentials.current_password){backupFieldError('backupLoginPassword','Enter your current dashboard password.');return}
@@ -295,13 +295,18 @@ $('restoreFile')?.addEventListener('change',()=>{
  const tooLarge=!!file&&file.size>32*1024*1024+128;
  $('restoreBackup').disabled=!file||tooLarge;backupFieldError('restoreFile',tooLarge?'Backup file is too large.':'');
 });
+const restoreEffects={
+ full:'Restores settings, login, financial state and reporting preferences, and merges Activity. Sign in again with the login saved in the backup.',
+ activity:'Adds Activity records and retains existing entries. Sign in again with your current dashboard login.',
+ config:'Replaces settings, login, reporting preferences and pause status. Sign in again with the login saved in the backup.'
+};
 $('restoreBackup')?.addEventListener('click',async()=>{
  clearBackupErrors();const file=$('restoreFile').files[0];if(!file)return;
- const credentials=backupCredentials(true),scopeLabel=$('backupScope').selectedOptions[0].textContent;
+ const credentials=backupCredentials(true),scopeLabel=$('restoreScope').selectedOptions[0].textContent;
  if(!credentials.current_password){backupFieldError('restoreLoginPassword','Enter your current dashboard password.');$('restoreLoginPassword').focus();return}
  if(credentials.password.length<12){backupFieldError('restorePassword','Backup password must contain 12–1024 characters.');$('restorePassword').focus();return}
  if(file.size>32*1024*1024+128){backupFieldError('restoreFile','Backup file is too large.');return}
- try{restorePayload={...credentials,archive:await readBackupFile(file)};restoreFilename=file.name;$('restoreScopeName').textContent=scopeLabel;$('restoreReviewFilename').textContent=file.name;$('backupReview').showModal()}
+ try{restorePayload={...credentials,archive:await readBackupFile(file)};restoreFilename=file.name;$('restoreScopeName').textContent=scopeLabel;$('restoreReviewFilename').textContent=file.name;$('restoreScopeEffect').textContent=t(restoreEffects[credentials.scope]);$('backupReview').showModal()}
  catch(error){backupFieldError('restoreFile',error.message)}
 });
 $('cancelBackupRestore')?.addEventListener('click',()=>{restorePayload=null;restoreFilename='';$('backupReview').close()});
