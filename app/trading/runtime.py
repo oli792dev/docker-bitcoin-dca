@@ -8,13 +8,18 @@ from pathlib import Path
 
 from app.core.configuration import ConfigStore, ConfigurationError, account_values, runtime_settings, validate
 from app.core.purchase_status import PurchaseStatus
-from app.core.security import AttemptLimiter, PasswordConfirmationError
+from app.core.security import AttemptLimiter, PasswordConfirmationError, SessionExpiredError
 from app.data.storage import STATE_PATH
 from app.exchanges.exchange import create_exchange
 from app.trading.identity import account_identity
 
 LOG = logging.getLogger("bitcoin-dca.settings")
 IDENTITY_FIELDS = ("exchange", "quote", "kraken_api_key", "kraken_api_secret", "bitvavo_api_key", "bitvavo_api_secret")
+
+
+def _check_session(authorize):
+    if authorize is not None and not authorize():
+        raise SessionExpiredError("Your session expired. Sign in again.")
 
 
 class Runtime:
@@ -239,11 +244,13 @@ class Runtime:
                 self.service = manual_withdrawal_service(self.api, self.settings)
             return self.service(action, session, token)
 
-    def save(self, payload):
+    def save(self, payload, *, authorize=None):
         with self.lock, self.store.lock:
+            _check_session(authorize)
             if self.worker.stop.is_set():
                 raise ValueError("Container is stopping; settings were not changed.")
             self._recover_configuration()
+            _check_session(authorize)
             if not isinstance(payload, dict) or set(payload) - {
                 "settings",
                 "username",
@@ -414,11 +421,12 @@ class Runtime:
             )
             return account_changed
 
-    def save_forecast_deposit(self, payload):
+    def save_forecast_deposit(self, payload, *, authorize=None):
         """Persist a reporting assumption without touching the exchange worker."""
         if not isinstance(payload, dict) or set(payload) != {"monthlyDeposit"}:
             raise ValueError("Invalid monthly deposit request.")
         with self.store.lock:
+            _check_session(authorize)
             if self._configuration_uncertain or self.worker.stop.is_set():
                 raise ValueError("Settings are being verified or the container is stopping; try again later.")
             previous = self.store.snapshot()
@@ -436,20 +444,23 @@ class Runtime:
                 )
             return {"monthlyDeposit": amount}
 
-    def save_report_from(self, payload):
+    def save_report_from(self, payload, *, authorize=None):
         if not isinstance(payload, dict) or set(payload) != {"from"}:
             raise ValueError("Invalid report start request.")
         if self.worker.stop.is_set():
             raise ValueError("Container is stopping; try again later.")
-        value = self.store.save_report_from(payload["from"])
+        with self.store.lock:
+            _check_session(authorize)
+            value = self.store.save_report_from(payload["from"])
         LOG.info("Period Analysis start date saved: from=%s; purchase schedule unchanged", value)
         return {"from": value}
 
-    def test_connection(self, payload):
+    def test_connection(self, payload, *, authorize=None):
         # Read-only and serialized so a connection test cannot race a financial action.
         if not self.lock.acquire(blocking=False):
             raise ValueError("The exchange account is busy. Try the connection test again shortly.")
         try:
+            _check_session(authorize)
             if self.worker.stop.is_set():
                 raise ValueError("Container is stopping; connection test was not started.")
             values = validate(payload, self.store.snapshot()["settings"])
@@ -480,11 +491,12 @@ class Runtime:
         finally:
             self.lock.release()
 
-    def set_pause(self, payload):
+    def set_pause(self, payload, *, authorize=None):
         """Serialize pause changes with financial actions, retaining the schedule."""
         if not isinstance(payload, dict) or set(payload) - {"paused", "until"}:
             raise ValueError("Invalid pause request.")
         with self.lock:
+            _check_session(authorize)
             if self.state_path.with_name(".restore-journal").exists():
                 raise ValueError("Restore recovery is required; restart the container before resuming.")
             if payload.get("paused") is True and not self.settings.get("live", False):
@@ -511,7 +523,7 @@ class Runtime:
             if retry:
                 raise PasswordConfirmationError("Too many password confirmation attempts. Try again later.", retry)
 
-    def backup(self, payload, restore=False, setup=False, *, setup_attempt_reserved=False):
+    def backup(self, payload, restore=False, setup=False, *, setup_attempt_reserved=False, authorize=None):
         """Reauthenticate, or allow initial restore only before an account or history exists."""
         import base64
 
@@ -529,6 +541,7 @@ class Runtime:
         if not isinstance(payload, dict) or set(payload) != allowed or setup and not restore:
             raise ValueError("Invalid backup request.")
         with self.lock, self.store.lock:
+            _check_session(authorize)
             saved = self.store.snapshot()
             account = saved["account"]
             if setup:
