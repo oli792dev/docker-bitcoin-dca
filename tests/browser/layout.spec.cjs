@@ -29,6 +29,20 @@ async function noPageOverflow(page) {
 }
 async function rect(locator) { return locator.boundingBox(); }
 
+test('the three dashboard balance amounts have the same font size', async ({page}) => {
+  await page.route('**/api/schedule', route => route.fulfill({
+    json: {quote: 'EUR', quoteBalance: 134.08, btcBalance: .00715, dashboardRefreshSeconds: 3600},
+  }));
+  await page.goto('/');
+  await expect(page.locator('#quoteBalance')).toContainText('134.08');
+  await expect(page.locator('#exchangeBtcBalance')).toContainText('0.00715');
+  await expect(page.locator('#spot')).toContainText('60,000.00');
+  const sizes = await page.locator('#quoteBalance, #exchangeBtcBalance, #spot')
+    .evaluateAll(amounts => amounts.map(amount => getComputedStyle(amount).fontSize));
+  expect(sizes).toEqual([sizes[0], sizes[0], sizes[0]]);
+  await noPageOverflow(page);
+});
+
 test('initial setup restores a login backup before creating an account', async ({page}) => {
   let restored=false;
   await page.route('**/api/setup/restore',route=>{
@@ -152,13 +166,16 @@ test('dashboard controls, analysis spacing and modal scroll restoration', async 
 
 });
 
-test('settings tabs stay single line and fields scroll within the content', async ({page,isMobile}) => {
+test('settings tabs stay visible and fields scroll within the content', async ({page,isMobile}) => {
   await page.goto('/settings');
   await expect(page.locator('#settingsForm')).toBeVisible();
   await noPageOverflow(page);
   const tabs = page.getByRole('tab');
+  expect(await tabs.evaluateAll(items => items.every(item => {
+    const box = item.getBoundingClientRect(), bar = item.parentElement.getBoundingClientRect();
+    return box.left >= bar.left && box.right <= bar.right;
+  }))).toBe(true);
   for (const tab of await tabs.all()) {
-    expect(await tab.evaluate(el => getComputedStyle(el).whiteSpace)).toBe('nowrap');
     expect((await rect(tab)).height).toBeGreaterThanOrEqual(44);
   }
   await page.emulateMedia({colorScheme: 'dark'});
@@ -441,7 +458,9 @@ test('purchase explanation explains the saved schedule in prose',async({page})=>
 
 test('successful restore reloads login with a one-time safe backup filename',async({page})=>{
  let restored=false;
- await page.route('**/api/settings/restore',route=>{const payload=route.request().postDataJSON();expect(payload.scope).toBe('config');expect(payload.password).toBe('archive-backup-password');if(payload.current_password!=='current-dashboard-password')return route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:'Your current password is incorrect.',field:'backupLoginPassword'})});restored=true;return route.fulfill({contentType:'application/json',body:JSON.stringify({restored:true,signInRequired:true})})});
+ let releaseRestore;
+ const pending = new Promise(resolve => { releaseRestore = resolve; });
+ await page.route('**/api/settings/restore',async route=>{const payload=route.request().postDataJSON();expect(payload.scope).toBe('config');expect(payload.password).toBe('archive-backup-password');if(payload.current_password!=='current-dashboard-password')return route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:'Your current password is incorrect.',field:'backupLoginPassword'})});await pending;restored=true;return route.fulfill({contentType:'application/json',body:JSON.stringify({restored:true,signInRequired:true})})});
  await page.route('https://dca.test/',route=>restored?route.fulfill({contentType:'text/html',body:pages['/login']}):route.fallback());
  await page.goto('/');await page.locator('#openSettings').click();
  const frame=page.frameLocator('#settingsFrame');await frame.getByRole('tab',{name:'Backup',exact:true}).click();
@@ -457,6 +476,12 @@ test('successful restore reloads login with a one-time safe backup filename',asy
  await frame.locator('#restoreLoginPassword').fill('current-dashboard-password');
  await frame.locator('#restorePassword').fill('archive-backup-password');
  await frame.locator('#restoreBackup').click();await frame.locator('#confirmBackupRestore').click();
+ await expect(frame.getByRole('status').filter({hasText: 'Restoring backup…'})).toBeVisible();
+ await expect(frame.locator('#cancelBackupRestore')).toBeDisabled();
+ await expect(page.locator('#closeSettings')).toBeDisabled();
+ await frame.locator('#backupReview').press('Escape');
+ await expect(frame.locator('#backupReview')).toBeVisible();
+ releaseRestore();
  await expect(page.locator('#restoreSuccess')).toBeVisible();
  await expect(page.locator('#restoreSuccess')).toContainText('Backup restored successfully.');
  await expect(page.locator('#restoredBackupName')).toHaveText('<b>my-backup</b>.dcabackup');
@@ -551,13 +576,14 @@ test('purchase amount and disclosure stay in place when toggled',async({page})=>
  closed.forEach((position,index)=>expect(position).toBeCloseTo(before[index],0));
 });
 
-test('planning cards share collapsed height and expand independently',async({page})=>{
+test('planning cards align side by side and the mobile disabled card stays compact',async({page,isMobile})=>{
  await page.goto('/');
  await expect(page.locator('#investedTotal')).toContainText('501');
  const check=async()=>{
    const purchase=await rect(page.locator('.plan-card').first());
    const withdrawal=await rect(page.locator('#automaticWithdrawalCard'));
-   expect(purchase.height).toBeCloseTo(withdrawal.height,0);
+   if(isMobile)expect(withdrawal.height).toBeLessThan(purchase.height);
+   else expect(purchase.height).toBeCloseTo(withdrawal.height,0);
  };
  await check();
  const beforePurchase=await rect(page.locator('.plan-card').first());
@@ -598,7 +624,17 @@ test('financial failures replace active status and misleading withdrawal countdo
 test('disabled withdrawals explain the next step with quiet dashboard typography', async ({page})=>{
   await page.goto('/');
   await expect(page.locator('#withdrawalDisabledHint')).toBeVisible();
-  await expect(page.locator('#withdrawalDisabledHint')).toHaveText('Enable automatic withdrawals in Settings');
+  await page.locator('#openSettings').click();
+  await expect(page.locator('#closeSettings')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#settingsDialog')).toBeHidden();
+  await page.evaluate(() => localStorage.setItem('bitcoinDcaSettingsTab', 'backupOptions'));
+  await page.getByRole('link', {name: 'Enable automatic withdrawals in Settings'}).click();
+  const withdrawalSwitch = page.frameLocator('#settingsFrame').getByRole('switch', {name: 'Automatic withdrawals'});
+  await expect(withdrawalSwitch).toBeFocused();
+  await expect(withdrawalSwitch).not.toBeChecked();
+  await page.locator('#closeSettings').click();
+  await expect(page.locator('#settingsDialog')).toBeHidden();
   await expect(page.locator('.report-primary')).toContainText('BTC purchased');
   await expect(page.locator('.report-primary')).toContainText('Purchases');
   expect(await page.locator('.dashboard-brand h1').evaluate(element=>getComputedStyle(element).fontWeight)).toBe('600');

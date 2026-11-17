@@ -323,8 +323,7 @@ __DESIGN_CSS__
 .redesigned .top-actions{flex:1 0 100%;justify-content:space-between;}
 .redesigned .bot-status{max-width:none;}
 .redesigned .balance-overview>.metric:last-child{grid-column:1/-1;border-top:1px solid var(--line);padding-top:var(--space-lg);}
-.redesigned .balance-overview>.metric:last-child .value{font-size:1.2rem;}
-.redesigned .planning-overview{grid-template-columns:1fr;}
+.redesigned .planning-overview{grid-template-columns:1fr;grid-auto-rows:auto;}
 .redesigned .plan-card>.value{font-size:1.3rem;}
 .redesigned .analysis-header button{font-size:.82rem;}
 .redesigned .controls{grid-template-columns:1fr;}
@@ -350,9 +349,8 @@ __DESIGN_CSS__
 .redesigned .settings-header-actions .logout-button{padding:8px 10px;font-size:.76rem;}
 }
 .redesigned .plan-card.withdrawal-disabled{background:var(--panel);border-color:transparent;}
-.redesigned .withdrawal-disabled .plan-title h2,.redesigned .withdrawal-disabled>#estimatedWithdrawalAt{color:var(--muted);}
-.redesigned .withdrawal-disabled>#estimatedWithdrawalAt{font-size:1.1rem;font-weight:500;}
-.redesigned .withdrawal-disabled>:not(.plan-title):not(#estimatedWithdrawalAt):not(#withdrawalDisabledHint),.redesigned .withdrawal-disabled #withdrawalBadge{display:none!important;}
+.redesigned .withdrawal-disabled .plan-title h2{color:var(--muted);}
+.redesigned .withdrawal-disabled>:not(.plan-title):not(#withdrawalDisabledHint),.redesigned .withdrawal-disabled #withdrawalBadge{display:none!important;}
 .report-range-dialog{width:min(620px,calc(100vw - 32px));}
 .report-range-dialog .controls{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:var(--space-lg);gap:var(--space-lg);}
 .report-range-dialog .controls .field:first-child{grid-column:1/-1;}
@@ -368,7 +366,6 @@ __DESIGN_CSS__
 .redesigned .withdrawal-disabled .plan-title{margin-bottom:0;}
 .redesigned #withdrawalDisabledHint{margin:var(--dashboard-caption-gap) 0 0;font-size:.82rem;line-height:1.5;color:var(--muted);}
 
-.redesigned .withdrawal-disabled #estimatedWithdrawalAt{display:none!important;}
 /* Supplemental details stay within their section, without divider bars. */
 .redesigned .dashboard-footnotes>ol{padding-top:0;}
 @media (pointer:coarse){
@@ -400,7 +397,7 @@ __DESIGN_CSS__
 
 /* Quiet surfaces and a deliberate hierarchy for financial data. */
 .redesigned .metric>.value{font-weight:600;letter-spacing:-.035em;line-height:1.22;}
-.redesigned .balance-overview>.metric:first-child>.value{font-size:clamp(1.65rem,3vw,2.2rem);}
+.redesigned .balance-overview>.metric>.value{font-size:clamp(1.45rem,3vw,1.9rem);}
 .redesigned .value-unit{font-size:.62em;font-weight:500;letter-spacing:0;color:var(--muted);white-space:nowrap;}
 .redesigned .metric-label{font-weight:500;}
 .redesigned .plan-title h2{font-weight:600;letter-spacing:-.015em;}

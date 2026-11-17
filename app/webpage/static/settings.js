@@ -88,10 +88,11 @@ $('accountPanel').hidden=!initial.createAccount;$('settingsForm').hidden=initial
 const showCredentials=Boolean($('dashboardCredentials'));if(showCredentials)$('username').value=initial.username||'';if(!initial.complete){$('pageHeading').textContent=t('2. Configure your bot');$('back').hidden=true}
 if(initial.embedded){
  document.body.classList.add('embedded');$('settingsNavigationHeading').hidden=true;$('back').hidden=true;$('pageHeading').hidden=true;
- document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('review').open&&!$('discardDialog').open){event.preventDefault();requestSettingsClose()}});
+ document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('review').open&&!$('discardDialog').open&&!$('backupReview').open){event.preventDefault();requestSettingsClose()}});
 }
 const settingsTabDefinitions=[['botConfiguration','Bot Configuration'],['exchangeConnection','Exchange'],['dashboardOptions','Dashboard'],['backupOptions','Backup']];
 const settingsTabs=[];
+const focusWithdrawals=initial.complete&&location.hash==='#withdrawals_enabled';
 function activateSettingsTab(id,focus=false){
  if($('settingsContent'))$('settingsContent').scrollTop=0;
  if(initial.createAccount)return;
@@ -110,7 +111,8 @@ if(!initial.createAccount){
  }
  let rememberedTab='botConfiguration';
  try{const saved=localStorage.getItem('bitcoinDcaSettingsTab');if(settingsTabs.some(item=>item.id===saved))rememberedTab=saved}catch(e){}
- activateSettingsTab(initial.complete?rememberedTab:'exchangeConnection');
+ activateSettingsTab(initial.complete?(focusWithdrawals?'botConfiguration':rememberedTab):'exchangeConnection');
+ if(focusWithdrawals&&!initial.embedded)$('withdrawals_enabled').focus();
  let invalidTabOpened=false;
  $('settingsForm').addEventListener('invalid',event=>{if(invalidTabOpened)return;const item=settingsTabs.find(item=>item.panel.contains(event.target));if(item){activateSettingsTab(item.id);invalidTabOpened=true;setTimeout(()=>{invalidTabOpened=false},0)}},true);
 }
@@ -222,9 +224,9 @@ let savedDraft=draftSignature(),settingsDirty=false;
 function updateDirty(){
  settingsDirty=draftSignature()!==savedDraft;
  $('unsavedChanges').hidden=!settingsDirty;
- if(initial.embedded)window.parent.postMessage({type:'dca-settings-dirty',dirty:settingsDirty},location.origin);
 }
 function requestSettingsClose(){
+ if($('backupReview').open)return;
  updateDirty();
  if(settingsDirty){$('discardDialog').showModal();return}
  if(initial.embedded)window.parent.postMessage({type:'dca-settings-close'},location.origin);else location.href='/';
@@ -238,7 +240,7 @@ if(typeof window!=='undefined'&&window.addEventListener){
  window.addEventListener('beforeunload',event=>{if(settingsDirty){event.preventDefault();event.returnValue=''}});
 }
 
-if(initial.embedded)window.parent.postMessage({type:'dca-settings-ready'},location.origin);
+if(initial.embedded)window.parent.postMessage({type:'dca-settings-ready',focusWithdrawals},location.origin);
 
 for(const id of [...fields.map(field=>field[0]),'username','current_password','password','passwordConfirm','newUsername','newPassword','confirmPassword','exchange','quote','kraken_api_key','kraken_api_secret','bitvavo_api_key','bitvavo_api_secret','kraken_withdraw_key','withdraw_address','withdraw_network','timezone','language','appearance','display_currency','dashboard_refresh_seconds']){
  const input=$(id);if(input)input.addEventListener('input',()=>clearFieldError(input));
@@ -310,5 +312,31 @@ $('restoreBackup')?.addEventListener('click',async()=>{
  catch(error){backupFieldError('restoreFile',error.message)}
 });
 $('cancelBackupRestore')?.addEventListener('click',()=>{restorePayload=null;restoreFilename='';$('backupReview').close()});
-$('backupReview')?.addEventListener('cancel',()=>{restorePayload=null;restoreFilename=''});
-$('confirmBackupRestore')?.addEventListener('click',async()=>{if(!restorePayload)return;const button=$('confirmBackupRestore'),filename=restoreFilename;button.disabled=true;try{await request('/api/settings/restore',restorePayload);try{sessionStorage.setItem('bitcoinDcaRestoredBackup',filename)}catch{}restorePayload=null;if(initial.embedded){window.parent.postMessage({type:'dca-settings-auth-required'},location.origin)}else{location.href='/'}}catch(error){backupFieldError(error.field||'restoreFile',error.message,true)}finally{button.disabled=false;$('backupReview').close();$('restoreLoginPassword').value='';$('restorePassword').value='';restorePayload=null;restoreFilename=''}});
+$('backupReview')?.addEventListener('cancel',event=>{
+ if($('confirmBackupRestore').disabled){event.preventDefault();return}
+ restorePayload=null;restoreFilename='';
+});
+$('confirmBackupRestore')?.addEventListener('click',async()=>{
+ const button=$('confirmBackupRestore'),cancel=$('cancelBackupRestore'),progress=$('restoreProgress');
+ if(!restorePayload||button.disabled)return;
+ const filename=restoreFilename;
+ button.disabled=cancel.disabled=true;
+ progress.textContent=t('Restoring backup…');
+ progress.focus();
+ if(initial.embedded)window.parent.postMessage({type:'dca-settings-restoring',active:true},location.origin);
+ try{
+  await request('/api/settings/restore',restorePayload);
+  try{sessionStorage.setItem('bitcoinDcaRestoredBackup',filename)}catch{}
+  if(initial.embedded)window.parent.postMessage({type:'dca-settings-auth-required'},location.origin);
+  else location.href='/';
+ }catch(error){
+  button.disabled=cancel.disabled=false;
+  progress.textContent='';
+  $('backupReview').close();
+  if(initial.embedded)window.parent.postMessage({type:'dca-settings-restoring',active:false},location.origin);
+  backupFieldError(error.field||'restoreFile',error.message,true);
+ }finally{
+  $('restoreLoginPassword').value='';$('restorePassword').value='';
+  restorePayload=null;restoreFilename='';
+ }
+});

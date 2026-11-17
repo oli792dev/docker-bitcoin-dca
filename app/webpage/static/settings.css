@@ -279,6 +279,10 @@ __DESIGN_CSS__
 }
 .settings-page .settings-tabs{scroll-padding-inline:3px;}
 .settings-page .settings-tabs.has-overflow{padding-bottom:8px;}
+@media (max-width:600px){
+ .settings-page .settings-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
+ .settings-page .settings-tabs button{min-width:0;white-space:normal;overflow-wrap:anywhere;}
+}
 
 .settings-error-summary{display:flex;align-items:baseline;gap:8px 12px;flex-wrap:wrap}
 .settings-error-summary[hidden]{display:none}
