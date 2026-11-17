@@ -14,6 +14,7 @@ from urllib.parse import urlencode
 import requests
 
 from app.exchanges.exchange_errors import DefinitiveRejection, ExchangeError, WithdrawalNotReady
+from app.exchanges.permissions import probe_timeout
 from app.exchanges.read_cache import ReadCache
 
 BASE_URL = "https://api.kraken.com/0"
@@ -60,6 +61,7 @@ def _canonical_asset(value):
 
 
 class Kraken:
+    probe_deadline: float | None = None
     exchange_name = "KRAKEN"
     supports_withdrawal_idempotency = False
 
@@ -134,7 +136,7 @@ class Kraken:
             self._balance_cache = None
             self._balance_cache_at = None
             self._reads.invalidate()
-        attempts = 3 if retry_safe else 1
+        attempts = 3 if retry_safe and self.probe_deadline is None else 1
         for attempt in range(1, attempts + 1):
             attempt_started = time.monotonic()
             try:
@@ -197,7 +199,9 @@ class Kraken:
     def public(self, method, params=None):
         return self._request_result(
             f"public/{method}",
-            lambda: self.session.get(f"{BASE_URL}/public/{method}", params=params or {}, timeout=(10, 30)),
+            lambda: self.session.get(
+                f"{BASE_URL}/public/{method}", params=params or {}, timeout=probe_timeout(self.probe_deadline, (10, 30))
+            ),
             retry_safe=True,
         )
 
@@ -222,7 +226,7 @@ class Kraken:
                     "API-Sign": signature,
                     "Content-Type": "application/x-www-form-urlencoded",
                 },
-                timeout=(10, 30),
+                timeout=probe_timeout(self.probe_deadline, (10, 30)),
             )
 
         return self._request_result(
