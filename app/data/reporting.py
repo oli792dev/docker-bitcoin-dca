@@ -82,7 +82,7 @@ def _usd_eur_rates(rows):
     persisted = {}
     for day in missing:
         index = bisect_right(dates, day) - 1
-        if index < 0:
+        if index < 0 or (day - dates[index]).days > FX_LOOKBACK_DAYS:
             raise ValueError(f"No historical USD/EUR rate available for {day}")
         rate = rates[dates[index]]
         if not rate.is_finite() or rate <= 0:
