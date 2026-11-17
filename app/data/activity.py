@@ -3,11 +3,12 @@
 import json
 import logging
 import os
+import re
 import sqlite3
 import time
 from contextlib import closing, contextmanager
 from datetime import UTC, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from secrets import token_hex
 from threading import RLock
@@ -255,6 +256,12 @@ def ledger_balance():
         return _balance(db)
 
 
+_DECIMAL_SEARCH = re.compile(
+    r"[€$]?-?(?:[0-9]+[.,][0-9]+|[0-9]{1,3}(?:,[0-9]{3})+\.[0-9]+|[0-9]{1,3}(?:\.[0-9]{3})+,[0-9]+)(?:[€$]|/btc)?"
+)
+_DECIMAL_SEPARATORS = str.maketrans(".,", ",.")
+
+
 def _matches_search(payload, query, zone=UTC):
     record = json.loads(payload)
 
@@ -292,16 +299,37 @@ def _matches_search(payload, query, zone=UTC):
         "unverified": "unverified unbestätigt ungeprüft",
     }.get(status, "")
     symbol = {"EUR": "€", "USD": "$"}.get(row.get("currency"), "")
-    for field in ("amount", "price", "fee"):
+    visible_numbers = set()
+    fields = {"amount": 2}
+    if row.get("type") != "Deposit":
+        fields.update(price=2, fee=2, shares=8)
+    elif record.get("depositStatus"):
+        fields["fee"] = 2
+    for field, places in fields.items():
         try:
-            number = Decimal(str(row.get(field, "0")))
-        except InvalidOperation:
+            # Intl formats the browser's Number and rounds midpoint ties away from zero.
+            number = Decimal(str(float(row.get(field))))
+        except (ValueError, TypeError, OverflowError):
             continue
-        if number.is_finite() and number.adjusted() < 20:
-            formatted = format(number, ",.2f")
-            text += " " + symbol + formatted + " " + symbol + formatted.translate(str.maketrans(".,", ",."))
+        if not number.is_finite() or number.adjusted() >= 20:
+            continue
+        rounded = number.quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP)
+        for grouping in ("", ","):
+            formatted = format(rounded, f"{grouping}.{places}f")
+            if field == "shares":
+                formatted = formatted.rstrip("0").rstrip(".")
+            for value in (formatted, formatted.translate(_DECIMAL_SEPARATORS)):
+                visible_numbers.add(value)
+                if field != "shares" and symbol:
+                    visible_numbers.update((symbol + value, value + symbol))
+                if field == "price":
+                    visible_numbers.update((value + "/btc", symbol + value + "/btc"))
+    text += " " + " ".join(visible_numbers)
     text += " " + text.replace(".", ",")
-    return all(term in text for term in query.casefold().split())
+    return all(
+        term in visible_numbers if _DECIMAL_SEARCH.fullmatch(term) else term in text
+        for term in query.casefold().split()
+    )
 
 
 @contextmanager

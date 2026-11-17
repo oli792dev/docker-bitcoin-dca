@@ -786,6 +786,24 @@ class ActivitySearchTests(unittest.TestCase):
             self.assertEqual(activity.read_report(0,2000000000000,search="%' OR 1=1")[1],0)
             with self.assertRaises(ValueError): activity.read_report(0,2000000000000,search='x'*257)
 
+    def test_decimal_search_matches_the_visible_rounded_values(self):
+        from app.data import activity
+        with tempfile.TemporaryDirectory() as tmp, patch.object(activity, "ACTIVITY_PATH", Path(tmp) / "activity.sqlite3"):
+            for number in ("3.534", "3.535", "13.53", "3.525"):
+                activity.append_activity_records([{
+                    "id": number, "exchange": "KRAKEN",
+                    "row": {"datetime": "2026-01-02T12:34:00Z", "type": "Buy", "identifier": "BTC",
+                            "shares": "0.0000353", "price": "100", "amount": number, "fee": "0", "currency": "EUR"},
+                }])
+            for search in ("3,53", "3.53", "€3,53 kraken", "3,53 €"):
+                with self.subTest(search=search):
+                    rows, *_ = activity.read_report(0, 2000000000000, search=search)
+                    self.assertEqual({row["id"] for row in rows}, {"3.534", "3.525"})
+            rows, *_ = activity.read_report(0, 2000000000000, search="3,54")
+            self.assertEqual([row["id"] for row in rows], ["3.535"])
+            rows, *_ = activity.read_report(0, 2000000000000, search="0,0000353")
+            self.assertEqual(len(rows), 4)
+
     def test_unknown_optional_amounts_do_not_break_text_search(self):
         from app.data.activity import _matches_search
         record={'exchange':'KRAKEN','row':{'type':'Buy','fee':None,'price':None,'amount':None}}
