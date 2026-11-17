@@ -350,6 +350,34 @@ test('operational controls, backup review and Activity filters remain usable', a
   await expect(page.locator('#settingsDialog')).toBeVisible();
 });
 
+test('opening the date editor refreshes withdrawal options and keeps the selected exact bounds', async ({page})=>{
+ const first=Date.parse('2026-10-17T12:00:00Z'),end=Date.parse('2026-10-20T12:00:00.456Z');
+ const original={analysisStartTimestamp:first,timestamp:end};
+ const newer={startTimestamp:end,timestamp:end+86400000};
+ let history=[original];
+ await page.route('**/api/withdrawals',route=>route.fulfill({json:history}));
+ await page.goto('/');
+ const interval=page.locator('#interval'),open=page.locator('#editCustomRange'),apply=page.locator('#applyRange');
+ const choice=[first-1,end,first].join(',');
+ await open.click();
+ await interval.selectOption(choice);
+ await apply.click();
+ await expect(page.locator('#rangeDialog')).toBeHidden();
+
+ history=[newer];
+ await open.click();
+ await expect(interval.locator('option')).toHaveCount(3);
+ await expect(interval.locator('option').nth(1)).toHaveAttribute('value',[end,newer.timestamp].join(','));
+ await expect(interval).toHaveValue(choice);
+ await expect(interval.locator('option:checked')).toContainText('Custom date range');
+ const report=page.waitForRequest(request=>{
+  const url=new URL(request.url());
+  return url.pathname==='/api/analytics'&&url.searchParams.get('start')===String(first-1)&&url.searchParams.get('end')===String(end);
+ });
+ await apply.click();
+ await report;
+});
+
 test('Activity dates are unboxed links and details use responsive columns', async ({page,isMobile})=>{
  await page.route('**/api/analytics?**',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({...analytics,activities:[{activityId:'example',datetime:'2026-10-29T12:00:00Z',type:'Buy',shares:.001,price:81000,amount:81,fee:.2,currency:'EUR',status:'confirmed'}],pagination:{total:1,pages:1,page:1}})}));
  await page.route('**/api/activity/detail?**',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({id:'example',exchange:'KRAKEN',row:{datetime:'2026-10-29T12:00:00Z',type:'Buy',shares:'.001',price:'81000',amount:'81',fee:'.2',currency:'EUR'}})}));

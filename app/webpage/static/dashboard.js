@@ -221,20 +221,39 @@ function applySelectedInterval(){
  $('start').value=localInput(displayStart);
  $('end').value=localInput(end);
 }
+let intervalRequest=0;
 async function loadIntervals(){
- const response=await fetch("/api/withdrawals");if(!response.ok)throw new Error("Could not load withdrawal history.");
- const withdrawals=await response.json();const select=$("interval");select.innerHTML="";
- const custom=document.createElement("option");custom.value="";custom.textContent=t("Custom date range");select.appendChild(custom);
- for(const withdrawal of withdrawals){
-  const previous=Number(withdrawal.startTimestamp),first=Number(withdrawal.analysisStartTimestamp),end=Number(withdrawal.timestamp);
-  const start=previous||(first>0?first-1:NaN);
-  if(!(start>=0&&end>start))continue;
-  const option=document.createElement('option');option.value=previous?[start,end].join(','):[start,end,first].join(',');
-  const startLabel=previous?dateLabel(previous):t('First recorded purchase')+' ('+dateLabel(first)+')';
-  option.textContent=startLabel+' → '+dateLabel(end);
-  select.appendChild(option);
+ const request=++intervalRequest,failure='Withdrawal intervals unavailable. Custom dates remain available.';
+ try{
+  const response=await fetch("/api/withdrawals");if(!response.ok)throw new Error("Could not load withdrawal history.");
+  const withdrawals=await response.json();
+  if(request!==intervalRequest)return;
+  const select=$("interval"),selected=select.value;
+  const savedIntervals=new Map(Array.from(select.children)
+   .filter(option=>option.value&&[selected,rangeDraft?.interval,customPeriod?.interval].includes(option.value))
+   .map(option=>[option.value,option]));
+  const custom=document.createElement("option");custom.value="";custom.textContent=t("Custom date range");
+  const options=[custom];
+  for(const withdrawal of withdrawals){
+   const previous=Number(withdrawal.startTimestamp),first=Number(withdrawal.analysisStartTimestamp),end=Number(withdrawal.timestamp);
+   const start=previous||(first>0?first-1:NaN);
+   if(!(start>=0&&end>start))continue;
+   const option=document.createElement('option');option.value=previous?[start,end].join(','):[start,end,first].join(',');
+   const startLabel=previous?dateLabel(previous):t('First recorded purchase')+' ('+dateLabel(first)+')';
+   option.textContent=startLabel+' → '+dateLabel(end);
+   options.push(option);savedIntervals.delete(option.value);
+  }
+  for(const option of savedIntervals.values()){
+   const [start,end,displayStart=start]=option.value.split(',').map(Number);
+   option.textContent=t('Custom date range')+' · '+dateLabel(displayStart)+' → '+dateLabel(end);
+   options.push(option);
+  }
+  select.replaceChildren(...options);
+  select.value=selected;
+  if($('intervalFeedback').textContent===t(failure))sectionFeedback('intervalFeedback','');
+ }catch(error){
+  if(request===intervalRequest)sectionFeedback('intervalFeedback',failure,true);
  }
- select.value="";
 }
 let selectedQuickRange='customRange',rangeDraft=null,customPeriod=null,reportThroughNow=true;
 function captureCustomPeriod(){return {start:$('start').value,end:$('end').value,interval:$('interval').value,throughNow:reportThroughNow}}
@@ -263,6 +282,7 @@ $('editCustomRange').addEventListener('click',()=>{
  rangeDraft={...captureCustomPeriod(),selected:selectedQuickRange};
  if(selectedQuickRange==='customRange')customPeriod=captureCustomPeriod();
  restoreCustomPeriod();$('rangeError').textContent='';$('rangeDialog').returnValue='';$('rangeDialog').showModal();
+ return loadIntervals();
 });
 $("interval").addEventListener("change",()=>{applySelectedInterval();$('rangeError').textContent=''});
 ["start","end"].forEach(id=>$(id).addEventListener("change",()=>{$("interval").value="";$('rangeError').textContent=''}));
@@ -562,13 +582,9 @@ async function refreshDashboard(force=false){
 window.DCA_DASHBOARD_ACTIONS={refreshSchedule:()=>refreshDashboard(true),withdraw:requestManualWithdrawal,export:requestParqetExport};
 const initialSchedule=refreshPurchaseSchedule();
 
-(async()=>{
- try{await loadIntervals()}catch(e){
-  $("interval").value="";$("start").value=localInput(Date.parse($("reportFrom").value)||Date.now()-1000);$("end").value=localInput(Date.now());
-  sectionFeedback("intervalFeedback","Withdrawal intervals unavailable. Custom dates remain available.",true);
- }
- restoreReportView();await loadAnalytics();
-})();
+restoreReportView();
+loadAnalytics();
+loadIntervals();
 
 // Preserve readable text and values; only changed account/report numbers fade briefly.
 (()=>{
@@ -589,12 +605,15 @@ const initialSchedule=refreshPurchaseSchedule();
 
 let activitySearchTimer;
 $('activitySearch')?.addEventListener('input',()=>{clearTimeout(activitySearchTimer);++reportRequest;activitySearchTimer=setTimeout(()=>{currentPage=1;loadAnalytics()},200)});
+let activityDetailRequest=0;
 async function showActivityDetail(identifier){
- const output=$('activityDetailValues');output.replaceChildren();$('activityDetail').showModal();
+ const request=++activityDetailRequest;
+ const dialog=$('activityDetail'),output=$('activityDetailValues');output.replaceChildren();dialog.showModal();
  try{const response=await fetch('/api/activity/detail?id='+encodeURIComponent(identifier));const data=await response.json();if(!response.ok)throw Error(data.error||'Activity record not found.');
+ if(request!==activityDetailRequest||!dialog.open)return;
  const row=data.row||{},feeEquivalent=data.networkFeeBtc==null&&Number(row.price)>0&&knownNumber(row.fee)?btc(Number(row.fee)/Number(row.price)):null;
  const fields=[...(feeEquivalent==null?[]:[['Fee equivalent (BTC at execution price)',feeEquivalent]]),['Activity ID',data.id],['Exchange',data.exchange],['Account identity',data.accountIdentity],...Object.entries(data.row||{}),...Object.entries(data).filter(([key])=>!['id','exchange','accountIdentity','row'].includes(key))];
  for(const [key,value] of fields){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=t(({datetime:'Execution time',type:'Type',identifier:'Asset',shares:'Executed BTC',amount:'Value',fee:'Fee (fiat)',price:'Execution price',currency:'Currency',networkFeeBtc:'Network fee (BTC)',grossWithdrawalAmountBtc:'Gross BTC debit',withdrawalId:'Withdrawal ID',withdrawalStatus:'Withdrawal status',depositStatus:'Deposit status',accountIdentity:'Account identity',simulated:'Simulation',manual:'Manual',purchaseStatus:'Purchase status',withdrawalAddress:'Destination',withdrawalNetwork:'Network'})[key]||key);dd.textContent=value==null?'—':typeof value==='object'?JSON.stringify(value):String(value);const field=document.createElement('div');field.className='activity-detail-field';field.append(dt,dd);output.append(field)}
- }catch(error){output.textContent=t(error.message)}
+ }catch(error){if(request===activityDetailRequest&&dialog.open)output.textContent=t(error.message)}
 }
 $('closeActivityDetail')?.addEventListener('click',()=>$('activityDetail').close());

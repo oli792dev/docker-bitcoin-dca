@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from app.trading import runtime
+from app.trading.controls import PauseControl
 
 
 class PauseTests(unittest.TestCase):
@@ -297,6 +298,108 @@ class BackupIntegrationTests(unittest.TestCase):
                     with self.assertRaises(ValueError):manager.restore(changed,'long backup password',scope)
                     self.assertEqual({name:(self.root/name).read_bytes() for name in previous},previous)
                     self.assertFalse((self.root/'.restore-journal').exists())
+
+    def test_invalid_archived_account_is_rejected_before_live_mutation(self):
+        from app.data.backup import Backups
+
+        manager = Backups(self.root)
+        password = "long backup password"
+        _, raw = manager.create("full", password)
+        config_path = self.root / "config.json"
+        original = config_path.read_bytes()
+        for scope, update in (
+            (None, {"username": None}),
+            ("config", {"username": " operator "}),
+            ("full", {"username": "op"}),
+            ("config", {"username": "op\ud800"}),
+            ("config", {"password_hash": None}),
+            ("config", {"password_hash": "invalid base64"}),
+            ("config", {"password_hash": "YWJj"}),
+        ):
+            with self.subTest(scope=scope, update=update):
+                config = json.loads(original)
+                config["account"].update(update)
+                invalid = self.rewrite_backup(raw, lambda files: files.update({"config.json": json.dumps(config).encode()}))
+                callback = Mock()
+                with self.assertRaisesRegex(ValueError, "Invalid backup login credentials"):
+                    manager.restore(invalid, password, scope, before_mutation=callback)
+                callback.assert_not_called()
+                self.assertEqual(config_path.read_bytes(), original)
+                self.assertFalse((self.root / ".restore-journal").exists())
+
+    def test_activity_restore_does_not_replace_malformed_current_controls(self):
+        from app.data.backup import Backups
+
+        manager = Backups(self.root)
+        password = "long backup password"
+        _, raw = manager.create("activity", password)
+        path = self.root / "controls.json"
+        malformed = b'{"paused": "off"}'
+        path.write_bytes(malformed)
+        callback = Mock()
+        with self.assertRaisesRegex(ValueError, "Invalid transaction controls"):
+            manager.restore(raw, password, "activity", before_mutation=callback)
+        callback.assert_not_called()
+        self.assertEqual(path.read_bytes(), malformed)
+
+    def test_full_restore_initializes_an_interrupted_empty_activity_database(self):
+        from app.data.backup import Backups
+
+        manager = Backups(self.root)
+        password = "long backup password"
+        _, raw = manager.create("full", password)
+        activity_path = self.root / "activity.sqlite3"
+        activity_path.write_bytes(b"")
+        manager.restore(raw, password, "full")
+        self.assertEqual(self.activity.read_activity_records(), [self.record("first")])
+
+    def test_restore_repairs_malformed_controls_and_preserves_original_bytes(self):
+        from app.data.backup import Backups
+
+        manager = Backups(self.root)
+        password = "long backup password"
+        path = self.root / "controls.json"
+        for scope, malformed in (("config", b'{"paused"'), ("full", b"\xff")):
+            with self.subTest(scope=scope):
+                _, raw = manager.create(scope, password)
+                path.write_bytes(malformed)
+                self.assertFalse(manager.restore(raw, password, scope)["paused"])
+                self.assertEqual(PauseControl(path).snapshot(), {"paused": False, "until": None})
+                saved = [item for item in self.root.glob(".restore-invalid-controls-*") if item.read_bytes() == malformed]
+                self.assertEqual(len(saved), 1)
+                self.assertEqual(saved[0].stat().st_mode & 0o777, 0o600)
+
+    def test_durable_rollback_repairs_malformed_current_controls_after_interruption(self):
+        from app.data import backup
+
+        manager = backup.Backups(self.root)
+        password = "long backup password"
+        _, raw = manager.create("config", password)
+        path = self.root / "controls.json"
+        malformed = b'{"paused": "off"}\n'
+        path.write_bytes(malformed)
+        original_config = (self.root / "config.json").read_bytes()
+        callback = Mock()
+        original_write = backup.write_json_atomic
+
+        def fail_commit(target, data):
+            if target == self.root / "report-preferences.json":
+                raise OSError("restore interrupted")
+            original_write(target, data)
+
+        with patch.object(backup, "recover_restore", wraps=backup.recover_restore) as recover:
+            recover.side_effect = [None, OSError("process interrupted before recovery")]
+            with patch.object(backup, "write_json_atomic", side_effect=fail_commit):
+                with self.assertRaisesRegex(OSError, "process interrupted"):
+                    manager.restore(raw, password, "config", before_mutation=callback)
+        callback.assert_called_once_with()
+        self.assertTrue((self.root / backup.JOURNAL / "manifest.json").exists())
+        self.assertEqual(PauseControl(self.root / backup.JOURNAL / "controls.json").snapshot(),
+                         {"paused": True, "until": None})
+        backup.recover_restore(self.root)
+        self.assertEqual((self.root / "config.json").read_bytes(), original_config)
+        self.assertEqual(PauseControl(path).snapshot(), {"paused": True, "until": None})
+        self.assertEqual([item.read_bytes() for item in self.root.glob(".restore-invalid-controls-*")], [malformed])
 
     def test_restore_preserves_archived_or_current_pause_for_each_scope(self):
         from app.data.backup import Backups

@@ -138,12 +138,18 @@ def sqlite_snapshot(source, destination):
     os.chmod(destination, 0o600)
 
 
-def _records(path):
-    with closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True)) as db:
+def _records(path, *, allow_empty=False):
+    with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)) as db:
         db.execute("PRAGMA trusted_schema=OFF")
         db.execute("PRAGMA query_only=ON")
         if db.execute("PRAGMA integrity_check").fetchone() != ("ok",):
             raise ValueError("Invalid Activity database.")
+        if (
+            allow_empty
+            and db.execute("PRAGMA user_version").fetchone() == (0,)
+            and db.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchone() is None
+        ):
+            return {}  # An interrupted first run may have opened the file before creating the schema.
         activity.validate_schema(db)
         records = {}
         for values in db.execute("SELECT * FROM activity"):
@@ -198,6 +204,17 @@ def _finish_restore(directory):
     recover_restore(directory)
 
 
+def _preserve_invalid_controls(path):
+    with (
+        path.open("rb") as source,
+        tempfile.NamedTemporaryFile(dir=path.parent, prefix=".restore-invalid-controls-", delete=False) as saved,
+    ):
+        shutil.copyfileobj(source, saved)
+        saved.flush()
+        os.fsync(saved.fileno())
+    _sync_directory(path.parent)
+
+
 def recover_restore(directory):
     """Rollback interrupted multi-file restore before settings can be loaded."""
     directory = Path(directory)
@@ -225,8 +242,11 @@ def recover_restore(directory):
     ):
         raise ValueError("Invalid restore recovery journal; transactions remain blocked.")
     with activity._REPORT_LOCK, activity._ACTIVITY_LOCK:
+        write_json_atomic(directory / "controls.json", {"paused": True, "until": None})
         activity._touch_activity()
         for name, existed in manifest.items():
+            if name == "controls.json":
+                continue  # Rollback always leaves a valid indefinite pause.
             target = directory / name
             if existed:
                 source = journal / name
@@ -239,7 +259,6 @@ def recover_restore(directory):
                     (directory / (name + suffix)).unlink(missing_ok=True)
             else:
                 target.unlink(missing_ok=True)
-        write_json_atomic(directory / "controls.json", {"paused": True, "until": None})
         _finish_restore(directory)
 
 
@@ -301,7 +320,7 @@ class Backups:
             filename = "bitcoin-dca-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ") + "-" + suffix + ".dcabackup"
             return filename, encrypted
 
-    def restore(self, encrypted, password, scope, unresolved=False):
+    def restore(self, encrypted, password, scope, unresolved=False, *, before_mutation=None):
         if (scope is not None and (not isinstance(scope, str) or scope not in SCOPES)) or unresolved:
             raise ValueError("Resolve pending financial work before restoring a backup.")
         manifest, data = unpack(decrypt(encrypted, password))
@@ -318,9 +337,6 @@ class Backups:
             activity._ACTIVITY_LOCK,
             tempfile.TemporaryDirectory(dir=self.directory, prefix=".restore-") as tmp,
         ):
-            recover_restore(self.directory)
-            if (self.directory / COMPLETED).exists():
-                raise ValueError("Previous restore cleanup could not finish; check persistent storage.")
             records = {}
             if scope != "config":
                 incoming = Path(tmp) / "activity.sqlite3"
@@ -329,21 +345,21 @@ class Backups:
                 records = _records(incoming)
             if _unresolved(records):
                 raise ValueError("Backup contains unresolved withdrawals; restore is blocked.")
-            with activity._db():
-                pass
-            current_path = self.directory / "activity.sqlite3"
-            current = _records(current_path)
-            if _unresolved(current):
-                raise ValueError("Resolve pending withdrawals before restoring a backup.")
-            if any(key in records and records[key] != value for key, value in current.items()):
-                raise ValueError("Backup conflicts with existing Activity; no records were changed.")
             if scope != "activity":
-                from app.core.configuration import ConfigStore
+                from app.core.configuration import ConfigStore, validate_restored_account
 
                 for name in restore_files - {"activity.sqlite3"}:
                     value = json.loads(data[name])
                     if not isinstance(value, dict):
                         raise ValueError("Invalid backup JSON file.")
+                    if name == "config.json":
+                        if (
+                            type(value.get("version")) is not int
+                            or value["version"] != 1
+                            or type(value.get("complete")) is not bool
+                        ):
+                            raise ValueError("Invalid backup configuration.")
+                        validate_restored_account(value.get("account"))
                     (Path(tmp) / name).write_bytes(data[name])
                 for name, key in (("installation.json", "firstStartedAt"), ("report-preferences.json", "from")):
                     if name not in SCOPES[scope]:
@@ -355,9 +371,26 @@ class Backups:
                         or datetime.fromisoformat(value[key]).tzinfo is None
                     ):
                         raise ValueError("Invalid backup reporting preferences.")
-                config = ConfigStore._read(Path(tmp) / "config.json")
-                if config.get("version") != 1 or not isinstance(config.get("account"), dict):
-                    raise ValueError("Invalid backup configuration.")
+                ConfigStore._read(Path(tmp) / "config.json")
+            from app.trading.controls import PauseControl
+
+            current_controls = self.directory / "controls.json"
+            restores_controls = "controls.json" in restore_files
+            if restores_controls:
+                controls = PauseControl(Path(tmp) / "controls.json").snapshot()
+            journal = self.directory / JOURNAL
+            if before_mutation is not None and (journal / "manifest.json").exists():
+                before_mutation()
+                before_mutation = None
+            recover_restore(self.directory)
+            if (self.directory / COMPLETED).exists():
+                raise ValueError("Previous restore cleanup could not finish; check persistent storage.")
+            current_path = self.directory / "activity.sqlite3"
+            current = _records(current_path, allow_empty=True) if current_path.exists() else {}
+            if _unresolved(current):
+                raise ValueError("Resolve pending withdrawals before restoring a backup.")
+            if any(key in records and records[key] != value for key, value in current.items()):
+                raise ValueError("Backup conflicts with existing Activity; no records were changed.")
             if scope == "full":
                 state = json.loads(data["state.json"])
                 if (
@@ -376,22 +409,32 @@ class Backups:
                     < datetime.fromisoformat(old_state["last_order_at"])
                 ):
                     raise ValueError("Full restore would rewind financial state. Use Activity-only restore.")
-            from app.trading.controls import PauseControl
-
-            controls = PauseControl(
-                Path(tmp) / "controls.json" if "controls.json" in restore_files else self.directory / "controls.json"
-            ).snapshot()
-            journal = self.directory / JOURNAL
+            if restores_controls:
+                try:
+                    PauseControl(current_controls).snapshot()
+                except (ValueError, OverflowError):
+                    _preserve_invalid_controls(current_controls)
+            else:
+                controls = PauseControl(current_controls).snapshot()
             journal.mkdir(mode=0o700)
             existed = {name: (self.directory / name).exists() for name in FILES}
             for name, present in existed.items():
                 if present:
-                    if name.endswith("sqlite3"):
+                    if name == "controls.json":
+                        # Keep the journal readable by older releases.
+                        write_json_atomic(journal / name, {"paused": True, "until": None})
+                    elif name.endswith("sqlite3"):
                         sqlite_snapshot(self.directory / name, journal / name)
                     else:
                         write_json_atomic(journal / name, json.loads((self.directory / name).read_text()))
             write_json_atomic(journal / "manifest.json", existed)
             _sync_directory(self.directory)
+            if before_mutation is not None:
+                try:
+                    before_mutation()
+                except BaseException:
+                    _finish_restore(self.directory)
+                    raise
             try:
                 if scope != "activity":
                     for name in restore_files - {"activity.sqlite3"}:

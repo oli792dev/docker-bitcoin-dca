@@ -47,7 +47,7 @@ An empty installation can restore Full or Config before account creation using t
 
 Restore rejects queued or unresolved financial work, conflicting Activity records and archived pending requests. Full cannot remove current Activity or rewind the last order timestamp. Config preserves financial state and Activity; Activities merges history without overwriting entries. Archived SQL is never installed.
 
-A durable rollback journal protects multi-file changes. Failed or interrupted restores roll back and force a pause; an unreadable journal blocks startup. Completed journals are retired before deletion, so interrupted cleanup never triggers rollback from partial copies. Successful restore reloads configuration, invalidates sessions and requires a read-only exchange check before new transactions. Full and Config restore their saved pause controls; Activities retains the current controls. Existing TLS certificates remain unchanged.
+A Full or Config restore can replace a malformed local pause file. The original bytes are saved in a private `.restore-invalid-controls-*` file in the data volume for diagnosis. A durable rollback journal protects multi-file changes. Failed or interrupted restores roll back and force a pause; an unreadable journal blocks startup. Completed journals are retired before deletion, so interrupted cleanup never triggers rollback from partial copies. Successful restore reloads configuration, invalidates sessions and requires a read-only exchange check before new transactions. Full and Config restore their saved pause controls; Activities retains the current controls. Existing TLS certificates remain unchanged.
 
 Stop the container before making an independent filesystem backup of the volume.
 
