@@ -359,6 +359,13 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  const withdrawalReport=new URL(requests.filter(url=>url.startsWith('/api/analytics?')).at(-1),'https://example.test');
  assert.equal(withdrawalReport.searchParams.get('page'),'2');
  assert.equal(Number(withdrawalReport.searchParams.get('end')),Date.parse(selectedEnd));
+ vm.runInContext('reportThroughNow=true',context);
+ const throughNowAction=context.window.DCA_DASHBOARD_ACTIONS.withdraw();await settle();
+ get('confirmationDialog').close('confirm');await throughNowAction;
+ const liveWithdrawalReport=new URL(requests.filter(url=>url.startsWith('/api/analytics?')).at(-1),'https://example.test');
+ assert(Number(liveWithdrawalReport.searchParams.get('end'))>Date.parse(selectedEnd));
+ assert.equal(get('end').value,selectedEnd);
+
  console.log('Dashboard regressions passed: interval dates, server pages, mixed-currency rows/totals and queued preview polling');
 })().catch(e=>{console.error(e);process.exit(1)});
 
