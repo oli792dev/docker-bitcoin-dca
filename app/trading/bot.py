@@ -275,6 +275,8 @@ def _finish_pending_withdrawal(api, state, settings, pending, context, result, s
         "balanceBefore": context.get("balanceBefore", pending["amount"]),
         "createdAt": result.get("createdAt"),
     }
+    if result.get("exchangeStatus"):
+        state["last_withdrawal"]["recovered"] = True
     state["withdrawal_armed"] = False
     state.pop("pending_withdrawal", None)
     state.pop("pending_withdrawal_context", None)
@@ -320,20 +322,26 @@ def recover_pending_kraken_withdrawal(api, state, settings, *, state_path: Path 
 
 
 def maybe_withdraw_btc(api, state, settings, manual_request=None):
+    recovered_completion = False
     if manual_request is None and settings["live"]:
         if recover_pending_kraken_withdrawal(api, state, settings):
             return
         reconcile_withdrawals(api, settings)
-        last_record = get_activity_record(state.get("last_withdrawal", {}).get("activityId", ""))
+        last_withdrawal = state.get("last_withdrawal", {})
+        last_record = get_activity_record(last_withdrawal.get("activityId", ""))
         if (
             last_record
             and last_record.get("withdrawalStatus") in ("completed", "failed")
             and not state.get("withdrawal_armed", True)
         ):
-            state["withdrawal_armed"] = True
-            save_state(STATE_PATH, state)
-            if last_record["withdrawalStatus"] == "failed":
-                return
+            recovered_completion = (
+                bool(last_withdrawal.get("recovered")) and last_record["withdrawalStatus"] == "completed"
+            )
+            if not recovered_completion:
+                state["withdrawal_armed"] = True
+                save_state(STATE_PATH, state)
+                if last_record["withdrawalStatus"] == "failed":
+                    return
         if not state.get("pending_withdrawal") and any(
             r.get("exchange") == settings["exchange"] and r.get("withdrawalStatus") == "submitted"
             for r in withdrawal_records(unresolved=True)
@@ -404,6 +412,11 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
         return
 
     available = api.balance("BTC")
+    if recovered_completion:
+        if available >= Decimal(last_withdrawal.get("balanceBefore", last_withdrawal["amount"])):
+            return
+        state["withdrawal_armed"] = True
+        save_state(STATE_PATH, state)
     if manual_request is not None:
         expected = Decimal(manual_request["amount"])
         if settings["exchange"] == "KRAKEN":
