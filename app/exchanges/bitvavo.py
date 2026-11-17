@@ -58,7 +58,10 @@ class Bitvavo:
             data=payload if payload else None,
             headers=headers,
             timeout=probe_timeout(self.probe_deadline, 15),
+            allow_redirects=not private,
         )
+        if private and 300 <= response.status_code < 400:
+            raise ExchangeError("Unexpected redirect from Bitvavo", code=response.status_code)
         try:
             payload = response.json()
         except ValueError:
