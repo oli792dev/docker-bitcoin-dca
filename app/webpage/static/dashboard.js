@@ -351,12 +351,13 @@ function reportQuery(period){
 function reportKey(query,revision,configurationRevision,throughNow){
  return JSON.stringify([query.start,throughNow?null:query.end,query.page,query.limit,query.q,revision,configurationRevision]);
 }
-async function loadAnalytics(appliedDates){
+async function loadAnalytics(appliedDates,refreshThroughNow=false){
  const request=++reportRequest,readAt=Date.now();
  const revision=activityRevision,configurationRevision=reportConfigurationRevision,throughNow=appliedDates?.throughNow??reportThroughNow;
  $("periodReport").ariaBusy="true";saveReportView();sectionFeedback("reportFeedback","");
  try{
   showError("");const query=reportQuery(selectedPeriod(appliedDates));
+  if(refreshThroughNow&&throughNow)query.end=Math.max(query.end,Date.now()+1);
   const response=await fetch("/api/analytics?"+new URLSearchParams({...query,tz:browserTimeZone}));
   const d=await response.json();if(!response.ok)throw new Error(d.error||"Could not load the report.");if(request!==reportRequest)return;
   await initialSchedule;
@@ -491,7 +492,7 @@ async function requestManualWithdrawal(){
  }
  showWithdrawalMessage("Submitting withdrawal…",false);
  const result=await withdrawalPost("/api/withdrawal/confirm",{token:p.token});showWithdrawalMessage(result.message,false);
- await loadAnalytics(rangeDraft);
+ await loadAnalytics(rangeDraft,true);
  }catch(e){showWithdrawalMessage(e.message)}
  finally{actionFeedback("withdraw",null,false,false)}
 }
