@@ -16,6 +16,7 @@ from app.exchanges.exchange_errors import UncertainWithdrawalError
 LOG = logging.getLogger("bitcoin-dca.worker")
 
 HEARTBEAT_WRITE_INTERVAL_SECONDS = 300
+JOB_RETENTION_SECONDS = 900
 
 
 class Worker:
@@ -40,14 +41,15 @@ class Worker:
         with self.lock:
             if not self.running or self.stop.is_set():
                 raise ValueError("Bot worker is unavailable; check container health.")
+            now = time.monotonic()
             self.jobs = {
                 k: v
                 for k, v in self.jobs.items()
-                if v["expires"] > time.monotonic() or v["state"] in ("queued", "running")
+                if v["expires"] is None or v["expires"] > now
             }
             if len(self.jobs) >= 128:
                 raise ValueError("Too many queued or recent requests; try again later.")
-            job = {"session": session, "state": "queued", "expires": time.monotonic() + 900}
+            job = {"session": session, "state": "queued", "expires": None}
             self.jobs[job_id] = job
             try:
                 self.queue.put_nowait((job_id, action, session, token))
@@ -59,7 +61,11 @@ class Worker:
     def get_job(self, job_id, session):
         with self.lock:
             job = self.jobs.get(job_id)
-            if not job or job["session"] != session or job["expires"] < time.monotonic():
+            if (
+                not job
+                or job["session"] != session
+                or (job["expires"] is not None and job["expires"] <= time.monotonic())
+            ):
                 raise ValueError("Request not found or expired. Check exchange status before starting again.")
             return {k: v for k, v in job.items() if k not in ("session", "expires")}
 
@@ -128,7 +134,9 @@ class Worker:
                 if self.stop.is_set():
                     with self.lock:
                         self.jobs[job_id].update(
-                            state="failed", error="Container is stopping; request was not executed."
+                            state="failed",
+                            error="Container is stopping; request was not executed.",
+                            expires=time.monotonic() + JOB_RETENTION_SECONDS,
                         )
                     self.queue.task_done()
                     break
@@ -137,7 +145,9 @@ class Worker:
                 try:
                     result = self.action(action, session, token)
                     with self.lock:
-                        self.jobs[job_id].update(state="completed", result=result)
+                        self.jobs[job_id].update(
+                            state="completed", result=result, expires=time.monotonic() + JOB_RETENTION_SECONDS
+                        )
                     # Manual withdrawals leave the existing account-check deadline unchanged.
                 except Exception as exc:
                     if isinstance(exc, UncertainWithdrawalError):
@@ -155,7 +165,9 @@ class Worker:
                         else "Account request failed. Check the container logs and exchange status before trying again."
                     )
                     with self.lock:
-                        self.jobs[job_id].update(state="failed", error=message)
+                        self.jobs[job_id].update(
+                            state="failed", error=message, expires=time.monotonic() + JOB_RETENTION_SECONDS
+                        )
                 finally:
                     self.queue.task_done()
                     self.heartbeat()
@@ -167,7 +179,11 @@ class Worker:
                         job_id, *_ = self.queue.get_nowait()
                     except queue.Empty:
                         break
-                    self.jobs[job_id].update(state="failed", error="Container is stopping; request was not executed.")
+                    self.jobs[job_id].update(
+                        state="failed",
+                        error="Container is stopping; request was not executed.",
+                        expires=time.monotonic() + JOB_RETENTION_SECONDS,
+                    )
                     self.queue.task_done()
             write_json_atomic(HEALTH_PATH, {"heartbeat": time.time(), "running": False})
 
