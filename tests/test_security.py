@@ -164,6 +164,42 @@ class SensitiveSettingsTests(unittest.TestCase):
         self.app=runtime.Runtime(self.store,root/'state.json')
         self.app.save({'settings':{'kraken_api_key':'fictional','kraken_api_secret':'c2VjcmV0'}})
 
+    def test_settings_operations_recheck_authorization_before_mutating(self):
+        before = self.store.snapshot()
+        denied = Mock(return_value=False)
+        for operation, payload in (
+            (self.app.save, {"settings": {"appearance": "dark"}}),
+            (self.app.set_pause, {"paused": False}),
+            (self.app.save_forecast_deposit, {"monthlyDeposit": "100"}),
+            (self.app.save_report_from, {"from": "2026-01-01T00:00:00Z"}),
+            (self.app.test_connection, {}),
+            (self.app.backup, {"scope": "config", "password": "backup-password", "current_password": PASSWORD}),
+        ):
+            with self.subTest(operation=operation.__name__), self.assertRaisesRegex(PermissionError, "session"):
+                operation(payload, authorize=denied)
+        self.assertEqual(self.store.snapshot(), before)
+
+    def test_settings_handler_returns_unauthorized_if_session_expires_during_body(self):
+        handler = object.__new__(web_ui.Handler)
+        handler.runtime = self.app
+        handler.path = "/api/settings/pause"
+        handler._has_valid_session = Mock(side_effect=[True, False])
+        handler._settings_body = Mock(return_value={"paused": False})
+        handler._json = Mock()
+        with patch.object(self.app.controls, "set") as change_pause:
+            handler._settings_post(handler.path)
+        change_pause.assert_not_called()
+        self.assertEqual(handler._json.call_args.args[0], 401)
+
+    def test_settings_save_rechecks_if_configuration_recovery_revokes_the_session(self):
+        authorize = Mock(side_effect=[True, False])
+        before = self.store.snapshot()
+        with patch.object(self.app, "_recover_configuration") as recover:
+            with self.assertRaises(security.SessionExpiredError):
+                self.app.save({"settings": {"appearance": "dark"}}, authorize=authorize)
+        recover.assert_called_once()
+        self.assertEqual(self.store.snapshot(), before)
+
     def test_committed_login_change_revokes_sessions_even_if_later_save_fails(self):
         self.app.invalidate_sessions=Mock()
         with patch.object(self.app.controls,'set',side_effect=OSError('controls unavailable')):

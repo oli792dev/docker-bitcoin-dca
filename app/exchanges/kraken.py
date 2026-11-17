@@ -218,7 +218,7 @@ class Kraken:
             signature = base64.b64encode(
                 hmac.new(self.secret_bytes, path.encode() + digest, hashlib.sha512).digest()
             ).decode()
-            return self.session.post(
+            response = self.session.post(
                 f"https://api.kraken.com{path}",
                 data=postdata,
                 headers={
@@ -227,7 +227,11 @@ class Kraken:
                     "Content-Type": "application/x-www-form-urlencoded",
                 },
                 timeout=probe_timeout(self.probe_deadline, (10, 30)),
+                allow_redirects=False,
             )
+            if 300 <= response.status_code < 400:
+                raise KrakenAPIError("Unexpected redirect from Kraken", code=response.status_code)
+            return response
 
         return self._request_result(
             f"private/{method}",

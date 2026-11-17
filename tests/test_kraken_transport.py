@@ -29,7 +29,7 @@ class KrakenTransportTests(unittest.TestCase):
 
     @staticmethod
     def response(result):
-        response = Mock()
+        response = Mock(status_code=200)
         response.json.return_value = {'error': [], 'result': result}
         return response
 
@@ -43,6 +43,20 @@ class KrakenTransportTests(unittest.TestCase):
         self.assertEqual(len(self.sessions), 2)
         self.assertIn('ZEUR', result)
         self.assertEqual(self.sessions[1].post.call_args.kwargs['timeout'], (10, 30))
+
+    def test_private_redirect_is_an_uncertain_error(self):
+        session = self.api.session
+        response = self.response({"txid": ["fictional-order"]})
+        response.status_code = 307
+        session.post.return_value = response
+
+        with self.assertRaisesRegex(kraken.KrakenAPIError, "Unexpected redirect") as error:
+            self.api.private("AddOrder")
+
+        self.assertEqual(error.exception.category, "uncertain")
+        session.post.assert_called_once()
+        self.assertIs(session.post.call_args.kwargs["allow_redirects"], False)
+        response.json.assert_not_called()
 
     def test_key_metadata_timeout_retries_read_on_fresh_connection(self):
         failed = self.api.session
@@ -132,7 +146,7 @@ class KrakenTransportTests(unittest.TestCase):
         failed.close.assert_called_once()
 
     def test_definitive_api_error_is_not_retried(self):
-        self.api.session.post.return_value = Mock()
+        self.api.session.post.return_value = Mock(status_code=200)
         self.api.session.post.return_value.json.return_value = {'error': ['EAPI:Invalid key']}
         with patch.object(kraken.time, 'sleep') as sleep, self.assertRaises(DefinitiveRejection):
             self.api.private('BalanceEx')

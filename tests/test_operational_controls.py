@@ -153,6 +153,22 @@ class BackupTests(unittest.TestCase):
             with zipfile.ZipFile(data,'w') as archive:archive.writestr(name,'{}')
             with self.assertRaises(ValueError):unpack(data.getvalue())
 
+    def test_archive_limits_directory_reads_during_open(self):
+        import io
+        import zipfile
+
+        from app.data import backup
+
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w") as archive:
+            manifest = zipfile.ZipInfo("manifest.json")
+            manifest.comment = b"metadata" * 20
+            archive.writestr(manifest, "{}")
+
+        with patch.object(backup, "MAX_ZIP_METADATA_READ", 128):
+            with self.assertRaisesRegex(ValueError, "Backup ZIP metadata exceeds"):
+                backup.unpack(output.getvalue())
+
 class BackupIntegrationTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
@@ -209,12 +225,15 @@ class BackupIntegrationTests(unittest.TestCase):
                         backup.Backups(directory).create("activity", "test-backup-password")
 
     def test_snapshot_includes_wal_and_activity_merge_never_deletes(self):
-        from app.data.backup import Backups,decrypt,unpack
+        from app.data import backup
+        from app.data.backup import Backups, decrypt, unpack
         manager=Backups(self.root)
         filename,raw=manager.create('activity','long backup password')
         self.assertFalse((self.root/'backups').exists())
         self.assertTrue(filename.endswith('.dcabackup'))
-        manifest,data=unpack(decrypt(raw,'long backup password'))
+        with patch.object(backup, "MAX_ZIP_METADATA_READ", 512):
+            manifest, data = unpack(decrypt(raw, 'long backup password'))
+        self.assertGreater(len(data["activity.sqlite3"]), 512)
         self.assertEqual(manifest['scope'],'activity')
         self.activity.append_activity_records([self.record('later')])
         manager.restore(raw,'long backup password','activity')

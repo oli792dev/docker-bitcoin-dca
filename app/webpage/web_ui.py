@@ -18,7 +18,7 @@ from urllib.parse import parse_qs, urlparse
 import requests
 
 from app.core.purchase_status import PurchaseStatus
-from app.core.security import AttemptLimiter, PasswordConfirmationError, string_object
+from app.core.security import AttemptLimiter, PasswordConfirmationError, SessionExpiredError, string_object
 from app.data.activity import (
     activity_revision,
     parqet_interval_records,
@@ -517,20 +517,25 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/setup/restore":
                 self._json(200, self.runtime.backup(payload, restore=True, setup=True, setup_attempt_reserved=True))
             elif path == "/api/settings/pause":
-                self._json(200, self.runtime.set_pause(payload))
+                self._json(200, self.runtime.set_pause(payload, authorize=self._has_valid_session))
             elif path in ("/api/settings/backup", "/api/settings/restore"):
-                self._json(200, self.runtime.backup(payload, restore=path.endswith("restore")))
+                self._json(
+                    200,
+                    self.runtime.backup(payload, restore=path.endswith("restore"), authorize=self._has_valid_session),
+                )
             elif path == "/api/settings/forecast":
-                self._json(200, self.runtime.save_forecast_deposit(payload))
+                self._json(200, self.runtime.save_forecast_deposit(payload, authorize=self._has_valid_session))
             elif path == "/api/settings/report-period":
-                self._json(200, self.runtime.save_report_from(payload))
+                self._json(200, self.runtime.save_report_from(payload, authorize=self._has_valid_session))
             elif path == "/api/settings/test":
-                self._json(200, self.runtime.test_connection(payload))
+                self._json(200, self.runtime.test_connection(payload, authorize=self._has_valid_session))
             else:
-                changed = self.runtime.save(payload)
+                changed = self.runtime.save(payload, authorize=self._has_valid_session)
                 if changed:
                     LOG.info("Dashboard account credentials updated; all dashboard sessions invalidated")
                 self._json(200, {"saved": True, "signInRequired": changed})
+        except SessionExpiredError as exc:
+            self._json(401, {"error": str(exc)})
         except PasswordConfirmationError as exc:
             error = {"error": str(exc)}
             if path in ("/api/settings/backup", "/api/settings/restore"):

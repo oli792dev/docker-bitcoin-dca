@@ -11,7 +11,7 @@ from app.exchanges import bitvavo
 from app.exchanges import kraken
 from app.webpage import web_ui
 from app.core import healthcheck
-from app.exchanges.exchange_errors import DefinitiveRejection
+from app.exchanges.exchange_errors import DefinitiveRejection, ExchangeError
 
 
 class AdapterReviewTests(unittest.TestCase):
@@ -103,6 +103,20 @@ class AdapterReviewTests(unittest.TestCase):
         with self.assertRaises(requests.HTTPError):api.buy_btc('EUR',D('.001'),'client')
         api.session.request.side_effect=requests.ReadTimeout('unknown result')
         with self.assertRaises(requests.ReadTimeout):api.buy_btc('EUR',D('.001'),'client')
+
+    def test_bitvavo_private_redirect_is_an_uncertain_error(self):
+        api = bitvavo.Bitvavo(api_key="fictional", api_secret="fictional")
+        response = Mock(status_code=307)
+        response.json.return_value = {"errorCode": 216, "error": "Insufficient funds"}
+        api.session.request.return_value = response
+
+        with self.assertRaisesRegex(ExchangeError, "Unexpected redirect") as error:
+            api.buy_btc("EUR", D(".001"), "client")
+
+        self.assertEqual(error.exception.category, "uncertain")
+        api.session.request.assert_called_once()
+        self.assertIs(api.session.request.call_args.kwargs["allow_redirects"], False)
+        response.json.assert_not_called()
 
     def test_bitvavo_withdrawal_transports_asset_and_accepts_empty_201(self):
         api=bitvavo.Bitvavo(api_key='fictional',api_secret='fictional');response=Mock(status_code=201,content=b'')
