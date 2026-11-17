@@ -40,7 +40,7 @@ class Runtime:
 
         self.controls = PauseControl(self.state_path.with_name("controls.json"))
         self.settings["transaction_gate"] = lambda: (
-            self.controls.snapshot()["paused"] or self.state_path.with_name(".restore-journal").exists()
+            pause_status(self.controls)[0]["paused"] or self.state_path.with_name(".restore-journal").exists()
         )
         self.api = None
         self.service = None
@@ -235,7 +235,10 @@ class Runtime:
                 raise ValueError("Container is stopping; request was not executed.")
             if self._configuration_uncertain:
                 raise ValueError("Settings storage is being verified; transactions remain paused.")
-            if self.controls.snapshot()["paused"] or self.state_path.with_name(".restore-journal").exists():
+            pause, pause_unavailable = pause_status(self.controls)
+            if pause_unavailable:
+                raise ValueError(PAUSE_UNAVAILABLE)
+            if pause["paused"] or self.state_path.with_name(".restore-journal").exists():
                 raise ValueError("Transactions are paused. Resume in Settings first.")
             if not self.api or not self.settings["manual_withdrawal_enabled"]:
                 raise ValueError("Manual withdrawals are disabled in Settings.")
