@@ -45,13 +45,23 @@ class BitcoinOnlyTests(unittest.TestCase):
     def test_web_ui_always_starts_using_the_saved_runtime_settings(self):
         with patch.dict(os.environ,{'WEB_UI_ENABLED':'false','EXCHANGE':'BITVAVO','LIVE_TRADING':'false'},clear=True), \
                 patch('app.trading.runtime.Runtime') as runtime_class, patch('app.webpage.web_ui.serve') as serve, \
-                patch.object(bot,'prepare_storage'),patch.object(bot.threading,'Thread'):
+                patch.object(bot,'prepare_storage'),patch.object(bot.threading,'Thread') as thread:
             app=runtime_class.return_value;app.settings=self.settings
             import runpy
             runpy.run_module("app", run_name="__main__")
         runtime_class.assert_called_once_with()
         app.worker.start.assert_called_once_with()
-        serve.assert_called_once_with(self.settings,6890,app.worker.submit,worker=app.worker,runtime=app,stop=serve.call_args.kwargs['stop'])
+        display_thread = thread.call_args.kwargs
+        self.assertEqual(display_thread["name"], "display-prices")
+        self.assertTrue(display_thread["daemon"])
+        stop = serve.call_args.kwargs["stop"]
+        display_prices = serve.call_args.kwargs["display_prices"]
+        self.assertIs(display_thread["target"].__self__, display_prices)
+        self.assertIs(display_thread["args"][1], stop)
+        serve.assert_called_once_with(
+            self.settings, 6890, app.worker.submit, worker=app.worker, runtime=app, stop=stop,
+            display_prices=display_prices,
+        )
         app.shutdown.assert_called_once_with()
 
 
@@ -71,7 +81,7 @@ class BitcoinOnlyTests(unittest.TestCase):
                 patch.object(bot, 'update_dashboard_snapshot'):
             self.assertEqual(bot.run_once(api, self.settings, 300), 30)
         api.market.assert_called_once_with('BTC-EUR', refresh=True)
-        self.assertEqual([call.args[0] for call in api.price.call_args_list],['BTC-EUR','BTC-USD'])
+        api.price.assert_called_once_with('BTC-EUR')
         self.assertEqual(api.buy_btc.call_args.args[:2], ('EUR', Decimal('.0001')))
         api.buy_base.assert_not_called()
 
