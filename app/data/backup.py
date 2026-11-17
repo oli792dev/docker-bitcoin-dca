@@ -211,6 +211,7 @@ def recover_restore(directory):
     ):
         raise ValueError("Invalid restore recovery journal; transactions remain blocked.")
     with activity._REPORT_LOCK, activity._ACTIVITY_LOCK:
+        activity._touch_activity()
         for name, existed in manifest.items():
             target = directory / name
             if existed:
@@ -384,8 +385,7 @@ class Backups:
                 # Import validated records into the application's own schema;
                 # archived SQL, caches and indexes are never installed.
                 if scope != "config":
-                    with activity._db() as db:
-                        db.executemany(activity._INSERT, [activity._values(row) for row in records.values()])
+                    activity.append_activity_records(records.values())
                 (self.directory / "dashboard.json").unlink(missing_ok=True)
             except BaseException:
                 recover_restore(self.directory)
