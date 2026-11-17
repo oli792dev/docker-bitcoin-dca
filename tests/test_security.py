@@ -145,10 +145,13 @@ class AttemptLimitTests(unittest.TestCase):
 
     def test_native_logout_revokes_session_and_clears_cookie(self):
         with patch.object(web_ui,'_SESSIONS',{'active':float('inf')}):
-            h=object.__new__(web_ui.Handler)
+            h=object.__new__(web_ui.Handler);h.path='/logout'
+            h.runtime=Mock()
+            h.runtime.store.snapshot.side_effect=AssertionError('Logout must not wait for configuration storage')
             h.headers={'Host':'dca.test:6890','Origin':'https://dca.test:6890','Cookie':'dca_session=active'}
             h.send_response=Mock();h.send_header=Mock();h.end_headers=Mock()
-            h._handle_logout()
+            h.do_POST()
+            h.runtime.store.snapshot.assert_not_called()
             h.send_response.assert_called_once_with(303)
             self.assertFalse(web_ui.session_is_valid('active'))
             self.assertTrue(any(call.args[0]=='Set-Cookie' and 'Max-Age=0' in call.args[1] for call in h.send_header.call_args_list))
