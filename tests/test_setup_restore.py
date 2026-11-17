@@ -152,6 +152,21 @@ class SetupRestoreTests(unittest.TestCase):
 
         self.assertTrue(self.runtime.exchange_check_pending)
         self.assertIsNone(self.runtime.service)
+        self.assertTrue(self.runtime._configuration_uncertain)
+
+    def test_failed_first_restore_can_be_retried_after_rollback_removes_config(self):
+        payload = self.archive("config")
+
+        def roll_back(*args, before_mutation):
+            before_mutation()
+            raise OSError("fixture rolled back before account creation")
+
+        with patch.object(Backups, "restore", side_effect=roll_back):
+            with self.assertRaisesRegex(OSError, "fixture rolled back"):
+                self.runtime.backup(payload, restore=True, setup=True)
+        self.assertFalse(self.runtime._configuration_uncertain)
+        self.assertTrue(self.runtime.backup(payload, restore=True, setup=True)["restored"])
+
 
     def test_setup_restore_requires_the_action_header(self):
         status, _ = self.request(self.archive('config'), action_header=False)
