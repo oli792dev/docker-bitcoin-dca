@@ -7,7 +7,6 @@ from pathlib import Path
 
 from app.data.storage import write_json_atomic
 
-
 PAUSE_UNAVAILABLE = "Transaction controls unavailable; trading is blocked"
 
 
