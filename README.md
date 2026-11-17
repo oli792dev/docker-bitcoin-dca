@@ -17,7 +17,7 @@ A self-hosted Bitcoin DCA bot for Kraken and Bitvavo, managed through an HTTPS d
 
 ## Setup
 
-Requires Docker Compose, internet access and an exchange account. Run one bot per exchange account.
+Requires Docker Compose, internet access and an exchange account. Run one bot per exchange account. Give each dashboard its own hostname when running multiple bots or sharing the host with other HTTPS services.
 
 ```sh
 git clone https://github.com/oli792dev/docker-bitcoin-dca.git

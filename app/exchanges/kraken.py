@@ -8,7 +8,7 @@ import threading
 import time
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 
 import requests
@@ -500,14 +500,19 @@ class Kraken:
             raise KrakenAPIError("Kraken withdrawal-history page limit reached")
         withdrawals = []
         for item in result:
-            status = str(item.get("status", "")).lower()
-            timestamp = int(float(item.get("time", 0)) * 1000)
+            status = item.get("status")
+            status = status.lower() if isinstance(status, str) else ""
+            try:
+                timestamp = int(Decimal(str(item.get("time", 0))) * 1000)
+            except (InvalidOperation, OverflowError, ValueError) as exc:
+                raise KrakenAPIError("Invalid Kraken withdrawal-history timestamp") from exc
             withdrawals.append(
                 {
                     "timestamp": timestamp,
-                    "symbol": "BTC",
-                    "amount": str(item.get("amount", "0")),
-                    "fee": str(item.get("fee", "0")),
+                    "symbol": _canonical_asset(item.get("asset")),
+                    "key": item.get("key"),
+                    "amount": str(item["amount"]) if item.get("amount") is not None else None,
+                    "fee": str(item["fee"]) if item.get("fee") is not None else None,
                     "status": "completed" if status == "success" else ("failed" if status == "failure" else status),
                     "id": item.get("refid") or "",
                     "txId": item.get("txid") or "",
@@ -664,4 +669,7 @@ class Kraken:
             "amount": withdrawal["amount"],
         }
         result = self.private("Withdraw", payload)
-        return {"id": result.get("refid"), "refid": result.get("refid")}
+        reference = result.get("refid") if isinstance(result, dict) else None
+        if not isinstance(reference, str) or not reference.strip():
+            raise KrakenAPIError("Kraken withdrawal response did not include its reference")
+        return {"id": reference, "refid": reference}

@@ -11,6 +11,7 @@ from app.core.purchase_status import PurchaseStatus
 from app.core.security import AttemptLimiter, PasswordConfirmationError, SessionExpiredError
 from app.data.storage import STATE_PATH
 from app.exchanges.exchange import create_exchange
+from app.trading.controls import PAUSE_UNAVAILABLE, pause_status
 from app.trading.identity import account_identity
 
 LOG = logging.getLogger("bitcoin-dca.settings")
@@ -39,7 +40,7 @@ class Runtime:
 
         self.controls = PauseControl(self.state_path.with_name("controls.json"))
         self.settings["transaction_gate"] = lambda: (
-            self.controls.snapshot()["paused"] or self.state_path.with_name(".restore-journal").exists()
+            pause_status(self.controls)[0]["paused"] or self.state_path.with_name(".restore-journal").exists()
         )
         self.api = None
         self.service = None
@@ -122,11 +123,15 @@ class Runtime:
         """Read-only startup gate; never submit or retry financial requests here."""
         from app.core.logging_utils import log_transition
         from app.data.activity import withdrawal_records
+        from app.trading.bot import recover_pending_kraken_withdrawal
         from app.trading.withdrawals import reconcile_withdrawals
 
         orders = self.api.open_orders()
         if not isinstance(orders, list):
             raise ValueError("Open exchange orders could not be verified.")
+        if self.settings["exchange"] == "KRAKEN" and self.state_path.exists():
+            state = json.loads(self.state_path.read_text())
+            recover_pending_kraken_withdrawal(self.api, state, self.settings, state_path=self.state_path)
         transfers = self.api.btc_withdrawals(0, int(time.time() * 1000))
         if not isinstance(transfers, list):
             raise ValueError("Complete withdrawal status could not be verified.")
@@ -230,7 +235,10 @@ class Runtime:
                 raise ValueError("Container is stopping; request was not executed.")
             if self._configuration_uncertain:
                 raise ValueError("Settings storage is being verified; transactions remain paused.")
-            if self.controls.snapshot()["paused"] or self.state_path.with_name(".restore-journal").exists():
+            pause, pause_unavailable = pause_status(self.controls)
+            if pause_unavailable:
+                raise ValueError(PAUSE_UNAVAILABLE)
+            if pause["paused"] or self.state_path.with_name(".restore-journal").exists():
                 raise ValueError("Transactions are paused. Resume in Settings first.")
             if not self.api or not self.settings["manual_withdrawal_enabled"]:
                 raise ValueError("Manual withdrawals are disabled in Settings.")
@@ -270,6 +278,8 @@ class Runtime:
                 pause_requested = False
             if pause_requested is not None and self.recovery_required:
                 raise ValueError("Restore recovery is required; restart the container before resuming.")
+            if pause_requested is False and values["live"] and pause_status(self.controls)[1]:
+                raise ValueError(PAUSE_UNAVAILABLE)
             account = previous["account"]
             if not account:
                 raise ValueError("Create a dashboard account first.")
@@ -501,6 +511,8 @@ class Runtime:
                 raise ValueError("Restore recovery is required; restart the container before resuming.")
             if payload.get("paused") is True and not self.settings.get("live", False):
                 raise ValueError("Enable and save live trading before pausing transactions.")
+            if payload.get("paused") is False and pause_status(self.controls)[1]:
+                raise ValueError(PAUSE_UNAVAILABLE)
             result = self.controls.set(payload.get("paused"), payload.get("until"))
             self.service = None
             self.worker.reconfigure.set()

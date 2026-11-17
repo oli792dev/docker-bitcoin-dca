@@ -493,6 +493,26 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(self.app.api.open_orders.call_count,3)
         self.app.api.buy_btc.assert_not_called();self.app.api.withdraw_btc.assert_not_called()
 
+    def test_startup_recovers_saved_kraken_withdrawal_without_submitting_again(self):
+        self.ready(startup_delay_seconds=0, live=True)
+        timestamp = 1_780_000_000_000
+        self.app.state_path.write_text(json.dumps({
+            "pending_withdrawal": {"asset": "XBT", "key": "wallet", "amount": ".0044", "fee": ".0001"},
+            "pending_withdrawal_context": {
+                "exchange": "KRAKEN", "quote": "EUR", "price": "81000", "timestamp_ms": timestamp,
+            },
+        }))
+        self.app.api.btc_withdrawals.return_value = [{
+            "symbol": "BTC", "key": "wallet", "amount": ".0044", "fee": ".0001",
+            "timestamp": timestamp + 1000, "id": "kraken-ref", "status": "completed",
+        }]
+        with patch.object(bot, "run_once") as run:
+            self.app.cycle()
+        run.assert_called_once()
+        self.app.api.withdraw_btc.assert_not_called()
+        self.assertNotIn("pending_withdrawal", json.loads(self.app.state_path.read_text()))
+        self.assertEqual(activity.get_activity_record("withdrawal:kraken-ref")["withdrawalStatus"], "completed")
+
     def test_check_failure_and_unknown_status_keep_gate_closed(self):
         self.automatic_check()
         with patch.object(bot,'run_once') as run:

@@ -297,19 +297,22 @@ test('operational controls, backup review and Activity filters remain usable', a
   await expect(page.locator('#backupReview')).not.toBeVisible();
   await expect(page.locator('#restorePasswordError')).toContainText('Backup password must contain');
   await page.locator('#restorePassword').fill('archive-backup-password');
+  await page.locator('#restoreScope').selectOption('config');
+  await page.locator('#backupScope').selectOption('full');
   await page.locator('#restoreBackup').click();
   await expect(page.locator('#backupReview')).toBeVisible();
   await expect(page.locator('#restoreScopeName')).toHaveText('Config only: settings and login');
   await expect(page.locator('#restoreReviewFilename')).toHaveText('example.dcabackup');
-  await expect(page.locator('#backupReview>p')).toHaveCount(2);
+  await expect(page.locator('#restoreScopeEffect')).toContainText('Sign in again with the login saved in the backup.');
   expect(await page.locator('#restoreScopeName').evaluate(el=>getComputedStyle(el).font)).toBe(await page.locator('#restoreReviewFilename').evaluate(el=>getComputedStyle(el).font));
   await page.locator('#cancelBackupRestore').click();
   await expect(page.locator('#backupReview')).not.toBeVisible();
   for(const scope of ['full','activity']){
-    await page.locator('#backupScope').selectOption(scope);
-    const label=await page.locator('#backupScope option:checked').textContent();
+    await page.locator('#restoreScope').selectOption(scope);
+    const label=await page.locator('#restoreScope option:checked').textContent();
     await page.locator('#restoreBackup').click();
     await expect(page.locator('#restoreScopeName')).toHaveText(label);
+    await expect(page.locator('#restoreScopeEffect')).toContainText(scope==='full'?'financial state':'Adds Activity records');
     await expect(page.locator('#restoreReviewFilename')).toHaveText('example.dcabackup');
     await page.locator('#cancelBackupRestore').click();
   }
@@ -410,10 +413,12 @@ test('purchase explanation explains the saved schedule in prose',async({page})=>
 
 test('successful restore reloads login with a one-time safe backup filename',async({page})=>{
  let restored=false;
- await page.route('**/api/settings/restore',route=>{const payload=route.request().postDataJSON();expect(payload.password).toBe('archive-backup-password');if(payload.current_password!=='current-dashboard-password')return route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:'Your current password is incorrect.',field:'backupLoginPassword'})});restored=true;return route.fulfill({contentType:'application/json',body:JSON.stringify({restored:true,signInRequired:true})})});
+ await page.route('**/api/settings/restore',route=>{const payload=route.request().postDataJSON();expect(payload.scope).toBe('config');expect(payload.password).toBe('archive-backup-password');if(payload.current_password!=='current-dashboard-password')return route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:'Your current password is incorrect.',field:'backupLoginPassword'})});restored=true;return route.fulfill({contentType:'application/json',body:JSON.stringify({restored:true,signInRequired:true})})});
  await page.route('https://dca.test/',route=>restored?route.fulfill({contentType:'text/html',body:pages['/login']}):route.fallback());
  await page.goto('/');await page.locator('#openSettings').click();
  const frame=page.frameLocator('#settingsFrame');await frame.getByRole('tab',{name:'Backup',exact:true}).click();
+ await frame.locator('#restoreScope').selectOption('config');
+ await frame.locator('#backupScope').selectOption('activity');
  await frame.locator('#restoreFile').setInputFiles({name:'<b>my-backup</b>.dcabackup',mimeType:'application/octet-stream',buffer:Buffer.from('fixture')});
  await frame.locator('#restoreLoginPassword').fill('wrong-dashboard-password');
  await frame.locator('#restorePassword').fill('archive-backup-password');

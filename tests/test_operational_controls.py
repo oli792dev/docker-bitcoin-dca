@@ -43,6 +43,23 @@ class PauseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'paused'):
             account.action('confirm', 'session', 'token')
 
+    def test_resume_keeps_corrupt_controls_fail_closed(self):
+        from threading import RLock
+        from app.trading.controls import PauseControl
+
+        with tempfile.TemporaryDirectory() as tmp:
+            account = object.__new__(runtime.Runtime)
+            account.lock = RLock()
+            account.state_path = Path(tmp) / "state.json"
+            account.settings = {"live": True}
+            account.worker = Mock()
+            path = account.state_path.with_name("controls.json")
+            path.write_text("{broken")
+            account.controls = PauseControl(path)
+            with self.assertRaisesRegex(ValueError, "controls"):
+                account.set_pause({"paused": False})
+            self.assertEqual(path.read_text(), "{broken")
+
     def test_pause_can_only_be_enabled_with_saved_live_trading(self):
         import threading
         account=object.__new__(runtime.Runtime)

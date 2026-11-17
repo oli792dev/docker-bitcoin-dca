@@ -25,13 +25,10 @@ def settings_page(store, create_account=False, embedded=False):
     data["pauseUnavailable"] = False
     data["recoveryRequired"] = False
     if not create_account and getattr(store, "path", None) is not None:
-        from app.trading.controls import PauseControl
+        from app.trading.controls import PauseControl, pause_status
 
         data["recoveryRequired"] = store.path.with_name(".restore-journal").exists()
-        try:
-            data["pause"] = PauseControl(store.path.with_name("controls.json")).snapshot()
-        except (ValueError, OSError):
-            data["pauseUnavailable"] = True
+        data["pause"], data["pauseUnavailable"] = pause_status(PauseControl(store.path.with_name("controls.json")))
     data["createAccount"] = create_account
     data["embedded"] = embedded
     encoded = json.dumps(data).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
