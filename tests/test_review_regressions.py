@@ -133,6 +133,30 @@ class ReviewTests(unittest.TestCase):
         snapshot['marketPrices']={'EUR':'80000'}
         self.assertEqual(market_prices.snapshot_market_price(snapshot,'KRAKEN','EUR','EUR')['price'],'80000')
 
+    def test_market_price_route_uses_independent_cached_quote(self):
+        snapshot = {
+            "exchange": "KRAKEN", "quote": "EUR", "marketPrices": {"EUR": "80000"},
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        }
+        response = Mock()
+        response.json.return_value = {"error": [], "result": {"XXBTZUSD": {"c": ["88000", "1"]}}}
+        handler = object.__new__(web_ui.Handler)
+        handler.path = "/api/market-price?currency=USD"
+        handler.settings = self.settings
+        handler._require_authentication = lambda: True
+        handler._json = Mock()
+        handler.display_prices = market_prices.DisplayPrices()
+        with patch.object(market_prices.requests, "get", return_value=response):
+            handler.display_prices.refresh("EUR")
+        with patch.object(web_ui, "read_dashboard_snapshot", return_value=snapshot), patch.object(
+            market_prices.requests, "get", side_effect=AssertionError("browser network request")
+        ):
+            handler.do_GET()
+        status, market = handler._json.call_args.args
+        self.assertEqual(status, 200)
+        self.assertEqual(market["conversionRate"], "1.1")
+        self.assertFalse(market["stale"])
+
     def test_historical_rates_are_cached_once_per_trade_day(self):
         record=self.record(currency='USD',when='2026-10-25T12:00:00Z')
         response=Mock();response.json.return_value={'rates':{'2026-10-23':{'EUR':'.9'}}}
@@ -161,7 +185,8 @@ class ReviewTests(unittest.TestCase):
         with patch.object(bot,'read_state',return_value=state),patch.object(bot,'save_state'),patch.object(bot,'update_dashboard_snapshot'),patch.object(bot,'update_dashboard_schedule'):
             bot.run_once(api,{**self.settings,'live':False},300)
         self.assertEqual(D(state['spent']),D('8.02'))
-        self.assertEqual(api.balance.call_count,2);self.assertEqual(api.market.call_count,1);self.assertEqual(api.price.call_count,2)
+        self.assertEqual(api.balance.call_count,2);self.assertEqual(api.market.call_count,1)
+        api.price.assert_called_once_with('BTC-EUR')
 
     def test_periodic_checks_do_not_move_due_time_when_inputs_are_unchanged(self):
         now=datetime(2026,10,28,12,tzinfo=timezone.utc)
