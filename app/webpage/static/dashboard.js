@@ -10,6 +10,7 @@ const numberFormats={
  integer:new Intl.NumberFormat(locale),
  minutes:new Intl.NumberFormat(locale,{maximumFractionDigits:1}),
 };
+const relativeTimeFormat=new Intl.RelativeTimeFormat(locale,{numeric:"always"});
 const browserTimeZone=Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC";
 function money(v,c){
  try{
@@ -27,7 +28,18 @@ function dateLabel(ms,timeZone,withZone=false){
  }
  return dateFormats.get(key).format(ms);
 }
-let exchangeBtcBalance=null, balanceDisplayPrice=null, balanceDisplayCurrency=null;
+let exchangeBtcBalance=null, balanceDisplayPrice=null, balanceDisplayCurrency=null, displayedMarketUpdatedAt=0;
+function renderMarketAge(){
+ const el=$('marketDataAge');
+ let text='';
+ if(displayedMarketUpdatedAt>0){
+  const seconds=Math.max(0,(Date.now()+scheduleClockOffset)/1000-displayedMarketUpdatedAt);
+  const [unit,duration]=seconds>=86400?['day',86400]:seconds>=3600?['hour',3600]:seconds>=60?['minute',60]:['second',1];
+  const age=relativeTimeFormat.format(-Math.floor(seconds/duration),unit);
+  text=t(seconds>600?'Market data is stale · updated {age}':'Market data updated {age}').replace('{age}',age);
+ }
+ if(el.textContent!==text)el.textContent=text;
+}
 function renderExchangeBtcValue(){
  $("exchangeBtcValue").textContent=t(exchangeBtcBalance!==null&&balanceDisplayPrice>0&&balanceDisplayCurrency===displayCurrency?money(exchangeBtcBalance*balanceDisplayPrice,displayCurrency):"—");
 }
@@ -98,6 +110,8 @@ async function refreshPurchaseSchedule(){
    const market=lastAccountMarket;
    balanceDisplayPrice=Number(market.price);balanceDisplayCurrency=market.currency;
    $('spot').textContent=money(market.price,market.currency)+'/BTC';
+   displayedMarketUpdatedAt=Number(market.updatedAt)||0;
+   renderMarketAge();
   }
   if(lastReportData&&$('periodReport').ariaBusy!=='true'){
    const market=reportAccountMarket(lastReportData);
@@ -144,7 +158,7 @@ async function refreshPurchaseSchedule(){
  }catch(e){if(request===scheduleRequest){activityRevision=undefined;lastAccountMarket=null;$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");updateStatusLight("error")}}
  finally{if(request===scheduleRequest){clearTimeout(scheduleRefreshTimer);scheduleRefreshTimer=setTimeout(refreshDashboard,dashboardRefreshSeconds*1000)}}
 }
-setInterval(renderPurchaseCountdown,1000);
+setInterval(()=>{renderPurchaseCountdown();renderMarketAge()},1000);
 
 function showError(message){$("error").textContent=t(message||"");$("error").classList.toggle("hidden",!message)}
 function logUiEvent(event){
@@ -163,7 +177,8 @@ function restoreReportView(){
 
 let reportFromSave=Promise.resolve();
 function saveReportFrom(){
- const timestamp=parseInput($('start'));
+ const selectedInterval=$('interval').value;
+ const timestamp=selectedInterval?Number(selectedInterval.split(',')[0]):parseInput($('start'));
  if(!Number.isFinite(timestamp))return Promise.resolve();
  const value=new Date(timestamp).toISOString();
  reportFromSave=reportFromSave.catch(()=>{}).then(async()=>{
@@ -193,13 +208,32 @@ function confirmWithdrawal(preview){
   dialog.showModal();
  });
 }
-function selectedPeriod(dates){const start=Date.parse(dates?.start??$("start").value),end=Date.parse(dates?.end??$("end").value);if(!Number.isFinite(start)||!Number.isFinite(end)||start>=end)throw new Error("Please choose a valid date range.");return {start:start,end:end}}
-function applySelectedInterval(){if(!$("interval").value)return;const p=$("interval").value.split(",").map(Number);$("start").value=localInput(p[0]);$("end").value=localInput(p[1])}
+function selectedPeriod(dates){
+ const interval=dates?.interval??$('interval').value;
+ const [start,end]=interval?interval.split(',').map(Number):[Date.parse(dates?.start??$('start').value),Date.parse(dates?.end??$('end').value)];
+ if(!Number.isFinite(start)||!Number.isFinite(end)||start>=end)throw new Error("Please choose a valid date range.");
+ return {start,end};
+}
+function applySelectedInterval(){
+ const interval=$('interval').value;
+ if(!interval)return;
+ const [start,end,displayStart=start]=interval.split(',').map(Number);
+ $('start').value=localInput(displayStart);
+ $('end').value=localInput(end);
+}
 async function loadIntervals(){
  const response=await fetch("/api/withdrawals");if(!response.ok)throw new Error("Could not load withdrawal history.");
  const withdrawals=await response.json();const select=$("interval");select.innerHTML="";
  const custom=document.createElement("option");custom.value="";custom.textContent=t("Custom date range");select.appendChild(custom);
- for(const withdrawal of withdrawals){const start=Number(withdrawal.startTimestamp),end=Number(withdrawal.timestamp);if(!(start>0&&end>start))continue;const o=document.createElement("option");o.value=start+","+end;o.textContent=t(dateLabel(start)+" → "+dateLabel(end));select.appendChild(o)}
+ for(const withdrawal of withdrawals){
+  const previous=Number(withdrawal.startTimestamp),first=Number(withdrawal.analysisStartTimestamp),end=Number(withdrawal.timestamp);
+  const start=previous||(first>0?first-1:NaN);
+  if(!(start>=0&&end>start))continue;
+  const option=document.createElement('option');option.value=previous?[start,end].join(','):[start,end,first].join(',');
+  const startLabel=previous?dateLabel(previous):t('First recorded purchase')+' ('+dateLabel(first)+')';
+  option.textContent=startLabel+' → '+dateLabel(end);
+  select.appendChild(option);
+ }
  select.value="";
 }
 let selectedQuickRange='customRange',rangeDraft=null,customPeriod=null,reportThroughNow=true;
@@ -329,8 +363,11 @@ async function loadReportMarket(d){
   if(previous)return previous;
   const snapshotUpdatedAt=Date.parse(d.snapshot?.updatedAt)/1000||0;
   const purchase=lastPurchaseMarket?.currency===d.quote&&lastPurchaseMarket.exchange===d.exchange&&lastPurchaseMarket.updatedAt>=snapshotUpdatedAt?lastPurchaseMarket:null;
-  const price=purchase?.price||Number(d.snapshot?.price)||(balanceDisplayCurrency===d.quote?balanceDisplayPrice:0);
-  return {currency:d.quote,price,rates:{[d.quote]:1},updatedAt:purchase?.updatedAt||snapshotUpdatedAt};
+  const snapshotPrice=Number(d.snapshot?.price);
+  const retainedPrice=balanceDisplayCurrency===d.quote?balanceDisplayPrice:0;
+  const price=purchase?.price||snapshotPrice||retainedPrice;
+  const updatedAt=purchase?.updatedAt||(snapshotPrice>0?snapshotUpdatedAt:retainedPrice>0?displayedMarketUpdatedAt:0);
+  return {currency:d.quote,price,rates:{[d.quote]:1},updatedAt};
  }
 }
 function updateReportMarket(d,market,newReport=false){
@@ -338,6 +375,8 @@ function updateReportMarket(d,market,newReport=false){
  if(!newReport&&market.currency===previous?.currency&&market.updatedAt>0&&market.updatedAt<previous.updatedAt)return;
  const ratesChanged=market.currency!==previous?.currency||JSON.stringify(market.rates)!==JSON.stringify(previous?.rates);
  lastReportMarket=market;
+ displayedMarketUpdatedAt=market.price>0?market.updatedAt:0;
+ renderMarketAge();
  if(!newReport&&!ratesChanged&&market.price===previous?.price)return;
  displayCurrency=market.currency;activityRates=market.rates;
  balanceDisplayPrice=market.price;balanceDisplayCurrency=displayCurrency;renderExchangeBtcValue();
@@ -448,14 +487,14 @@ async function withdrawalPost(path, body){
  const result=await response.json();if(!response.ok)throw new Error(result.error||"Withdrawal request failed.");
  if(!result.jobId)return result;
  showWithdrawalMessage("Request queued. Waiting for the account worker…",false);
- for(let i=0;i<600;i++){
+ for(let i=0;;i++){
   const check=await fetch("/api/withdrawal/jobs/"+encodeURIComponent(result.jobId));const job=await check.json();
   if(!check.ok)throw new Error(job.error||"Could not check the request. Check exchange status before trying again.");
   if(job.state==="failed")throw new Error(job.error);
   if(job.state==="completed")return job.result;
-  await new Promise(resolve=>setTimeout(resolve,1000));
+  if(job.state!=="queued"&&job.state!=="running")throw new Error("The request is still unresolved. Check exchange status before starting another withdrawal.");
+  await new Promise(resolve=>setTimeout(resolve,i<599?1000:10000));
  }
- throw new Error("The request is still unresolved. Check exchange status before starting another withdrawal.");
 }
 async function loadWithdrawalConfiguration(){
  const response=await fetch("/api/withdrawal/config");const d=await response.json();
@@ -508,7 +547,8 @@ async function refreshDashboard(force=false){
   }
  }
  const request=reportRequest;
- const query=reportQuery({start:parseInput($("start")),end:parseInput($("end"))});
+ let query;
+ try{query=reportQuery(selectedPeriod())}catch{return}
  // shortcut: future-dated rows can enter through-now reports between revisions, refresh periodically until the ledger exposes the next timestamp.
  const throughNowChanged=reportThroughNow&&(query.end<lastReportEnd||Date.now()-lastReportReadAt>=300000);
  if(force||!lastReportData||activityRevision==null||throughNowChanged||reportKey(query,activityRevision,reportConfigurationRevision,reportThroughNow)!==lastReportKey){
