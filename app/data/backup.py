@@ -25,6 +25,7 @@ from app.data import activity
 from app.data.storage import write_json_atomic
 
 MAX_BYTES = 32 * 1024 * 1024
+MAX_ZIP_METADATA_READ = (1 << 16) + 22  # End record plus the ZIP comment search window.
 MAGIC = b"DCA-BACKUP-1\0"
 FILES = frozenset(
     {"config.json", "state.json", "controls.json", "installation.json", "report-preferences.json", "activity.sqlite3"}
@@ -37,6 +38,18 @@ SCOPES = {
 JOURNAL = ".restore-journal"
 COMPLETED = ".restore-completed"
 LOG = logging.getLogger("bitcoin-dca.backup")
+
+
+class _BackupArchiveBuffer(io.BytesIO):
+    reading_metadata = True
+
+    def read(self, size: int | None = -1, /) -> bytes:
+        # ZipFile reads the directory and builds its member list during construction.
+        if self.reading_metadata:
+            read_size = size if size is not None and size >= 0 else self.getbuffer().nbytes - self.tell()
+            if read_size > MAX_ZIP_METADATA_READ:
+                raise ValueError("Backup ZIP metadata exceeds the size limit.")
+        return super().read(size)
 
 
 def _key(password, salt):
@@ -75,7 +88,8 @@ def unpack(payload):
     if len(payload) > MAX_BYTES:
         raise ValueError("Backup exceeds the 32 MiB limit.")
     try:
-        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        with _BackupArchiveBuffer(payload) as buffer, zipfile.ZipFile(buffer) as archive:
+            buffer.reading_metadata = False
             members = archive.infolist()
             names = [item.filename for item in members]
             if (
