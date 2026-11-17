@@ -4,7 +4,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from app.data.activity import append_activity_records
+from app.data.activity import activity_records_by_id, append_activity_records
 from app.trading.deposit_types import (
     DepositActivity,
     DepositHistoryExchange,
@@ -66,11 +66,15 @@ def sync_deposits(
     start = max(0, int(datetime.fromisoformat(observation["historyStartAt"]).timestamp() * 1000))
     verification_start = max(0, int(datetime.fromisoformat(pending["start"]).timestamp() * 1000)) if pending else start
     start = min(start, verification_start)
-    rows = api.fiat_deposits(settings["quote"], start, int(now.timestamp() * 1000))
+    end = int(now.timestamp() * 1000)
+    rows = api.fiat_deposits(settings["quote"], start, end)
     if not isinstance(rows, list):
         raise ValueError("Fiat deposit history could not be verified")
     records: list[DepositActivity] = []
+    new_records: list[DepositActivity] = []
+    deposit_total = Decimal(0)
     account_scope = f"{settings['account_identity']}:" if settings.get("account_identity") else ""
+    candidates = []
     for item in rows:
         if item.get("status") != "completed" or item.get("symbol") != settings["quote"]:
             continue
@@ -81,21 +85,40 @@ def sync_deposits(
         timestamp = int(item["timestamp"])
         if not item.get("id") or timestamp < 0:
             raise ValueError("Invalid fiat deposit reference or timestamp")
-        if not start <= timestamp <= int(now.timestamp() * 1000):
+        if not start <= timestamp <= end:
             continue
         record_id = f"fiat-deposit:{settings['exchange']}:{settings['quote']}:{account_scope}{item['id']}"
+        candidates.append((record_id, timestamp, amount, fee))
+
+    stored: dict[str, DepositActivity] = activity_records_by_id([row[0] for row in candidates])
+    for record_id, timestamp, amount, fee in candidates:
+        if pending and timestamp >= verification_start:
+            deposit_total += amount - fee
+        occurred_at = datetime.fromtimestamp(timestamp / 1000, UTC).isoformat()
+        amount_text, fee_text = str(amount), str(fee)
+        existing = stored.get(record_id)
+        # Restored ledger data may differ from current exchange funding evidence.
+        if existing and (
+            existing["row"].get("datetime") == occurred_at
+            and existing["row"].get("amount") == amount_text
+            and existing["row"].get("fee") == fee_text
+            and existing["row"].get("type") == "Deposit"
+            and existing.get("depositStatus") == "confirmed"
+        ):
+            records.append(existing)
+            continue
         record: DepositActivity = {
             "id": record_id,
             "exchange": settings["exchange"],
             "depositStatus": "confirmed",
             "row": {
-                "datetime": datetime.fromtimestamp(timestamp / 1000, UTC).isoformat(),
+                "datetime": occurred_at,
                 "type": "Deposit",
                 "identifier": settings["quote"],
                 "assetType": "Cash",
                 "currency": settings["quote"],
-                "amount": str(amount),
-                "fee": str(fee),
+                "amount": amount_text,
+                "fee": fee_text,
                 "shares": "0",
                 "price": "0",
                 "tax": "0",
@@ -104,20 +127,15 @@ def sync_deposits(
         if settings.get("account_identity"):
             record["accountIdentity"] = settings["account_identity"]
         records.append(record)
+        if existing is None:
+            new_records.append(record)
+            stored[record_id] = record
     # Insert before advancing the checkpoint; retrying the same exchange IDs is harmless.
-    inserted = _persist_deposits(records) if records else 0
+    inserted = _persist_deposits(new_records) if new_records else 0
     if not pending:
         if records:
             observation["confirmed"] = records
         return observation["confirmed"], inserted
-    deposit_total = sum(
-        (
-            Decimal(record["row"]["amount"]) - Decimal(record["row"]["fee"])
-            for record in records
-            if int(datetime.fromisoformat(record["row"]["datetime"]).timestamp() * 1000) >= verification_start
-        ),
-        Decimal(0),
-    )
     verified = False
     if booked is not None and "bookedBaseline" in pending:
         classifier = getattr(type(api), "non_deposit_balance_change", None)
@@ -130,7 +148,7 @@ def sync_deposits(
                 api,
                 settings["quote"],
                 verification_start,
-                int(now.timestamp() * 1000),
+                end,
                 Decimal(pending["bookedBaseline"]) if "bookedBaseline" in pending else None,
                 booked,
                 deposit_total,
