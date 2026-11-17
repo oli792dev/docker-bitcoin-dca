@@ -590,14 +590,24 @@ class Runtime:
                 raise ValueError("Invalid backup encoding.") from None
             if self.unresolved() or self.worker.queue.unfinished_tasks:
                 raise ValueError("Resolve pending transactions and queued requests before restoring a backup.")
+            mutation_started = False
+
+            def before_mutation():
+                nonlocal mutation_started
+                mutation_started = True
+
             try:
-                result = manager.restore(encrypted, payload["password"], None if setup else payload["scope"])
+                result = manager.restore(
+                    encrypted, payload["password"], None if setup else payload["scope"], before_mutation=before_mutation
+                )
             except BaseException:
-                if (self.state_path.parent / ".restore-completed").exists():
+                recovery_required = self.recovery_required
+                if mutation_started and (self.state_path.parent / ".restore-completed").exists():
                     self._configuration_uncertain = True
-                self.exchange_check_pending = True
-                self.service = None
-                if self.recovery_required:
+                if mutation_started or recovery_required:
+                    self.exchange_check_pending = True
+                    self.service = None
+                if recovery_required:
                     LOG.error("Restore recovery required; restart the container. New transactions remain blocked.")
                     self.controls.set(True)
                 raise
