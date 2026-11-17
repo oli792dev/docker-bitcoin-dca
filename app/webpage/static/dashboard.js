@@ -307,14 +307,16 @@ function activityStatus(row){
  if(status==="unverified")return {label:"Unverified",tone:"muted"};
  return {label:"Pending",tone:"pending"};
 }
-let renderedActivities;
+let renderedActivities,filteredActivityMarket;
 function renderActivities(){
  const body=$("activities");
  const pageSize=Number($("pageSize").value),total=activityTotal,totalPages=activityPages;
  currentPage=Math.min(Math.max(1,currentPage),totalPages);
  const start=(currentPage-1)*pageSize,end=Math.min(start+pageSize,total);
+ const market=filteredActivityMarket||lastReportMarket;
  const rows=activityRows.map(row=>{
-  const rate=Number.isFinite(activityRates[row.currency])?activityRates[row.currency]:1,currency=Number.isFinite(activityRates[row.currency])?displayCurrency:row.currency;
+  const conversion=market?.rates[row.currency];
+  const rate=Number.isFinite(conversion)?conversion:1,currency=Number.isFinite(conversion)?market.currency:row.currency;
   const status=activityStatus(row);
   const type=row.simulated?"Buy (Simulation)":(row.type==="TransferOut"?"Withdrawal":row.type),vals=[Number.isFinite(Date.parse(row.datetime))?dateLabel(Date.parse(row.datetime)):"—",t(type||"—"),row.type==="Deposit"?"—":activityBtc(row.shares),row.type==="Deposit"?"—":activityMoney(row.price,rate,currency,"/BTC"),activityMoney(row.amount,rate,currency),(row.type==="Deposit"&&!row.depositStatus)?"—":(row.simulated&&knownNumber(row.fee)?"~":"")+activityMoney(row.fee,rate,currency),t(status.label)];
   return {id:row.activityId,vals,tone:status.tone};
@@ -352,7 +354,7 @@ function reportCurrency(d){
  return ["EUR","USD"].includes(d.configuration.displayCurrency)?d.configuration.displayCurrency:(["EUR","USD"].includes(d.quote)?d.quote:"EUR");
 }
 function reportCurrencies(d){
- return [...new Set([...Object.keys(d.summaryByCurrency||{}),...Object.keys(d.depositsByCurrency||{}),...d.activities.map(row=>row.currency).filter(code=>["EUR","USD"].includes(code))])];
+ return [...new Set([...(d.activityCurrencies||[]),...Object.keys(d.summaryByCurrency||{}),...Object.keys(d.depositsByCurrency||{}),...d.activities.map(row=>row.currency).filter(code=>["EUR","USD"].includes(code))])];
 }
 function reportMarket(market,d,currency,currencies){
  const rates=Object.fromEntries(Object.entries(market.conversionRates||{[d.quote]:market.conversionRate})
@@ -410,6 +412,19 @@ function reportQuery(period){
 function reportKey(query,revision,configurationRevision,throughNow){
  return JSON.stringify([query.start,throughNow?null:query.end,query.page,query.limit,query.q,revision,configurationRevision]);
 }
+function activitySearchFx(market){
+ if(!market)return "";
+ const source=market.currency==="EUR"?"USD":"EUR",rate=market.rates[source];
+ return Number.isFinite(rate)&&rate>0?source+":"+rate:"";
+}
+async function fetchAnalytics(query,fx){
+ const params=new URLSearchParams({...query,tz:browserTimeZone});
+ if(fx)params.set("fx",fx);
+ const response=await fetch("/api/analytics?"+params);
+ const report=await response.json();
+ if(!response.ok)throw new Error(report.error||"Could not load the report.");
+ return report;
+}
 async function loadAnalytics(appliedDates,refreshThroughNow=false){
  const request=++reportRequest,readAt=Date.now();
  const revision=activityRevision,configurationRevision=reportConfigurationRevision,throughNow=appliedDates?.throughNow??reportThroughNow;
@@ -417,12 +432,19 @@ async function loadAnalytics(appliedDates,refreshThroughNow=false){
  try{
   showError("");const query=reportQuery(selectedPeriod(appliedDates));
   if(refreshThroughNow&&throughNow)query.end=Math.max(query.end,Date.now()+1);
-  const response=await fetch("/api/analytics?"+new URLSearchParams({...query,tz:browserTimeZone}));
-  const d=await response.json();if(!response.ok)throw new Error(d.error||"Could not load the report.");if(request!==reportRequest)return;
+  const searching=Boolean(query.q.trim()),fx=searching?activitySearchFx(filteredActivityMarket||lastReportMarket):"";
+  let d=await fetchAnalytics(query,fx);
+  if(request!==reportRequest)return;
   await initialSchedule;
   if(request!==reportRequest)return;
   const market=await loadReportMarket(d);
   if(request!==reportRequest)return;
+  if(searching&&activitySearchFx(market)!==fx){
+   d=await fetchAnalytics(query,activitySearchFx(market));
+   if(request!==reportRequest)return;
+  }
+  // Background price refreshes must not change values used to select the current page.
+  filteredActivityMarket=searching?market:null;
   quote=d.quote;$('selectedPeriodLabel').textContent=dateLabel(query.start)+' – '+dateLabel(query.end);
   document.title="Bitcoin DCA Dashboard";
   lastReportData=d;activityRows=d.activities;activityTotal=d.pagination.total;activityPages=d.pagination.pages;currentPage=d.pagination.page;

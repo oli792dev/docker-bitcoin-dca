@@ -804,6 +804,28 @@ class ActivitySearchTests(unittest.TestCase):
             rows, *_ = activity.read_report(0, 2000000000000, search="0,0000353")
             self.assertEqual(len(rows), 4)
 
+    def test_decimal_search_uses_display_currency_and_rate_before_pagination(self):
+        from app.data import activity
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(activity, "ACTIVITY_PATH", Path(tmp) / "activity.sqlite3"):
+            for index, (currency, amount) in enumerate((("USD", "4.415"), ("USD", "4.42"), ("EUR", "3.53"))):
+                activity.append_activity_records([{
+                    "id": str(index),
+                    "row": {"type": "Buy", "identifier": "BTC", "datetime": "2026-01-02T12:34:00Z",
+                            "currency": currency, "amount": amount, "shares": "0.001", "price": "100", "fee": "0"},
+                }])
+            def search(query, **pagination):
+                return activity.read_report(0, 2000000000000, search=query, search_fx="USD:0.8", **pagination)
+            rows, total, page, *_ = search("3,53 €", page=2, limit=1)
+            self.assertEqual(([row["id"] for row in rows], total, page), (["0"], 2, 2))
+            self.assertEqual(search("4,42")[1], 0)
+            self.assertEqual(search("$3.53")[1], 0)
+            self.assertEqual(search("3.53 USD")[1], 0)
+            self.assertEqual(search("3.53 EUR")[1], 2)
+            self.assertEqual(search("3,54")[1], 1)
+            with self.assertRaisesRegex(ValueError, "conversion"):
+                activity.read_report(0, 2000000000000, search="3,53", search_fx="USD:inf")
+
     def test_unknown_optional_amounts_do_not_break_text_search(self):
         from app.data.activity import _matches_search
         record={'exchange':'KRAKEN','row':{'type':'Buy','fee':None,'price':None,'amount':None}}

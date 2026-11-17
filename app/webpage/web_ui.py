@@ -951,6 +951,7 @@ class Handler(BaseHTTPRequestHandler):
                             query.get("status", [""])[0],
                             query.get("q", [""])[0],
                             query.get("tz", ["UTC"])[0],
+                            query.get("fx", [""])[0],
                         ),
                     )
                 return

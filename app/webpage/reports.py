@@ -68,6 +68,7 @@ class ReportService:
         status: str = "",
         search: str = "",
         search_timezone: str = "UTC",
+        search_fx: str = "",
     ) -> dict[str, Any]:
         records, total, page, totals, balance = (
             self.read_report(
@@ -77,7 +78,7 @@ class ReportService:
                 limit,
                 kind=kind,
                 status=status,
-                **({"search": search, "search_timezone": search_timezone} if search else {}),
+                **({"search": search, "search_timezone": search_timezone, "search_fx": search_fx} if search else {}),
             )
             if kind or status or search
             else self.read_report(start, end, page, limit)
@@ -88,6 +89,9 @@ class ReportService:
             snapshot["price"] = "0"
         result = self.build_report(settings, totals, snapshot, records)
         limit = max(1, min(1000, limit))
+        result["activityCurrencies"] = sorted(
+            {group["currency"] for group in totals if group["currency"] in ("EUR", "USD")}
+        )
         result["pagination"] = {
             "page": page,
             "pageSize": limit,

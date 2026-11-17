@@ -2,6 +2,7 @@
 
 import json
 import logging
+import math
 import os
 import re
 import sqlite3
@@ -262,7 +263,7 @@ _DECIMAL_SEARCH = re.compile(
 _DECIMAL_SEPARATORS = str.maketrans(".,", ",.")
 
 
-def _matches_search(payload, query, zone=UTC):
+def _matches_search(payload, query, zone=UTC, source_currency="", rate=1.0):
     record = json.loads(payload)
 
     def values(value):
@@ -272,8 +273,15 @@ def _matches_search(payload, query, zone=UTC):
             return " ".join(values(item) for item in value)
         return str(value).casefold()
 
-    text = values(record)
     row = record.get("row", {})
+    currency = row.get("currency")
+    converted = bool(source_currency and currency == source_currency)
+    if converted:
+        currency = "EUR" if source_currency == "USD" else "USD"
+    searchable_row = {key: value for key, value in row.items() if key not in ("amount", "price", "fee", "shares")}
+    if converted:
+        searchable_row["currency"] = currency
+    text = values({**record, "row": searchable_row})
     stamp = row.get("datetime")
     if stamp:
         parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
@@ -298,7 +306,7 @@ def _matches_search(payload, query, zone=UTC):
         "cancelled": "canceled storniert abgebrochen",
         "unverified": "unverified unbestätigt ungeprüft",
     }.get(status, "")
-    symbol = {"EUR": "€", "USD": "$"}.get(row.get("currency"), "")
+    symbol = {"EUR": "€", "USD": "$"}.get(currency, "")
     visible_numbers = set()
     fields = {"amount": 2}
     if row.get("type") != "Deposit":
@@ -308,7 +316,7 @@ def _matches_search(payload, query, zone=UTC):
     for field, places in fields.items():
         try:
             # Intl formats the browser's Number and rounds midpoint ties away from zero.
-            number = Decimal(str(float(row.get(field))))
+            number = Decimal(str(float(row.get(field)) * (rate if converted and field != "shares" else 1)))
         except (ValueError, TypeError, OverflowError):
             continue
         if not number.is_finite() or number.adjusted() >= 20:
@@ -345,7 +353,7 @@ def _report_db():
             yield db
 
 
-def read_report(start, end, page=1, limit=20, kind="", status="", search="", search_timezone="UTC"):
+def read_report(start, end, page=1, limit=20, kind="", status="", search="", search_timezone="UTC", search_fx=""):
     """Rows, totals and global balance from one consistent SQLite read transaction."""
     if kind not in ("", "Buy", "TransferOut", "Deposit") or status not in (
         "",
@@ -368,6 +376,21 @@ def read_report(start, end, page=1, limit=20, kind="", status="", search="", sea
         zone = ZoneInfo(search_timezone)
     except (ValueError, ZoneInfoNotFoundError):
         raise ValueError("Invalid Activity search timezone.") from None
+    source_currency, rate = "", 1.0
+    if search_fx:
+        try:
+            source_currency, separator, raw_rate = search_fx.partition(":")
+            rate = float(raw_rate)
+            if (
+                len(search_fx) > 40
+                or not separator
+                or source_currency not in ("EUR", "USD")
+                or not math.isfinite(rate)
+                or rate <= 0
+            ):
+                raise ValueError
+        except (AttributeError, ValueError):
+            raise ValueError("Invalid Activity search conversion.") from None
     limit = max(1, min(1000, int(limit)))
     with _report_db() as db:
         where = "(asset='BTC' OR kind='Deposit') AND timestamp>? AND timestamp<=?"
@@ -388,7 +411,10 @@ def read_report(start, end, page=1, limit=20, kind="", status="", search="", sea
         search = search.strip()
         if search:
             db.create_function(
-                "activity_matches", 2, lambda payload, query: _matches_search(payload, query, zone), deterministic=True
+                "activity_matches",
+                2,
+                lambda payload, query: _matches_search(payload, query, zone, source_currency, rate),
+                deterministic=True,
             )
             results = db.execute(
                 "WITH matches AS MATERIALIZED ("
