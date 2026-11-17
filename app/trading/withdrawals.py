@@ -3,12 +3,78 @@
 import logging
 import time
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from app.core.logging_utils import log_transition
 from app.data.activity import update_activity_record, withdrawal_records
 
 LOG = logging.getLogger("bitcoin-dca.withdrawals")
+# Limit matching to the connection and first-response timeout budget.
+KRAKEN_WITHDRAWAL_WINDOW_MS = 40_000
+
+
+def withdrawal_status(value: str) -> str:
+    status = value.lower()
+    if status in ("success", "completed"):
+        return "completed"
+    if status in ("failure", "failed", "canceled", "cancelled"):
+        return "failed"
+    return "submitted"
+
+
+def match_kraken_withdrawal(api, pending: dict, context: dict) -> dict | None:
+    """Read the saved attempt window and identify one independently verified Kraken withdrawal."""
+    submitted = context.get("timestamp_ms")
+    key = pending.get("key")
+    if type(submitted) is not int or submitted <= 0 or not isinstance(key, str) or not key:
+        return None
+    # Kraken reports creation times at whole-second precision. Legacy state saved only the start.
+    start = submitted // 1000 * 1000
+    end = context.get("kraken_recovery_until_ms", submitted + KRAKEN_WITHDRAWAL_WINDOW_MS)
+    if type(end) is not int or not submitted <= end <= submitted + KRAKEN_WITHDRAWAL_WINDOW_MS:
+        return None
+    try:
+        amount = Decimal(str(pending.get("amount")))
+        fee = Decimal(str(pending.get("fee")))
+    except InvalidOperation:
+        return None
+    if not amount.is_finite() or amount <= 0 or not fee.is_finite() or fee < 0:
+        return None
+    rows = api.btc_withdrawals(start, end)
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        return None
+    matches = []
+    for row in rows:
+        timestamp = row.get("timestamp")
+        if type(timestamp) is int and timestamp > 0 and not start <= timestamp <= end:
+            continue
+        if row.get("symbol") not in (None, "", "BTC") or row.get("key") not in (None, "", key):
+            continue
+        try:
+            row_amount = Decimal(str(row.get("amount")))
+            row_fee = Decimal(str(row.get("fee")))
+        except InvalidOperation:
+            return None
+        if not row_amount.is_finite() or not row_fee.is_finite():
+            return None
+        if row_amount != amount or row_fee != fee:
+            continue
+        if (
+            type(timestamp) is not int
+            or not start <= timestamp <= end
+            or row.get("symbol") != "BTC"
+            or row.get("key") != key
+            or not isinstance(row.get("id"), str)
+            or not row["id"].strip()
+            or not isinstance(row.get("status"), str)
+            or not row["status"].strip()
+        ):
+            return None
+        matches.append(row)
+    if len(matches) != 1:
+        return None
+    match = matches[0]
+    return match if sum(row.get("id") == match["id"] for row in rows) == 1 else None
 
 
 def reconcile_withdrawals(api, settings, force=False, submitted_only=False):
@@ -77,13 +143,7 @@ def reconcile_withdrawals(api, settings, force=False, submitted_only=False):
         found = matches[0]
         if found.get("timestamp") and int(found["timestamp"]) > 0:
             row["datetime"] = datetime.fromtimestamp(int(found["timestamp"]) / 1000, UTC).isoformat()
-        status = str(found.get("status", "")).lower()
-        if status in ("success", "completed"):
-            status = "completed"
-        elif status in ("failure", "failed", "canceled", "cancelled"):
-            status = "failed"
-        else:
-            status = "submitted"
+        status = withdrawal_status(str(found.get("status", "")))
         record.pop("nextVerificationAt", None)
         record.pop("verificationNote", None)
         record["exchange"] = settings["exchange"]
@@ -92,8 +152,10 @@ def reconcile_withdrawals(api, settings, force=False, submitted_only=False):
         record["exchangeStatus"] = str(found.get("status", ""))
         record["txId"] = found.get("txId", "")
         record["lastVerifiedAt"] = datetime.now(UTC).isoformat()
-        fee = Decimal(str(found.get("fee", record.get("networkFeeBtc", "0"))))
-        net = Decimal(str(found.get("amount", row["shares"])))
+        fee_value = found.get("fee")
+        fee = Decimal(str(fee_value if fee_value is not None else record.get("networkFeeBtc", "0")))
+        amount_value = found.get("amount")
+        net = Decimal(str(amount_value if amount_value is not None else row["shares"]))
         record["networkFeeBtc"] = str(fee)
         record["grossWithdrawalAmountBtc"] = str(net + fee)
         record["netWithdrawalAmount"] = True
