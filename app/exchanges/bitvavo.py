@@ -12,12 +12,15 @@ from urllib.parse import urlencode
 import requests
 
 from app.exchanges.exchange_errors import DefinitiveRejection, ExchangeError
+from app.exchanges.permissions import probe_timeout
 from app.exchanges.read_cache import ReadCache
 
 BASE_URL = "https://api.bitvavo.com/v2"
 
 
 class Bitvavo:
+    probe_deadline: float | None = None
+
     def __init__(self, api_key=None, api_secret=None):
         self.key = api_key
         self.secret = api_secret
@@ -54,7 +57,7 @@ class Bitvavo:
             params=params,
             data=payload if payload else None,
             headers=headers,
-            timeout=15,
+            timeout=probe_timeout(self.probe_deadline, 15),
         )
         try:
             payload = response.json()
