@@ -54,6 +54,7 @@ Stop the container before making an independent filesystem backup of the volume.
 ## Execution and recovery
 
 - After startup delay, verify open orders and BTC withdrawals before new transactions. Saved pending requests are reconciled; uncertain non-idempotent submissions are not blindly repeated. Idempotent withdrawal retries persist their attempt times before submission. Verification searches the complete attempt window, requires a unique match and records the exchange timestamp.
+- If a Kraken withdrawal response is lost, the bot checks withdrawal history during startup and regular account checks. It adopts a unique matching Kraken reference only when the saved account, withdrawal method, BTC amount, fee and submission window agree. The bot never resends the request. If the evidence stays incomplete or ambiguous, keep the saved state and contact Kraken support to confirm the transaction. The bot keeps withdrawals blocked until it can verify the match.
 - An explicit pause gates all new buys and withdrawals, including simulation, manual confirmation and retries. Read-only account checks and order/withdrawal reconciliation continue. Live trading and pause are saved together; disabling live trading clears pause. The restrictive pause is persisted before live activation, and pause is cleared only after the configuration is durable. Purchase deadlines are retained.
 - Purchase interval = UTC time from the last purchase to the active deposit deadline ÷ `(affordable purchases + 1)`, minimum 60 seconds. Fees and exchange limits apply; the final purchase can use the remaining budget.
 - Deposit dates use the configured timezone and local time. Short months use their last day; daylight-saving gaps move forward and repeated times use the first occurrence.
@@ -73,6 +74,8 @@ docker cp bitcoin-dca:/webui-data/tls/ca.pem ./bitcoin-dca-ca.pem
 ```
 
 Trust this certificate authority on each client device. Never distribute private keys. Changing hosts renews the server certificate; keeping the volume preserves the CA. A new volume requires trusting its new CA.
+
+Use a dedicated hostname for each dashboard, including when running multiple bots on one Docker host. Browsers share cookies across HTTPS ports on the same hostname. Keep unrelated HTTPS services on other hostnames and list the dashboard hostname in `WEB_UI_TLS_HOSTS`.
 
 Sessions last 30 minutes and use `Secure`, `HttpOnly` and `SameSite=Strict` cookies. Login/password-confirmation attempts are limited. Sensitive settings require the current password; changing login credentials invalidates sessions. API secrets are stored unencrypted with owner-only permissions: protect the Docker host, volume and backups. The container runs as root.
 
