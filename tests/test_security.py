@@ -249,6 +249,21 @@ class LocalHttpsTests(unittest.TestCase):
 
 
 class HandshakeFailureTests(unittest.TestCase):
+    def test_body_deadline_is_cancelled_after_read_and_closes_an_expired_socket(self):
+        import socket
+
+        handler = object.__new__(web_ui.Handler)
+        handler.connection = Mock()
+        handler.rfile = io.BytesIO(b"body")
+        with patch.object(web_ui, "Timer") as timer:
+            self.assertEqual(handler._read_body(4), b"body")
+            duration, expire = timer.call_args.args
+            self.assertEqual(duration, 10)
+            timer.return_value.start.assert_called_once()
+            timer.return_value.cancel.assert_called_once()
+            expire()
+            handler.connection.shutdown.assert_called_once_with(socket.SHUT_RDWR)
+
     def test_certificate_rejection_closes_request_before_http_processing(self):
         handler=object.__new__(web_ui.Handler)
         handler.request=Mock();handler.tls_context=Mock()
