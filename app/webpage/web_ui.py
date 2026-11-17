@@ -24,7 +24,7 @@ from app.data.activity import (
     parqet_interval_records,
     read_dashboard_snapshot,
     read_report,
-    withdrawal_records,
+    withdrawal_cycle_bounds,
 )
 from app.data.analytics import report as build_report
 from app.data.reporting import parqet_aggregate_rows, parqet_csv
@@ -622,11 +622,14 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def do_POST(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/logout":
+            self._handle_logout()
+            return
         if self.runtime:
             from app.core.configuration import runtime_settings
 
             self.settings = runtime_settings(self.runtime.store.snapshot()["settings"])
-        parsed = urlparse(self.path)
         if parsed.path in (
             "/api/setup/account",
             "/api/setup/restore",
@@ -642,9 +645,6 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/login":
             self._handle_login()
-            return
-        if parsed.path == "/logout":
-            self._handle_logout()
             return
         if not self._require_authentication():
             return
@@ -894,23 +894,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._handle_schedule()
                 return
             if parsed.path == "/api/withdrawals":
-                withdrawals = []
-                previous = {}
-                for record in withdrawal_records():
-                    if record.get("withdrawalStatus") != "completed":
-                        continue
-                    timestamp = _row_timestamp_ms(record["row"])
-                    scope = (record.get("exchange", ""), record.get("accountIdentity", ""))
-                    withdrawals.append(
-                        {
-                            "timestamp": timestamp,
-                            "startTimestamp": previous.get(scope, 0),
-                            "txId": record.get("id", ""),
-                            "exchange": record.get("exchange", ""),
-                        }
-                    )
-                    previous[scope] = timestamp
-                self._json(200, withdrawals)
+                self._json(200, withdrawal_cycle_bounds())
                 return
             if parsed.path in ("/api/analytics", "/api/export.csv"):
                 if parsed.path == "/api/export.csv":
@@ -973,11 +957,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         LOG.debug("Web UI %s - %s", self.address_string(), fmt % args)
-
-
-def _row_timestamp_ms(row):
-    value = datetime.fromisoformat(row["datetime"].replace("Z", "+00:00"))
-    return int(value.timestamp() * 1000)
 
 
 def serve(settings, port, withdrawal_service=None, worker=None, runtime=None, stop=None, *, display_prices=None):
