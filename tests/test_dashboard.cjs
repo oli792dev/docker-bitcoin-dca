@@ -22,6 +22,7 @@ const records=Array.from({length:45},(_,i)=>({activityId:String(i),datetime:'202
 const stored=new Map([['bitcoinDcaMonthlyDeposit','999']]);let expiryCallback, slowWithdrawalPolls=0, slowerPolls=0;let configuredMonthlyDeposit='',forecastSaveFails=false;const forecastSaves=[];
 let forecastAt='2027-01-10T12:00:00Z',automaticWithdrawals=true;
 let activityRevision,reportConfigurationRevision,purchasePrice="84000",balanceUpdatedAt="2026-10-29T12:00:00Z",reportMarketAt=null,scheduleMarket=null,configuredOrder="0",effectiveOrder="0.00006";const dashboardPollTimers=[],dashboardPollCallbacks=[];let dashboardRefreshSeconds=30;
+let releaseInitialIntervals;
 const requests=[];let waitingStartup=false,waitingDeposit=false,reportFails=false,scheduleFails=false,checks=0,eurOnly=false,priceUnavailable=false,invalidUsdRate=false,withdrawalUnavailable=false,configuredDisplayCurrency="EUR",withdrawalExchange="KRAKEN",withdrawalTarget="Example wallet",withdrawalNetwork="BTC",withdrawalHistoryEmpty=false;
 let withdrawalHistory=[{timestamp:Date.parse('2026-10-20T12:00:00.456Z'),startTimestamp:0,analysisStartTimestamp:Date.parse('2026-10-17T12:00:00Z')},{timestamp:Date.parse('2026-10-23T12:00:00Z'),startTimestamp:Date.parse('2026-10-20T12:00:00Z')}];
 const response=data=>({ok:true,json:async()=>data});
@@ -32,7 +33,10 @@ const context={document:{getElementById:get,createElement:()=>new Element()},loc
  if(parsed.pathname==='/api/settings/forecast'){const data=JSON.parse(options.body);forecastSaves.push(data);if(forecastSaveFails)return {ok:false,json:async()=>({error:'Forecast save failed'})};configuredMonthlyDeposit=data.monthlyDeposit;return response({monthlyDeposit:configuredMonthlyDeposit})}
  if(parsed.pathname==='/api/schedule')return response({activityRevision,reportConfigurationRevision,accountMarketPrice:scheduleMarket,configuredBuyAmount:configuredOrder,effectiveBuyAmount:effectiveOrder,dashboardRefreshSeconds,estimatedWithdrawalAt:forecastAt,expectedMonthlyDeposit:configuredMonthlyDeposit,quote:'EUR',exchange:'KRAKEN',quoteBalance:'72.7719',nextDepositAt:'2026-11-01T00:00:00+01:00',purchaseCurrencyPrice:purchasePrice,withdrawalsEnabled:automaticWithdrawals,withdrawalThreshold:'1000',btcBalance:'.00379',balanceUpdatedAt,nextPurchaseAt:waitingDeposit||waitingStartup?null:new Date(Date.now()+3600000).toISOString(),startupDelayActive:waitingStartup,nextPurchaseStatus:waitingStartup?'Waiting for startup delay':waitingDeposit?'Waiting for deposit':'Scheduled',serverTime:new Date().toISOString(),timezone:'Europe/Berlin'});
  if(parsed.pathname==='/api/export.csv')return {ok:true,blob:async()=>new Blob(['fixture CSV'])};
- if(parsed.pathname==='/api/withdrawals')return response(withdrawalHistoryEmpty?[]:withdrawalHistory);
+ if(parsed.pathname==='/api/withdrawals'){
+  if(!releaseInitialIntervals)await new Promise(resolve=>{releaseInitialIntervals=resolve});
+  return response(withdrawalHistoryEmpty?[]:withdrawalHistory);
+ }
  if(parsed.pathname==='/api/withdrawal/config')return response({enabled:!withdrawalUnavailable,exchange:withdrawalExchange,target:withdrawalTarget,network:withdrawalNetwork,destination:'fictional wallet',reason:withdrawalUnavailable?'Manual withdrawal is unavailable: set KRAKEN_WITHDRAW_KEY to your saved Bitcoin withdrawal method in .env.':''});
  if(parsed.pathname==='/api/market-price'&&parsed.searchParams.get('currency')==='USD')return response({price:'88000',conversionRate:'1.1',conversionRates:{EUR:'1.1',USD:'1'},updatedAt:reportMarketAt??Date.now()/1000});
  if(parsed.pathname==='/api/market-price')return priceUnavailable?{ok:false,json:async()=>({error:'offline'})}:response({price:'80000',conversionRate:'1',conversionRates:{EUR:'1',USD:invalidUsdRate?'invalid':'0.9'},updatedAt:reportMarketAt??Date.now()/1000});
@@ -50,6 +54,8 @@ const context={document:{getElementById:get,createElement:()=>new Element()},loc
 const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
 (async()=>{
  vm.createContext(context);vm.runInContext(script,context);await settle();
+ assert.equal(get('buyCount').textContent,45,'The initial report renders while withdrawal history is pending');
+ releaseInitialIntervals();await settle();
  const reportCountBeforeRefreshRegression=requests.filter(url=>url.startsWith('/api/analytics?')).length;
  vm.runInContext('lastReportData=null',context);reportFails=true;
  await vm.runInContext('loadAnalytics()',context);reportFails=false;
@@ -385,6 +391,32 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  const firstCycleReport=new URL(requests.filter(url=>url.startsWith('/api/analytics?')).at(-1),'https://example.test');
  assert.equal(Number(firstCycleReport.searchParams.get('start')),withdrawalHistory[0].analysisStartTimestamp-1);
  assert.equal(Number(firstCycleReport.searchParams.get('end')),withdrawalHistory[0].timestamp);
+
+ const detailFetch=context.fetch;
+ let finishEarlierActivity;
+ context.fetch=(url,options)=>{
+  if(url==='/api/activity/detail?id=earlier')return new Promise(resolve=>{finishEarlierActivity=resolve});
+  if(url==='/api/activity/detail?id=later')return Promise.resolve(response({id:'later'}));
+  return detailFetch(url,options);
+ };
+ const earlierActivity=vm.runInContext("showActivityDetail('earlier')",context);
+ get('closeActivityDetail').handlers.click();
+ await vm.runInContext("showActivityDetail('later')",context);
+ finishEarlierActivity(response({id:'earlier'}));await earlierActivity;
+ assert.equal(get('activityDetailValues').children.length,3);
+ assert.equal(get('activityDetailValues').children[0].children[1].textContent,'later');
+ get('closeActivityDetail').handlers.click();
+ context.fetch=detailFetch;
+
+ const retainedInterval=firstCycle.value;
+ withdrawalHistory=[{startTimestamp:withdrawalHistory[1].timestamp,timestamp:withdrawalHistory[1].timestamp+5000}];
+ const retainDates=[get('start').value,get('end').value];
+ await get('editCustomRange').handlers.click();
+ assert.equal(get('interval').children[1].value,[withdrawalHistory[0].startTimestamp,withdrawalHistory[0].timestamp].join(','));
+ assert(get('interval').children.some(option=>option.value===retainedInterval));
+ assert.equal(get('interval').value,retainedInterval);
+ assert.deepEqual([get('start').value,get('end').value],retainDates);
+ get('cancelRange').handlers.click();
 
  console.log('Dashboard regressions passed: interval dates, server pages, mixed-currency rows/totals and queued preview polling');
 })().catch(e=>{console.error(e);process.exit(1)});
