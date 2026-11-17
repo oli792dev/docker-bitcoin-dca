@@ -5,7 +5,7 @@ import sys;sys.path.insert(0,'.');from app.webpage.scroll_ui import SCROLL_CSS,S
 from app.webpage.templates import dashboard_page;print(json.dumps(dashboard_page()))`],{encoding:'utf8'}));
 const script=html.split('<script>')[1].split('</script>')[0];
 class Element{
- constructor(){this.attributes={};this.value='';this.children=[];this.handlers={};this.textContent='';this.disabled=false;this.classList={toggle(){},add(){},remove(){}}}
+ constructor(){this.dataset={};this.attributes={};this.value='';this.children=[];this.handlers={};this.textContent='';this.disabled=false;this.classList={toggle(){},add(){},remove(){}}}
  setAttribute(name,value){this.attributes[name]=String(value);this[name]=value;if(name==='hidden')this.hidden=true}
  getAttribute(name){return this.attributes[name]??null}
  removeAttribute(name){delete this.attributes[name];delete this[name];if(name==='hidden')this.hidden=false}
@@ -21,16 +21,16 @@ get('reportFrom').value='2020-10-01T12:34:56Z';
 const records=Array.from({length:45},(_,i)=>({activityId:String(i),datetime:'2026-10-22T12:00:00Z',type:'Buy',identifier:'BTC',shares:'.001',currency:i<22?'EUR':'USD',price:i<22?'80000':'100000',amount:i<22?'80':'100',fee:i<22?'.2':'.25'}));
 const stored=new Map([['bitcoinDcaMonthlyDeposit','999']]);let expiryCallback;let configuredMonthlyDeposit='',forecastSaveFails=false;const forecastSaves=[];
 let forecastAt='2027-01-10T12:00:00Z',automaticWithdrawals=true;
-let reportMarketAt=null,scheduleMarket=null,configuredOrder="0",effectiveOrder="0.00006";const dashboardPollTimers=[],dashboardPollCallbacks=[];let dashboardRefreshSeconds=30;
+let activityRevision,reportConfigurationRevision,purchasePrice="84000",balanceUpdatedAt="2026-10-29T12:00:00Z",reportMarketAt=null,scheduleMarket=null,configuredOrder="0",effectiveOrder="0.00006";const dashboardPollTimers=[],dashboardPollCallbacks=[];let dashboardRefreshSeconds=30;
 const requests=[];let waitingStartup=false,waitingDeposit=false,reportFails=false,scheduleFails=false,checks=0,eurOnly=false,priceUnavailable=false,invalidUsdRate=false,withdrawalUnavailable=false,configuredDisplayCurrency="EUR",withdrawalExchange="KRAKEN",withdrawalTarget="Example wallet",withdrawalNetwork="BTC",withdrawalHistoryEmpty=false;
 let withdrawalHistory=[{timestamp:Date.parse('2026-10-20T12:00:00Z'),startTimestamp:0},{timestamp:Date.parse('2026-10-23T12:00:00Z'),startTimestamp:Date.parse('2026-10-20T12:00:00Z')}];
 const response=data=>({ok:true,json:async()=>data});
-const context={document:{getElementById:get,createElement:()=>new Element()},localStorage:{getItem:key=>stored.get(key)??null,setItem:(key,value)=>stored.set(key,value)},Intl,Date,URL,console,alert(){throw Error('Withdrawal must not use a browser alert')},confirm:()=>false,setInterval(){},setTimeout(fn,ms){if(['refreshPurchaseSchedule','refreshDashboard'].includes(fn.name)){dashboardPollTimers.push(ms);dashboardPollCallbacks.push(fn);return dashboardPollTimers.length}if(ms===120000){expiryCallback=fn;return 1}queueMicrotask(fn)},clearTimeout(){},window:{location:{reload(){throw Error('Unexpected reload')}}},fetch:async(url,options)=>{
+const context={document:{getElementById:get,createElement:()=>new Element()},localStorage:{getItem:key=>stored.get(key)??null,setItem:(key,value)=>stored.set(key,value)},Intl,Date,URL,URLSearchParams,console,alert(){throw Error('Withdrawal must not use a browser alert')},confirm:()=>false,setInterval(){},setTimeout(fn,ms){if(['refreshPurchaseSchedule','refreshDashboard'].includes(fn.name)){dashboardPollTimers.push(ms);dashboardPollCallbacks.push(fn);return dashboardPollTimers.length}if(ms===120000){expiryCallback=fn;return 1}queueMicrotask(fn)},clearTimeout(){},window:{location:{reload(){throw Error('Unexpected reload')}}},fetch:async(url,options)=>{
  requests.push(url);const parsed=new URL(url,'http://example.test');
  if(parsed.pathname==='/api/schedule'&&scheduleFails)throw Error('Schedule offline');
  if(parsed.pathname==='/api/settings/report-period')return response({from:JSON.parse(options.body).from});
  if(parsed.pathname==='/api/settings/forecast'){const data=JSON.parse(options.body);forecastSaves.push(data);if(forecastSaveFails)return {ok:false,json:async()=>({error:'Forecast save failed'})};configuredMonthlyDeposit=data.monthlyDeposit;return response({monthlyDeposit:configuredMonthlyDeposit})}
- if(parsed.pathname==='/api/schedule')return response({accountMarketPrice:scheduleMarket,configuredBuyAmount:configuredOrder,effectiveBuyAmount:effectiveOrder,dashboardRefreshSeconds,estimatedWithdrawalAt:forecastAt,expectedMonthlyDeposit:configuredMonthlyDeposit,quote:'EUR',exchange:'KRAKEN',quoteBalance:'72.7719',nextDepositAt:'2026-11-01T00:00:00+01:00',purchaseCurrencyPrice:'84000',withdrawalsEnabled:automaticWithdrawals,withdrawalThreshold:'1000',btcBalance:'.00379',balanceUpdatedAt:'2026-10-29T12:00:00Z',nextPurchaseAt:waitingDeposit||waitingStartup?null:new Date(Date.now()+3600000).toISOString(),startupDelayActive:waitingStartup,nextPurchaseStatus:waitingStartup?'Waiting for startup delay':waitingDeposit?'Waiting for deposit':'Scheduled',serverTime:new Date().toISOString(),timezone:'Europe/Berlin'});
+ if(parsed.pathname==='/api/schedule')return response({activityRevision,reportConfigurationRevision,accountMarketPrice:scheduleMarket,configuredBuyAmount:configuredOrder,effectiveBuyAmount:effectiveOrder,dashboardRefreshSeconds,estimatedWithdrawalAt:forecastAt,expectedMonthlyDeposit:configuredMonthlyDeposit,quote:'EUR',exchange:'KRAKEN',quoteBalance:'72.7719',nextDepositAt:'2026-11-01T00:00:00+01:00',purchaseCurrencyPrice:purchasePrice,withdrawalsEnabled:automaticWithdrawals,withdrawalThreshold:'1000',btcBalance:'.00379',balanceUpdatedAt,nextPurchaseAt:waitingDeposit||waitingStartup?null:new Date(Date.now()+3600000).toISOString(),startupDelayActive:waitingStartup,nextPurchaseStatus:waitingStartup?'Waiting for startup delay':waitingDeposit?'Waiting for deposit':'Scheduled',serverTime:new Date().toISOString(),timezone:'Europe/Berlin'});
  if(parsed.pathname==='/api/export.csv')return {ok:true,blob:async()=>new Blob(['fixture CSV'])};
  if(parsed.pathname==='/api/withdrawals')return response(withdrawalHistoryEmpty?[]:withdrawalHistory);
  if(parsed.pathname==='/api/withdrawal/config')return response({enabled:!withdrawalUnavailable,exchange:withdrawalExchange,target:withdrawalTarget,network:withdrawalNetwork,destination:'fictional wallet',reason:withdrawalUnavailable?'Manual withdrawal is unavailable: set KRAKEN_WITHDRAW_KEY to your saved Bitcoin withdrawal method in .env.':''});
@@ -111,7 +111,7 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  assert.equal(get('periodValue').textContent,'€4,500.00','Account price refresh must update the current period valuation');
  assert.equal(get('orderSummary').textContent,'0.00006 BTC','Show effective quantity when configured below the minimum');
  assert.equal(vm.runInContext('currentPage',context),pageBeforePrice,'Price updates retain the selected activity page');
- scheduleMarket.updatedAt=Date.now()/1000+60;reportMarketAt=Date.now()/1000+120;configuredOrder='0';await vm.runInContext('loadAnalytics()',context);
+ scheduleMarket={...scheduleMarket,updatedAt:Date.now()/1000+60,conversionRates:{EUR:'1'}};await vm.runInContext('refreshPurchaseSchedule()',context);reportMarketAt=Date.now()/1000+120;configuredOrder='0';await vm.runInContext('loadAnalytics()',context);
  assert.equal(get('periodValue').textContent,'€3,600.00','A newer report market response must beat an older cached schedule quote');
  scheduleMarket=null;reportMarketAt=null;vm.runInContext('lastAccountMarket=null',context);
  assert.equal(get('depositVolume').textContent,'€200.00');assert(!html.includes('id="depositCount"'));assert(!html.includes('id="withdrawCount"'));
@@ -300,13 +300,56 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  assert.match(get('automaticWithdrawalDestination').textContent,/bc1-fictional-target via BTC on Bitvavo/);
  withdrawalTarget='';await vm.runInContext('loadWithdrawalConfiguration()',context);
  assert.match(get('automaticWithdrawalDestination').textContent,/No withdrawal target is configured/);
+ activityRevision='revision-a';configuredDisplayCurrency='EUR';vm.runInContext('currentPage=1',context);
+ scheduleMarket={price:'81000',currency:'EUR',quoteCurrency:'EUR',conversionRate:'1',conversionRates:{EUR:'1',USD:'.9'},updatedAt:Date.now()/1000+180};
+ const countRequests=prefix=>requests.filter(url=>url.startsWith(prefix)).length;
+ const priceRequests=countRequests('/api/market-price');
+ await dashboardPollCallbacks.at(-1)();
+ assert.equal(countRequests('/api/market-price'),priceRequests,'Schedule already has the rates for this report');
+ const analyticsRequests=countRequests('/api/analytics'),renderedRows=get('activities').children;
+ await dashboardPollCallbacks.at(-1)();
+ assert.equal(countRequests('/api/analytics'),analyticsRequests,'Unchanged activity and filters skip analytics');
+ assert.equal(get('activities').children,renderedRows,'Identical activity cells retain their DOM nodes');
+ scheduleMarket={...scheduleMarket,price:'82000',updatedAt:scheduleMarket.updatedAt+1};
+ await dashboardPollCallbacks.at(-1)();
+ assert.equal(get('periodValue').textContent,'€3,690.00','Price changes still update the report');
+ assert.equal(get('activities').children,renderedRows,'BTC spot price does not change historical activity cells');
+ const currentScheduleMarket=scheduleMarket;
+ scheduleMarket={...scheduleMarket,price:'99000',updatedAt:scheduleMarket.updatedAt+2,conversionRatesUpdatedAt:{EUR:scheduleMarket.updatedAt+2,USD:scheduleMarket.updatedAt-1}};
+ await dashboardPollCallbacks.at(-1)();
+ assert.equal(get('periodValue').textContent,'€3,690.00','An old historical rate keeps a newer complete quote in use');
+ scheduleMarket=currentScheduleMarket;
+ activityRevision='revision-after-restore';records[0]={...records[0],type:'TransferOut',withdrawalStatus:'submitted'};
+ await dashboardPollCallbacks.at(-1)();
+ assert.equal(countRequests('/api/analytics'),analyticsRequests+1,'New activity revision reloads the active report');
+ assert.equal(get('activities').children[0].children[6].textContent,'Pending');
+ scheduleMarket={...scheduleMarket,conversionRates:{EUR:'1'}};
+ await dashboardPollCallbacks.at(-1)();
+ assert.equal(countRequests('/api/analytics'),analyticsRequests+1);
+ assert.equal(countRequests('/api/market-price'),priceRequests+1,'Incomplete rates fall back to the price endpoint');
+ priceUnavailable=true;
+ await dashboardPollCallbacks.at(-1)();
+ assert.equal(get('periodValue').textContent,'€3,690.00','A temporary fallback failure retains the last complete quote');
+ priceUnavailable=false;
+ reportConfigurationRevision='changed-settings';configuredDisplayCurrency='USD';
+ await dashboardPollCallbacks.at(-1)();
+ assert.equal(countRequests('/api/analytics'),analyticsRequests+2,'Report changes from another tab invalidate the cached report');
+ assert.equal(get('periodValue').textContent,'US$3,960.00');
+ reportConfigurationRevision='changed-currency-again';configuredDisplayCurrency='EUR';priceUnavailable=true;
+ balanceUpdatedAt=new Date(Date.now()+1000).toISOString();purchasePrice='90000';
+ await dashboardPollCallbacks.at(-1)();
+ assert.equal(get('periodValue').textContent,'€4,050.00','New schedule purchase quote can replace a frozen report snapshot');
+ purchasePrice='91000';balanceUpdatedAt=new Date(Date.now()+2000).toISOString();
+ await dashboardPollCallbacks.at(-1)();
+ assert.equal(countRequests('/api/analytics'),analyticsRequests+3,'Fallback valuation does not require reloading the report');
+ assert.equal(get('periodValue').textContent,'€4,095.00');
  console.log('Dashboard regressions passed: interval dates, server pages, mixed-currency rows/totals and queued preview polling');
 })().catch(e=>{console.error(e);process.exit(1)});
 
 // Render a German report without translating exchange codes or changing arithmetic.
 const germanElements={},germanGet=id=>germanElements[id]??=new Element();
 germanGet('pageSize').value='10';
-const germanContext=vm.createContext({DCA_I18N:{language:'de',catalog:JSON.parse(fs.readFileSync('app/webpage/locales/de.json','utf8'))},document:{getElementById:germanGet,createElement:()=>new Element()},localStorage:{getItem:()=>null,setItem(){}},Intl,Date,URL,console,setInterval(){},setTimeout(){},clearTimeout(){},window:{location:{reload(){}}},fetch:()=>new Promise(()=>{})});
+const germanContext=vm.createContext({DCA_I18N:{language:'de',catalog:JSON.parse(fs.readFileSync('app/webpage/locales/de.json','utf8'))},document:{getElementById:germanGet,createElement:()=>new Element()},localStorage:{getItem:()=>null,setItem(){}},Intl,Date,URL,URLSearchParams,console,setInterval(){},setTimeout(){},clearTimeout(){},window:{location:{reload(){}}},fetch:()=>new Promise(()=>{})});
 vm.runInContext(fs.readFileSync('app/webpage/static/i18n.js','utf8'),germanContext);
 vm.runInContext(script,germanContext);
 vm.runInContext(`displayCurrency='EUR';activityRows=[{datetime:'2026-10-22T12:00:00Z',type:'Buy',purchaseStatus:'confirmed',shares:'.001',price:'80000',amount:'80',fee:'.2',currency:'EUR'}];activityTotal=1;activityPages=1;renderActivities()`,germanContext);
