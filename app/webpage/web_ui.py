@@ -19,7 +19,13 @@ import requests
 
 from app.core.purchase_status import PurchaseStatus
 from app.core.security import AttemptLimiter, PasswordConfirmationError, string_object
-from app.data.activity import parqet_interval_records, read_dashboard_snapshot, read_report, withdrawal_records
+from app.data.activity import (
+    activity_revision,
+    parqet_interval_records,
+    read_dashboard_snapshot,
+    read_report,
+    withdrawal_records,
+)
 from app.data.analytics import report as build_report
 from app.data.reporting import parqet_aggregate_rows, parqet_csv
 from app.exchanges import market_prices
@@ -81,10 +87,22 @@ class Handler(BaseHTTPRequestHandler):
     withdrawal_service = None
     worker = None
     tls_context = None
+    display_prices: market_prices.DisplayPrices | None = None
 
     def _login_page(self, error=""):
         return _login_page(
             error, (self.settings or {}).get("appearance", "system"), (self.settings or {}).get("language", "en")
+        )
+
+    def _account_market_price(self, snapshot, currency, currencies=()):
+        quote = self.settings["quote"]
+        return market_prices.snapshot_market_price(
+            snapshot,
+            self.settings["exchange"],
+            currency,
+            quote,
+            currencies,
+            alternate=self.display_prices.latest(quote) if self.display_prices is not None else None,
         )
 
     def _handle_schedule(self) -> None:
@@ -139,18 +157,33 @@ class Handler(BaseHTTPRequestHandler):
             financial_error=withdrawal_error,
         )
         try:
-            account_price = market_prices.snapshot_market_price(
-                snapshot,
-                self.settings["exchange"],
-                self.settings.get("display_currency", "EUR"),
-                self.settings["quote"],
-            )
+            account_price = self._account_market_price(snapshot, self.settings.get("display_currency", "EUR"))
         except (ValueError, RuntimeError, KeyError):
             account_price = None
         self._json(
             200,
             {
                 "accountMarketPrice": account_price,
+                "activityRevision": activity_revision(),
+                "reportConfigurationRevision": json.dumps(
+                    [
+                        self.settings.get(key)
+                        for key in (
+                            "exchange",
+                            "quote",
+                            "display_currency",
+                            "live",
+                            "buy_amount",
+                            "deposit_day",
+                            "deposit_time",
+                            "timezone",
+                            "withdrawals_enabled",
+                            "withdraw_threshold",
+                        )
+                    ],
+                    default=str,
+                    separators=(",", ":"),
+                ),
                 "pause": pause,
                 "purchaseExplanation": snapshot.get("withdrawalForecastPlan") if balance_matches else None,
                 "recoveryRequired": recovery_required,
@@ -805,17 +838,14 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/market-price":
             currency = query.get("currency", ["EUR"])[0].upper()
             try:
-                market = market_prices.snapshot_market_price(
-                    read_dashboard_snapshot(),
-                    self.settings["exchange"],
-                    currency,
-                    self.settings["quote"],
-                    query.get("currencies", [""])[0].split(",") if query.get("currencies", [""])[0] else (),
+                currencies = query.get("currencies", [""])[0]
+                market = self._account_market_price(
+                    read_dashboard_snapshot(), currency, currencies.split(",") if currencies else ()
                 )
                 self._json(200, market)
             except ValueError as exc:
                 self._json(400, {"error": str(exc)})
-            except (RuntimeError, requests.RequestException) as exc:
+            except RuntimeError as exc:
                 LOG.debug("Saved account price unavailable: %s", exc)
                 self._json(503, {"error": str(exc)})
             except Exception:
@@ -927,7 +957,7 @@ def _row_timestamp_ms(row):
     return int(value.timestamp() * 1000)
 
 
-def serve(settings, port, withdrawal_service=None, worker=None, runtime=None, stop=None):
+def serve(settings, port, withdrawal_service=None, worker=None, runtime=None, stop=None, *, display_prices=None):
     import os
     from threading import Event, Thread
 
@@ -952,6 +982,7 @@ def serve(settings, port, withdrawal_service=None, worker=None, runtime=None, st
             "worker": worker,
             "runtime": runtime,
             "tls_context": context,
+            "display_prices": display_prices,
         },
     )
     server = HTTPSWebServer(("0.0.0.0", port), handler)
