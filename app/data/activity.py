@@ -5,7 +5,7 @@ import logging
 import os
 import sqlite3
 import time
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -17,6 +17,7 @@ from app.data.storage import write_json_atomic
 ACTIVITY_PATH = Path("/webui-data/activity.sqlite3")
 SNAPSHOT_PATH = Path("/webui-data/dashboard.json")
 _ACTIVITY_LOCK = RLock()
+_REPORT_LOCK = RLock()
 
 
 SCHEMA_VERSION = 1
@@ -294,6 +295,19 @@ def _matches_search(payload, query, zone=UTC):
     return all(term in text for term in query.casefold().split())
 
 
+@contextmanager
+def _report_db():
+    # Restore can replace the database and its WAL files. Normal ledger writes can
+    # proceed while a report reads its own consistent SQLite snapshot.
+    with _REPORT_LOCK:
+        with _db():
+            pass
+        with closing(sqlite3.connect(ACTIVITY_PATH.resolve().as_uri() + "?mode=ro", uri=True, timeout=30)) as db:
+            db.create_aggregate("decimal_sum", 1, _DecimalSum)
+            db.execute("BEGIN")
+            yield db
+
+
 def read_report(start, end, page=1, limit=20, kind="", status="", search="", search_timezone="UTC"):
     """Rows, totals and global balance from one consistent SQLite read transaction."""
     if kind not in ("", "Buy", "TransferOut", "Deposit") or status not in (
@@ -318,8 +332,7 @@ def read_report(start, end, page=1, limit=20, kind="", status="", search="", sea
     except (ValueError, ZoneInfoNotFoundError):
         raise ValueError("Invalid Activity search timezone.") from None
     limit = max(1, min(1000, int(limit)))
-    with _db() as db:
-        db.execute("BEGIN")
+    with _report_db() as db:
         where = "(asset='BTC' OR kind='Deposit') AND timestamp>? AND timestamp<=?"
         args = [start, end]
         if kind:
@@ -334,18 +347,31 @@ def read_report(start, end, page=1, limit=20, kind="", status="", search="", sea
             status = "canceled" if status == "cancelled" else status
             where += " AND CASE WHEN kind='Deposit' THEN json_extract(payload,'$.depositStatus') WHEN kind='Buy' AND simulated=0 THEN coalesce(json_extract(payload,'$.purchaseStatus'),'confirmed') WHEN status='cancelled' THEN 'canceled' ELSE status END=?"
             args.append(status)
-        if search.strip():
+        requested_page = max(1, min(int(page), 2**63 - 1))
+        search = search.strip()
+        if search:
             db.create_function(
                 "activity_matches", 2, lambda payload, query: _matches_search(payload, query, zone), deterministic=True
             )
-            where += " AND activity_matches(payload,?)"
-            args.append(search.strip())
-        total = db.execute("SELECT count(*) FROM activity WHERE " + where, args).fetchone()[0]
-        page = max(1, min(int(page), max(1, (total + limit - 1) // limit)))
-        rows = db.execute(
-            "SELECT payload FROM activity WHERE " + where + " ORDER BY timestamp DESC,id DESC LIMIT ? OFFSET ?",
-            (*args, limit, (page - 1) * limit),
-        ).fetchall()
+            results = db.execute(
+                "WITH matches AS MATERIALIZED ("
+                "SELECT id,timestamp FROM activity WHERE " + where + " AND activity_matches(payload,?)"
+                "), tally AS (SELECT count(*) AS total FROM matches) "
+                "SELECT activity.payload,tally.total FROM matches JOIN activity USING(id) CROSS JOIN tally "
+                "ORDER BY matches.timestamp DESC,matches.id DESC LIMIT ? "
+                "OFFSET (SELECT (max(1,min(?,(total+?-1)/?))-1)*? FROM tally)",
+                (*args, search, limit, requested_page, limit, limit, limit),
+            ).fetchall()
+            total = results[0][1] if results else 0
+            rows = results
+        else:
+            total = db.execute("SELECT count(*) FROM activity WHERE " + where, args).fetchone()[0]
+            page = max(1, min(requested_page, max(1, (total + limit - 1) // limit)))
+            rows = db.execute(
+                "SELECT payload FROM activity WHERE " + where + " ORDER BY timestamp DESC,id DESC LIMIT ? OFFSET ?",
+                (*args, limit, (page - 1) * limit),
+            ).fetchall()
+        page = max(1, min(requested_page, max(1, (total + limit - 1) // limit)))
         return (
             [json.loads(r[0]) for r in rows],
             total,

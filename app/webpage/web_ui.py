@@ -3,14 +3,16 @@
 import html
 import json
 import logging
+import socket
 import ssl
 import time
 import traceback
+from contextlib import suppress
 from datetime import UTC, datetime
 from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler
 from secrets import token_urlsafe
-from threading import BoundedSemaphore, RLock
+from threading import BoundedSemaphore, RLock, Timer
 from urllib.parse import parse_qs, urlparse
 
 import requests
@@ -214,6 +216,43 @@ class Handler(BaseHTTPRequestHandler):
                 raise TLSHandshakeError(error) from None
         super().setup()
 
+    def _read_deadline(self, seconds):
+        connection = self.connection
+
+        def expire():
+            with suppress(OSError):
+                connection.shutdown(socket.SHUT_RDWR)
+
+        timer = Timer(seconds, expire)
+        timer.daemon = True
+        timer.start()
+        return timer
+
+    def handle_one_request(self):
+        self._header_deadline = self._read_deadline(10)
+        try:
+            super().handle_one_request()
+        finally:
+            self._header_deadline.cancel()
+
+    def parse_request(self):
+        try:
+            return super().parse_request()
+        finally:
+            self._header_deadline.cancel()
+
+    def _read_body(self, length, *, seconds=10):
+        # Handler unit tests also exercise the parser with an in-memory stream.
+        timer = self._read_deadline(seconds) if hasattr(self, "connection") else None
+        try:
+            body = self.rfile.read(length)
+            if len(body) != length:
+                raise TimeoutError("Request body did not complete.")
+            return body
+        finally:
+            if timer is not None:
+                timer.cancel()
+
     def end_headers(self):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "same-origin")
@@ -311,7 +350,7 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
             if length <= 0 or length > 16384:
                 raise ValueError("Invalid login request")
-            form = parse_qs(self.rfile.read(length).decode("utf-8"), keep_blank_values=True)
+            form = parse_qs(self._read_body(length).decode("utf-8"), keep_blank_values=True)
             username = form.get("username", [""])[0]
             password = form.get("password", [""])[0]
         except (ValueError, UnicodeDecodeError):
@@ -379,8 +418,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _settings_body(self):
         length = self._settings_length()
-        text = self.rfile.read(length).decode("utf-8")
-        if urlparse(self.path).path in ("/api/settings/restore", "/api/setup/restore"):
+        restore = urlparse(self.path).path in ("/api/settings/restore", "/api/setup/restore")
+        text = self._read_body(length, seconds=60 if restore else 10).decode("utf-8")
+        if restore:
             from app.data.backup import MAX_BYTES
 
             limits = {"password": 1024, "archive": (MAX_BYTES + 128) * 4 // 3 + 4}
@@ -420,7 +460,11 @@ class Handler(BaseHTTPRequestHandler):
                 upload_reserved = True
             if path == "/api/setup/restore":
                 self.runtime.reserve_setup_restore()
-            payload = self._settings_body()
+            try:
+                payload = self._settings_body()
+            except (ConnectionError, TimeoutError):
+                self.close_connection = True
+                return
             if path == "/api/setup/account":
                 with self.runtime.store.lock:
                     self.runtime.store.create_account(payload.get("username"), payload.get("password"))
@@ -571,7 +615,7 @@ class Handler(BaseHTTPRequestHandler):
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 0 < length <= 256:
                     raise ValueError("Invalid UI event")
-                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                payload = json.loads(self._read_body(length).decode("utf-8"))
                 event = payload.get("event") if isinstance(payload, dict) else None
                 if not isinstance(event, str) or event not in messages:
                     raise ValueError("Invalid UI event")
@@ -595,7 +639,7 @@ class Handler(BaseHTTPRequestHandler):
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 0 < length <= 4096:
                     raise ValueError("Invalid request body")
-                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                payload = json.loads(self._read_body(length).decode("utf-8"))
                 if not isinstance(payload, dict):
                     raise ValueError("Invalid request body")
                 session = SimpleCookie(self.headers.get("Cookie", ""))["dca_session"].value

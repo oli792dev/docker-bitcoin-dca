@@ -447,7 +447,9 @@ class Runtime:
 
     def test_connection(self, payload):
         # Read-only and serialized so a connection test cannot race a financial action.
-        with self.lock:
+        if not self.lock.acquire(blocking=False):
+            raise ValueError("The exchange account is busy. Try the connection test again shortly.")
+        try:
             if self.worker.stop.is_set():
                 raise ValueError("Container is stopping; connection test was not started.")
             values = validate(payload, self.store.snapshot()["settings"])
@@ -459,6 +461,7 @@ class Runtime:
             started = time.monotonic()
             api = create_exchange(runtime_settings(values))
             try:
+                api.probe_deadline = started + 15
                 from app.exchanges.permissions import check_permissions
 
                 permissions = check_permissions(api, values["quote"])
@@ -474,6 +477,8 @@ class Runtime:
             finally:
                 if hasattr(api, "session"):
                     api.session.close()
+        finally:
+            self.lock.release()
 
     def set_pause(self, payload):
         """Serialize pause changes with financial actions, retaining the schedule."""

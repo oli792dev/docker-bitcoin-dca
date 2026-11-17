@@ -152,6 +152,18 @@ class BackupIntegrationTests(unittest.TestCase):
             sqlite_snapshot(self.root / 'missing.sqlite3', self.root / 'activity.sqlite3')
         self.assertEqual([r['id'] for r in self.activity.read_activity_records()], ['first'])
 
+    def test_oversized_snapshot_is_rejected_before_reading_it_into_memory(self):
+        from app.data import activity, backup
+
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            with patch.object(activity, "ACTIVITY_PATH", directory / "activity.sqlite3"):
+                with activity._db() as db:
+                    db.execute("INSERT INTO cache VALUES ('large', zeroblob(?), 0)", (backup.MAX_BYTES,))
+                with patch.object(Path, "read_bytes", side_effect=AssertionError("oversized snapshot read")):
+                    with self.assertRaisesRegex(ValueError, "32 MiB"):
+                        backup.Backups(directory).create("activity", "test-backup-password")
+
     def test_snapshot_includes_wal_and_activity_merge_never_deletes(self):
         from app.data.backup import Backups,decrypt,unpack
         manager=Backups(self.root)
@@ -513,6 +525,51 @@ class ReviewFixTests(unittest.TestCase):
         self.assertFalse((self.root/'.restore-journal').exists())
 
 class ActivitySearchTests(unittest.TestCase):
+    def test_search_evaluates_each_candidate_once_and_clamps_the_page(self):
+        from app.data import activity
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(activity, "ACTIVITY_PATH", Path(tmp) / "activity.sqlite3"):
+            with activity._db() as db:
+                db.executemany(
+                    "INSERT INTO activity(id,timestamp,kind,asset,simulated,payload) VALUES (?,?,'Buy','BTC',0,?)",
+                    [(str(i), i, json.dumps({"id": str(i)})) for i in range(1, 6)],
+                )
+            with patch.object(activity, "_matches_search", return_value=True) as matches:
+                rows, total, page, _, _ = activity.read_report(0, 5, page=99, limit=2, search="buy")
+            self.assertEqual(([row["id"] for row in rows], total, page), (["1"], 5, 3))
+            self.assertEqual(matches.call_count, 5)
+
+    def test_search_leaves_ledger_writes_available(self):
+        from threading import Event, Thread
+        from app.data import activity
+
+        entered, release, written = Event(), Event(), Event()
+
+        def match(*args):
+            entered.set()
+            return release.wait(5)
+
+        def write():
+            activity.cache_put_many({"test": {"value": 1}})
+            written.set()
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(activity, "ACTIVITY_PATH", Path(tmp) / "activity.sqlite3"):
+            with activity._db() as db:
+                db.execute("INSERT INTO activity(id,timestamp,kind,asset,simulated,payload) VALUES ('1',1,'Buy','BTC',0,'{}')")
+            with patch.object(activity, "_matches_search", side_effect=match):
+                reader = Thread(target=activity.read_report, args=(0, 1), kwargs={"search": "buy"})
+                writer = Thread(target=write)
+                reader.start()
+                try:
+                    self.assertTrue(entered.wait(2))
+                    writer.start()
+                    self.assertTrue(written.wait(2), "The search held the ledger write lock")
+                finally:
+                    release.set()
+                    reader.join()
+                    if writer.ident is not None:
+                        writer.join()
+
     def test_search_matches_hidden_attributes_unicode_and_dates_across_pages(self):
         from app.data import activity
         with tempfile.TemporaryDirectory() as tmp, patch.object(activity, 'ACTIVITY_PATH', Path(tmp)/'activity.sqlite3'):

@@ -5,6 +5,17 @@ import time
 import requests
 
 
+def probe_timeout(deadline, timeout):
+    """Limit the next diagnostic connection and read to the remaining budget."""
+    if deadline is None:
+        return timeout
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise requests.Timeout("Exchange connection test time budget exhausted.")
+    connect, read = timeout if isinstance(timeout, tuple) else (timeout, timeout)
+    return min(connect, remaining / 2), min(read, remaining / 2)
+
+
 def check_permissions(api, quote):
     """Distinguish successful reads, explicit denial and unverified financial scopes."""
     result = {

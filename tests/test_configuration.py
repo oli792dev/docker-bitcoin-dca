@@ -358,6 +358,27 @@ class ConfigurationTests(unittest.TestCase):
         self.assertTrue(state['configuration_live'])
 
 
+    def test_connection_test_does_not_queue_behind_the_account_worker(self):
+        from threading import Event, Thread
+
+        held, release = Event(), Event()
+
+        def hold_account():
+            with self.app.lock:
+                held.set()
+                release.wait(2)
+
+        worker = Thread(target=hold_account)
+        worker.start()
+        try:
+            self.assertTrue(held.wait(2))
+            with self.assertRaisesRegex(ValueError, "busy"):
+                self.app.test_connection(CREDENTIALS)
+            self.api_factory.assert_not_called()
+        finally:
+            release.set()
+            worker.join()
+
     def test_connection_test_only_reads_balances_and_does_not_save(self):
         self.account()
         before = self.store.snapshot()
