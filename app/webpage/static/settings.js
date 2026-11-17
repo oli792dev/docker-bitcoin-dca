@@ -189,11 +189,38 @@ function renderReview(){
   $(row.changed?'reviewValues':'unchangedReviewValues').append(dt,dd);
  }
 }
-$('settingsForm').addEventListener('submit',e=>{e.preventDefault();if(!exchangeCredentialsReady())return;const editingCredentials=showCredentials;if(editingCredentials&&$('password').value!==$('passwordConfirm').value){message('New passwords do not match.',true,'passwordConfirm');return}pending={settings:values()};if(pauseState.known&&$('pauseTransactions').checked!==pauseState.initial)pending.pause=$('pauseTransactions').checked;if(editingCredentials)Object.assign(pending,{username:$('username').value.trim(),password:$('password').value,current_password:$('current_password').value});renderReview();$('review').showModal()});
+$('settingsForm').addEventListener('submit',e=>{e.preventDefault();if(!exchangeCredentialsReady())return;const editingCredentials=showCredentials;if(editingCredentials&&$('password').value!==$('passwordConfirm').value){message('New passwords do not match.',true,'passwordConfirm');return}const draft=values();pending={settings:initial.complete?Object.fromEntries(Object.entries(draft).filter(([key,value])=>value!==originalSettings[key])):draft};if(pauseState.known&&$('pauseTransactions').checked!==pauseState.initial)pending.pause=$('pauseTransactions').checked;if(editingCredentials){const username=$('username').value.trim();if(username!==initial.username)pending.username=username;if($('password').value)pending.password=$('password').value;if($('current_password').value)pending.current_password=$('current_password').value}renderReview();$('review').showModal()});
 
 function logSettingsCancellation(){fetch('/api/ui-events',{method:'POST',headers:{'Content-Type':'application/json','X-DCA-Action':'ui-event'},body:JSON.stringify({event:'settings_save_cancelled'}),keepalive:true}).catch(()=>{})}
-$('cancel').addEventListener('click',()=>{$('review').close();pending=null;$('sensitivePassword').value='';logSettingsCancellation()});$('review').addEventListener('cancel',()=>{pending=null;$('sensitivePassword').value='';logSettingsCancellation()});
-$('confirm').addEventListener('click',async()=>{if(!pending)return;if(needsPassword()&&!pending.current_password){if(!$('sensitivePassword').value){$('passwordConfirmationError').textContent=t('Enter your current login password to confirm these changes.');return}pending.current_password=$('sensitivePassword').value}const b=$('confirm');b.disabled=true;try{const d=await request('/api/settings',pending);pending=null;savedDraft=draftSignature();updateDirty();if(initial.embedded){window.parent.postMessage({type:'dca-settings-saved'},location.origin)}else{location.href='/'}}catch(err){if(pending)delete pending.current_password;$('review').close();message(err.message,true,err.field)}finally{$('sensitivePassword').value='';b.disabled=false}});
+function cancelSettingsReview(event){
+ if($('confirm').disabled){event.preventDefault();return}
+ $('review').close();pending=null;$('sensitivePassword').value='';logSettingsCancellation();
+}
+$('cancel').addEventListener('click',cancelSettingsReview);
+$('review').addEventListener('cancel',cancelSettingsReview);
+$('confirm').addEventListener('click',async()=>{
+ const confirm=$('confirm'),cancel=$('cancel'),progress=$('settingsSaveProgress');
+ if(!pending||confirm.disabled)return;
+ if(needsPassword()&&!pending.current_password){
+  if(!$('sensitivePassword').value){$('passwordConfirmationError').textContent=t('Enter your current login password to confirm these changes.');return}
+  pending.current_password=$('sensitivePassword').value;
+ }
+ confirm.disabled=cancel.disabled=true;
+ progress.textContent=t('Saving settings…');progress.focus();
+ if(initial.embedded)window.parent.postMessage({type:'dca-settings-busy',active:true},location.origin);
+ try{
+  await request('/api/settings',pending);
+  pending=null;$('review').close();savedDraft=draftSignature();updateDirty();
+  if(initial.embedded)window.parent.postMessage({type:'dca-settings-saved'},location.origin);
+  else location.href='/';
+ }catch(err){
+  if(pending)delete pending.current_password;
+  $('review').close();message(err.message,true,err.field);
+  if(initial.embedded)window.parent.postMessage({type:'dca-settings-busy',active:false},location.origin);
+ }finally{
+  $('sensitivePassword').value='';progress.textContent='';confirm.disabled=cancel.disabled=false;
+ }
+});
 
 function updatePauseDependency(){
  const live=$('live').checked;
@@ -220,13 +247,14 @@ function draftSignature(){
  const account=showCredentials?['username','current_password','password','passwordConfirm'].map(id=>$(id).value):[];
  return JSON.stringify([settings,account,$('pauseTransactions').checked]);
 }
+const originalSettings=values();
 let savedDraft=draftSignature(),settingsDirty=false;
 function updateDirty(){
  settingsDirty=draftSignature()!==savedDraft;
  $('unsavedChanges').hidden=!settingsDirty;
 }
 function requestSettingsClose(){
- if($('backupReview').open)return;
+ if($('review').open||$('backupReview').open)return;
  updateDirty();
  if(settingsDirty){$('discardDialog').showModal();return}
  if(initial.embedded)window.parent.postMessage({type:'dca-settings-close'},location.origin);else location.href='/';
@@ -323,7 +351,7 @@ $('confirmBackupRestore')?.addEventListener('click',async()=>{
  button.disabled=cancel.disabled=true;
  progress.textContent=t('Restoring backup…');
  progress.focus();
- if(initial.embedded)window.parent.postMessage({type:'dca-settings-restoring',active:true},location.origin);
+ if(initial.embedded)window.parent.postMessage({type:'dca-settings-busy',active:true},location.origin);
  try{
   await request('/api/settings/restore',restorePayload);
   try{sessionStorage.setItem('bitcoinDcaRestoredBackup',filename)}catch{}
@@ -333,7 +361,7 @@ $('confirmBackupRestore')?.addEventListener('click',async()=>{
   button.disabled=cancel.disabled=false;
   progress.textContent='';
   $('backupReview').close();
-  if(initial.embedded)window.parent.postMessage({type:'dca-settings-restoring',active:false},location.origin);
+  if(initial.embedded)window.parent.postMessage({type:'dca-settings-busy',active:false},location.origin);
   backupFieldError(error.field||'restoreFile',error.message,true);
  }finally{
   $('restoreLoginPassword').value='';$('restorePassword').value='';

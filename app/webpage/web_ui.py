@@ -9,6 +9,7 @@ import time
 import traceback
 from contextlib import suppress
 from datetime import UTC, datetime
+from functools import lru_cache
 from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler
 from secrets import token_urlsafe
@@ -65,6 +66,23 @@ HTML = (
     .replace("__DESIGN_CSS__", DESIGN_CSS)
 )
 LOGIN_HTML = LOGIN_HTML.replace("__DESIGN_CSS__", DESIGN_CSS)
+
+
+@lru_cache(maxsize=48)
+def _dashboard_template(language, appearance, manual_withdrawal, parqet, withdrawals):
+    hidden = []
+    if not manual_withdrawal:
+        hidden += ["#manualWithdraw", "#withdrawal-note"]
+    if not parqet:
+        hidden += ["#download", "#parqet-actions", "#exportMessage", "#parqet-note", "#manual-export-note"]
+    if not withdrawals:
+        hidden += ["#automatic-withdrawal-note", "#forecastAssumptions"]
+    styles = "<style>" + ",".join(hidden) + "{display:none!important}</style>" if hidden else ""
+    page = HTML.replace("</head>", styles + "</head>")
+    if not parqet:
+        page = page.replace("Period analysis and Parqet export</strong>", "Period analysis</strong>")
+        page = page.replace("to review activity and prepare a Parqet export.", "to review activity.")
+    return localize_page(apply_appearance(page, appearance), language)
 
 
 def _login_page(error="", appearance="system", language="en"):
@@ -141,6 +159,15 @@ class Handler(BaseHTTPRequestHandler):
             if self.settings.get("live") and self.settings.get("withdrawals_enabled")
             else None
         )
+        if (
+            balance_matches
+            and not exchange_check_pending
+            and self.settings.get("live")
+            and self.settings.get("withdrawals_enabled")
+            and snapshot.get("withdrawalBalancePending")
+        ):
+            forecast_at, projected_purchases = None, None
+            forecast_status = "Waiting for the exchange balance to reflect the previous withdrawal."
         if withdrawal_error:
             forecast_at, forecast_status = None, withdrawal_error
         pause, pause_unavailable = pause_status(self.runtime.controls if self.runtime else None)
@@ -586,14 +613,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def _dashboard_html(self):
         settings = self.settings
-        hidden = []
-        if not settings.get("manual_withdrawal_enabled", True):
-            hidden += ["#manualWithdraw", "#withdrawal-note"]
-        if not settings.get("parqet_enabled", True):
-            hidden += ["#download", "#parqet-actions", "#exportMessage", "#parqet-note", "#manual-export-note"]
-        if not settings.get("withdrawals_enabled", False):
-            hidden += ["#automatic-withdrawal-note", "#forecastAssumptions"]
-        styles = "<style>" + ",".join(hidden) + "{display:none!important}</style>" if hidden else ""
         kraken = settings["exchange"] == "KRAKEN"
         target = settings.get("kraken_withdraw_key" if kraken else "withdraw_address")
         destination = (
@@ -609,16 +628,15 @@ class Handler(BaseHTTPRequestHandler):
         first_start = (
             self.runtime.store.report_from() if self.runtime and hasattr(self.runtime.store, "report_from") else ""
         )
-        page = (
-            HTML.replace("__WITHDRAW_DESTINATION__", destination)
-            .replace("__REPORT_FROM__", html.escape(first_start, quote=True))
-            .replace("</head>", styles + "</head>")
+        template = _dashboard_template(
+            settings.get("language", "en"),
+            settings.get("appearance", "system"),
+            settings.get("manual_withdrawal_enabled", True),
+            settings.get("parqet_enabled", True),
+            settings.get("withdrawals_enabled", False),
         )
-        if not settings.get("parqet_enabled", True):
-            page = page.replace("Period analysis and Parqet export</strong>", "Period analysis</strong>")
-            page = page.replace("to review activity and prepare a Parqet export.", "to review activity.")
-        return localize_page(
-            apply_appearance(page, settings.get("appearance", "system")), settings.get("language", "en")
+        return template.replace("__REPORT_FROM__", html.escape(first_start, quote=True)).replace(
+            "__WITHDRAW_DESTINATION__", destination
         )
 
     def do_POST(self):

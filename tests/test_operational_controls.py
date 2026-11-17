@@ -557,10 +557,29 @@ class BackupIntegrationTests(unittest.TestCase):
         from app.trading.runtime import Runtime
         account=Runtime(self.store,self.root/'state.json')
         payload={'scope':'full','password':'long dashboard password','current_password':'long dashboard password'}
-        with patch('app.data.backup.Backups.create',return_value=('test.dcabackup',b'test')) as create:
+        with patch('app.data.backup.Backups.snapshot') as snapshot:
             with self.assertRaisesRegex(ValueError,'different') as error:account.backup(payload)
             self.assertEqual(error.exception.field,'backupPassword')
-            create.assert_not_called()
+            snapshot.assert_not_called()
+
+    def test_backup_encoding_releases_account_and_store_locks(self):
+        from app.data.backup import Backups
+        from app.trading.runtime import Runtime
+
+        account = Runtime(self.store, self.root / "state.json")
+        encode = Backups.encode
+
+        def unlocked_encode(*args):
+            self.assertFalse(account.lock._is_owned())
+            self.assertFalse(account.store.lock._is_owned())
+            return encode(*args)
+
+        with patch.object(Backups, "encode", side_effect=unlocked_encode):
+            backup = account.backup({
+                "scope": "config", "password": "different backup password",
+                "current_password": "long dashboard password",
+            })
+        self.assertTrue(backup["archive"])
 
     def test_old_backup_can_be_restored_even_if_password_matches_current_login(self):
         import base64

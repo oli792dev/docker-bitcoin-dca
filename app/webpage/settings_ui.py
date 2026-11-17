@@ -2,6 +2,7 @@
 
 import json
 import re
+from functools import lru_cache
 
 from app.webpage.design_system import DESIGN_CSS, apply_appearance
 from app.webpage.i18n import localize_page
@@ -18,6 +19,14 @@ PAGE = (
 )
 
 
+@lru_cache(maxsize=12)
+def _settings_template(complete, appearance, language):
+    page = PAGE
+    if not complete:
+        page = re.sub(r"<!--dashboard-credentials-start-->.*?<!--dashboard-credentials-end-->", "", page, flags=re.S)
+    return localize_page(apply_appearance(page, appearance), language)
+
+
 def settings_page(store, create_account=False, embedded=False):
     # The unauthenticated first step must not expose imported credentials or destinations.
     data = dict(settings={}, complete=False, username="") if create_account else store.public()
@@ -32,9 +41,7 @@ def settings_page(store, create_account=False, embedded=False):
     data["createAccount"] = create_account
     data["embedded"] = embedded
     encoded = json.dumps(data).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-    page = PAGE
-    if not data["complete"]:
-        page = re.sub(r"<!--dashboard-credentials-start-->.*?<!--dashboard-credentials-end-->", "", page, flags=re.S)
-    page = apply_appearance(page.replace("__INITIAL__", encoded), data["settings"].get("appearance", "system"))
-    language = data["settings"].get("language", "en")
-    return localize_page(page, language)
+    template = _settings_template(
+        data["complete"], data["settings"].get("appearance", "system"), data["settings"].get("language", "en")
+    )
+    return template.replace("__INITIAL__", encoded)

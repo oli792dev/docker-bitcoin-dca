@@ -249,6 +249,18 @@ class LocalHttpsTests(unittest.TestCase):
         self.assertEqual(self.root.stat().st_mode&0o777,0o700)
         tls.https_context(self.hosts,self.root)
 
+    def test_leaf_from_another_installation_is_reissued_by_local_ca(self):
+        with tempfile.TemporaryDirectory() as directory:
+            foreign = Path(directory)
+            tls.https_context(self.hosts, foreign)
+            local_ca = (self.root / "ca.pem").read_bytes()
+            for name in ("server.pem", "server-key.pem"):
+                (self.root / name).write_bytes((foreign / name).read_bytes())
+            tls.https_context(self.hosts, self.root)
+            self.assertEqual((self.root / "ca.pem").read_bytes(), local_ca)
+            self.assertNotEqual((self.root / "server.pem").read_bytes(), (foreign / "server.pem").read_bytes())
+            tls._openssl("verify", "-trusted", self.root / "ca.pem", self.root / "server.pem")
+
     def test_tls_handshake_validates_local_ca_and_ip_without_network(self):
         incoming,outgoing=ssl.MemoryBIO(),ssl.MemoryBIO()
         server=self.context.wrap_bio(incoming,outgoing,server_side=True)

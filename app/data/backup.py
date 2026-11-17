@@ -269,6 +269,9 @@ class Backups:
         self.directory = Path(directory)
 
     def create(self, scope, password):
+        return self.encode(scope, password, self.snapshot(scope))
+
+    def snapshot(self, scope):
         if not isinstance(scope, str) or scope not in SCOPES:
             raise ValueError("Invalid backup scope.")
         with activity._ACTIVITY_LOCK, tempfile.TemporaryDirectory(dir=self.directory, prefix=".backup-") as tmp:
@@ -302,23 +305,27 @@ class Backups:
                         ).encode()
                     )
                     remaining -= len(data[name])
-            manifest = {
-                "version": 1,
-                "scope": scope,
-                "createdAt": datetime.now(UTC).isoformat(),
-                "files": {name: hashlib.sha256(value).hexdigest() for name, value in data.items()},
-            }
-            output = io.BytesIO()
-            with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
-                archive.writestr("manifest.json", json.dumps(manifest))
-                for name, value in data.items():
-                    archive.writestr(name, value)
-            if output.tell() > MAX_BYTES:
-                raise ValueError("Backup exceeds the 32 MiB limit.")
-            encrypted = encrypt(output.getvalue(), password)
-            suffix = "activities" if scope == "activity" else scope
-            filename = "bitcoin-dca-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ") + "-" + suffix + ".dcabackup"
-            return filename, encrypted
+            return data
+
+    @staticmethod
+    def encode(scope, password, data):
+        manifest = {
+            "version": 1,
+            "scope": scope,
+            "createdAt": datetime.now(UTC).isoformat(),
+            "files": {name: hashlib.sha256(value).hexdigest() for name, value in data.items()},
+        }
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
+            archive.writestr("manifest.json", json.dumps(manifest))
+            for name, value in data.items():
+                archive.writestr(name, value)
+        if output.tell() > MAX_BYTES:
+            raise ValueError("Backup exceeds the 32 MiB limit.")
+        encrypted = encrypt(output.getvalue(), password)
+        suffix = "activities" if scope == "activity" else scope
+        filename = "bitcoin-dca-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ") + "-" + suffix + ".dcabackup"
+        return filename, encrypted
 
     def restore(self, encrypted, password, scope, unresolved=False, *, before_mutation=None):
         if (scope is not None and (not isinstance(scope, str) or scope not in SCOPES)) or unresolved:

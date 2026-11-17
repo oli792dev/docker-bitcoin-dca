@@ -221,6 +221,8 @@ class AuditFixTests(unittest.TestCase):
         state = {}
         bot.maybe_withdraw_btc(api, state, self.settings)
         reconcile_withdrawals(api, self.settings, force=True)
+        self.assertTrue(bot.maybe_withdraw_btc(api, state, self.settings))
+        self.assertEqual(len(api.sent), 1)
         api.available = D('.002')
         bot.maybe_withdraw_btc(api, state, self.settings)
         self.assertEqual(len(api.sent), 2)

@@ -33,6 +33,21 @@ class LocalizationTests(TestCase):
         self.assertIn('id="settingsContent"',page)
         self.assertIn('class="settings-footer"',page)
 
+    def test_cached_settings_template_inserts_current_user_data_on_each_render(self):
+        from app.webpage.settings_ui import _settings_template
+
+        def render(username):
+            return settings_page(SimpleNamespace(public=lambda: dict(
+                settings={**DEFAULTS, "language": "de"}, username=username, complete=True
+            )))
+
+        _settings_template.cache_clear()
+        self.assertIn('"username": "first-user"', render("first-user"))
+        second = render("second-user")
+        self.assertIn('"username": "second-user"', second)
+        self.assertNotIn("first-user", second)
+        self.assertEqual(_settings_template.cache_info().hits, 1)
+
     def test_translated_responses_preserve_financial_and_user_data(self):
         handler=object.__new__(Handler);handler.settings={'language':'de'};handler._send=Mock()
         handler._json(200,{'nextPurchaseStatus':'Waiting for deposit','target':'Before','quote':'EUR',

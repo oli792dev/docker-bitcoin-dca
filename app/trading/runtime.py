@@ -4,7 +4,9 @@ import hmac
 import json
 import logging
 import time
+from contextlib import nullcontext
 from pathlib import Path
+from threading import Lock
 
 from app.core.configuration import ConfigStore, ConfigurationError, account_values, runtime_settings, validate
 from app.core.purchase_status import PurchaseStatus
@@ -29,6 +31,7 @@ class Runtime:
         from app.trading.worker import Worker
 
         self.lock = ACCOUNT_LOCK
+        self.backup_download = Lock()
         from app.data.backup import recover_restore
 
         recover_restore(Path(state_path).parent if state_path is not None else STATE_PATH.parent)
@@ -552,73 +555,85 @@ class Runtime:
         )
         if not isinstance(payload, dict) or set(payload) != allowed or setup and not restore:
             raise ValueError("Invalid backup request.")
-        with self.lock, self.store.lock:
-            _check_session(authorize)
-            saved = self.store.snapshot()
-            account = saved["account"]
-            if setup:
-                self._require_empty_installation()
-            elif not account:
-                raise ValueError("Complete dashboard account setup first.")
-            attempt_key = "initial-backup-restore" if setup else account["username"]
-            attempts = self.setup_restore_attempts if setup else self.password_attempts
-            retry = 0 if setup and setup_attempt_reserved else attempts.consume(attempt_key)
-            if retry:
-                raise PasswordConfirmationError("Too many password confirmation attempts. Try again later.", retry)
-            if not setup and not self.store.authenticate(account["username"], payload["current_password"]):
-                raise PasswordConfirmationError("Your current password is incorrect.")
-            if not setup:
-                attempts.clear(attempt_key)
-            if self.worker.stop.is_set() or self._configuration_uncertain:
-                raise ValueError("Settings are being verified or the container is stopping; try again later.")
-            manager = Backups(self.state_path.parent)
-            if not restore:
-                if isinstance(payload["password"], str) and hmac.compare_digest(
-                    payload["password"].encode("utf-8"), payload["current_password"].encode("utf-8")
-                ):
-                    raise ConfigurationError(
-                        "Backup password must be different from the dashboard password.", "backupPassword"
-                    )
-                filename, encrypted = manager.create(payload["scope"], payload["password"])
-                LOG.info("Encrypted backup created: scope=%s", payload["scope"])
-                return {"filename": filename, "archive": base64.b64encode(encrypted).decode()}
-            if not isinstance(payload["archive"], str) or len(payload["archive"]) > (MAX_BYTES + 128) * 4 // 3 + 4:
-                raise ValueError("Backup exceeds the 32 MiB limit.")
-            try:
-                encrypted = base64.b64decode(payload["archive"], validate=True)
-            except ValueError:
-                raise ValueError("Invalid backup encoding.") from None
-            if self.unresolved() or self.worker.queue.unfinished_tasks:
-                raise ValueError("Resolve pending transactions and queued requests before restoring a backup.")
-            mutation_started = False
+        with nullcontext() if restore else self.backup_download:
+            with self.lock, self.store.lock:
+                _check_session(authorize)
+                saved = self.store.snapshot()
+                account = saved["account"]
+                if setup:
+                    self._require_empty_installation()
+                elif not account:
+                    raise ValueError("Complete dashboard account setup first.")
+                attempt_key = "initial-backup-restore" if setup else account["username"]
+                attempts = self.setup_restore_attempts if setup else self.password_attempts
+                retry = 0 if setup and setup_attempt_reserved else attempts.consume(attempt_key)
+                if retry:
+                    raise PasswordConfirmationError("Too many password confirmation attempts. Try again later.", retry)
+                if not setup and not self.store.authenticate(account["username"], payload["current_password"]):
+                    raise PasswordConfirmationError("Your current password is incorrect.")
+                if not setup:
+                    attempts.clear(attempt_key)
+                if self.worker.stop.is_set() or self._configuration_uncertain:
+                    raise ValueError("Settings are being verified or the container is stopping; try again later.")
+                manager = Backups(self.state_path.parent)
+                if not restore:
+                    if isinstance(payload["password"], str) and hmac.compare_digest(
+                        payload["password"].encode("utf-8"), payload["current_password"].encode("utf-8")
+                    ):
+                        raise ConfigurationError(
+                            "Backup password must be different from the dashboard password.", "backupPassword"
+                        )
+                    snapshot = manager.snapshot(payload["scope"])
+                else:
+                    if (
+                        not isinstance(payload["archive"], str)
+                        or len(payload["archive"]) > (MAX_BYTES + 128) * 4 // 3 + 4
+                    ):
+                        raise ValueError("Backup exceeds the 32 MiB limit.")
+                    try:
+                        encrypted = base64.b64decode(payload["archive"], validate=True)
+                    except ValueError:
+                        raise ValueError("Invalid backup encoding.") from None
+                    if self.unresolved() or self.worker.queue.unfinished_tasks:
+                        raise ValueError("Resolve pending transactions and queued requests before restoring a backup.")
+                    mutation_started = False
 
-            def before_mutation():
-                nonlocal mutation_started
-                mutation_started = True
+                    def before_mutation():
+                        nonlocal mutation_started
+                        mutation_started = True
 
-            try:
-                result = manager.restore(
-                    encrypted, payload["password"], None if setup else payload["scope"], before_mutation=before_mutation
-                )
-            except BaseException:
-                recovery_required = self.recovery_required
-                if mutation_started and not recovery_required and (not setup or self.store.path.exists()):
+                    try:
+                        result = manager.restore(
+                            encrypted,
+                            payload["password"],
+                            None if setup else payload["scope"],
+                            before_mutation=before_mutation,
+                        )
+                    except BaseException:
+                        recovery_required = self.recovery_required
+                        if mutation_started and not recovery_required and (not setup or self.store.path.exists()):
+                            self._configuration_uncertain = True
+                        if mutation_started or recovery_required:
+                            self.exchange_check_pending = True
+                            self.service = None
+                        if recovery_required:
+                            LOG.error(
+                                "Restore recovery required; restart the container. New transactions remain blocked."
+                            )
+                            self.controls.set(True)
+                        raise
                     self._configuration_uncertain = True
-                if mutation_started or recovery_required:
-                    self.exchange_check_pending = True
-                    self.service = None
-                if recovery_required:
-                    LOG.error("Restore recovery required; restart the container. New transactions remain blocked.")
-                    self.controls.set(True)
-                raise
-            self._configuration_uncertain = True
-            self._recover_configuration()
-            self.invalidate_sessions()
-            self.worker.reconfigure.set()
-            attempts.clear(attempt_key)
-            LOG.info(
-                "Encrypted backup restored: scope=%s; transactions paused=%s; automatic exchange check required",
-                result["scope"],
-                result["paused"],
-            )
-            return {**result, "signInRequired": True}
+                    self._recover_configuration()
+                    self.invalidate_sessions()
+                    self.worker.reconfigure.set()
+                    attempts.clear(attempt_key)
+                    LOG.info(
+                        "Encrypted backup restored: scope=%s; transactions paused=%s; automatic exchange check required",
+                        result["scope"],
+                        result["paused"],
+                    )
+                    return {**result, "signInRequired": True}
+            filename, encrypted = manager.encode(payload["scope"], payload["password"], snapshot)
+            _check_session(authorize)
+            LOG.info("Encrypted backup created: scope=%s", payload["scope"])
+            return {"filename": filename, "archive": base64.b64encode(encrypted).decode()}

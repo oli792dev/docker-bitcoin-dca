@@ -13,6 +13,8 @@ import threading
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
+from cryptography import x509
+
 from app.core.logging_utils import log_transition
 from app.data.storage import DATA_DIR
 
@@ -96,7 +98,11 @@ def https_context(hosts, directory=None):
         if reusable:
             try:
                 ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER).load_cert_chain(cert, key)
-            except ssl.SSLError:
+                _openssl("verify", "-trusted", ca, "-purpose", "sslserver", cert)
+                leaf = x509.load_pem_x509_certificate(cert.read_bytes())
+                names = leaf.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+                reusable = {str(name.value) for name in names} == set(hosts)
+            except (OSError, ValueError, x509.ExtensionNotFound, subprocess.CalledProcessError):
                 reusable = False
         if not reusable:
             names = []

@@ -23,7 +23,7 @@
    ready=true;frame.style.visibility='visible';
    if(event.data.focusWithdrawals)frame.contentDocument.getElementById('withdrawals_enabled').focus();
   }
-  if(event.data?.type==='dca-settings-restoring'&&dialog.open)closeButton.disabled=logoutButton.disabled=event.data.active===true;
+  if(event.data?.type==='dca-settings-busy'&&dialog.open)closeButton.disabled=logoutButton.disabled=event.data.active===true;
   if(event.data?.type==='dca-settings-close')dialog.close();
   if(event.data?.type==='dca-transactions-updated')window.DCA_DASHBOARD_ACTIONS?.refreshSchedule?.();
   if(event.data?.type==='dca-settings-saved')window.location.reload();

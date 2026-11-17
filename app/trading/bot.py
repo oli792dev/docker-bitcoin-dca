@@ -208,6 +208,7 @@ def update_dashboard_snapshot(settings, quote_balance, price, btc_balance=None):
             "nextPurchaseStatus": previous.get("nextPurchaseStatus", "Schedule pending"),
             "nextPurchaseStatusCode": previous.get("nextPurchaseStatusCode", PurchaseStatus.UNKNOWN),
             "withdrawalError": previous.get("withdrawalError"),
+            "withdrawalBalancePending": previous.get("withdrawalBalancePending"),
             "updatedAt": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
         }
     )
@@ -275,8 +276,6 @@ def _finish_pending_withdrawal(api, state, settings, pending, context, result, s
         "balanceBefore": context.get("balanceBefore", pending["amount"]),
         "createdAt": result.get("createdAt"),
     }
-    if result.get("exchangeStatus"):
-        state["last_withdrawal"]["recovered"] = True
     state["withdrawal_armed"] = False
     state.pop("pending_withdrawal", None)
     state.pop("pending_withdrawal_context", None)
@@ -322,7 +321,7 @@ def recover_pending_kraken_withdrawal(api, state, settings, *, state_path: Path 
 
 
 def maybe_withdraw_btc(api, state, settings, manual_request=None):
-    recovered_completion = False
+    completed_withdrawal = False
     if manual_request is None and settings["live"]:
         if recover_pending_kraken_withdrawal(api, state, settings):
             return
@@ -334,14 +333,11 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
             and last_record.get("withdrawalStatus") in ("completed", "failed")
             and not state.get("withdrawal_armed", True)
         ):
-            recovered_completion = (
-                bool(last_withdrawal.get("recovered")) and last_record["withdrawalStatus"] == "completed"
-            )
-            if not recovered_completion:
+            completed_withdrawal = last_record["withdrawalStatus"] == "completed"
+            if not completed_withdrawal:
                 state["withdrawal_armed"] = True
                 save_state(STATE_PATH, state)
-                if last_record["withdrawalStatus"] == "failed":
-                    return
+                return
         if not state.get("pending_withdrawal") and any(
             r.get("exchange") == settings["exchange"] and r.get("withdrawalStatus") == "submitted"
             for r in withdrawal_records(unresolved=True)
@@ -412,9 +408,9 @@ def maybe_withdraw_btc(api, state, settings, manual_request=None):
         return
 
     available = api.balance("BTC")
-    if recovered_completion:
+    if completed_withdrawal:
         if available >= Decimal(last_withdrawal.get("balanceBefore", last_withdrawal["amount"])):
-            return
+            return True
         state["withdrawal_armed"] = True
         save_state(STATE_PATH, state)
     if manual_request is not None:
@@ -703,16 +699,21 @@ def _run_once(
         return check_interval
     clear_transition(api, "deposit-verification")
     withdrawal_error = None
+    withdrawal_balance_pending = False
     try:
-        maybe_withdraw_btc(api, state, settings)
+        withdrawal_balance_pending = bool(maybe_withdraw_btc(api, state, settings))
     except requests.RequestException as exc:
         LOG.warning("Automatic BTC withdrawal check failed; will retry: %s", exc)
         withdrawal_error = WITHDRAWAL_FAILED
     if state.get("pending_withdrawal") and state.get("pending_withdrawal_context", {}).get("result") is None:
         withdrawal_error = WITHDRAWAL_UNCERTAIN
     snapshot = read_dashboard_snapshot()
-    if snapshot.get("withdrawalError") != withdrawal_error:
+    if (
+        snapshot.get("withdrawalError") != withdrawal_error
+        or bool(snapshot.get("withdrawalBalancePending")) != withdrawal_balance_pending
+    ):
         snapshot["withdrawalError"] = withdrawal_error
+        snapshot["withdrawalBalancePending"] = withdrawal_balance_pending
         write_dashboard_snapshot(snapshot)
     if market.get("status") != "trading":
         update_dashboard_schedule(None, PurchaseStatus.MARKET_UNAVAILABLE, detail=str(market.get("status")))
