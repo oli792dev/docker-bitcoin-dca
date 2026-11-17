@@ -193,7 +193,7 @@ function confirmWithdrawal(preview){
   dialog.showModal();
  });
 }
-function selectedPeriod(){const start=parseInput($("start")),end=parseInput($("end"));if(!Number.isFinite(start)||!Number.isFinite(end)||start>=end)throw new Error("Please choose a valid date range.");return {start:start,end:end}}
+function selectedPeriod(dates){const start=Date.parse(dates?.start??$("start").value),end=Date.parse(dates?.end??$("end").value);if(!Number.isFinite(start)||!Number.isFinite(end)||start>=end)throw new Error("Please choose a valid date range.");return {start:start,end:end}}
 function applySelectedInterval(){if(!$("interval").value)return;const p=$("interval").value.split(",").map(Number);$("start").value=localInput(p[0]);$("end").value=localInput(p[1])}
 async function loadIntervals(){
  const response=await fetch("/api/withdrawals");if(!response.ok)throw new Error("Could not load withdrawal history.");
@@ -351,12 +351,12 @@ function reportQuery(period){
 function reportKey(query,revision,configurationRevision,throughNow){
  return JSON.stringify([query.start,throughNow?null:query.end,query.page,query.limit,query.q,revision,configurationRevision]);
 }
-async function loadAnalytics(){
+async function loadAnalytics(appliedDates){
  const request=++reportRequest,readAt=Date.now();
- const revision=activityRevision,configurationRevision=reportConfigurationRevision,throughNow=reportThroughNow;
+ const revision=activityRevision,configurationRevision=reportConfigurationRevision,throughNow=appliedDates?.throughNow??reportThroughNow;
  $("periodReport").ariaBusy="true";saveReportView();sectionFeedback("reportFeedback","");
  try{
-  showError("");const query=reportQuery(selectedPeriod());
+  showError("");const query=reportQuery(selectedPeriod(appliedDates));
   const response=await fetch("/api/analytics?"+new URLSearchParams({...query,tz:browserTimeZone}));
   const d=await response.json();if(!response.ok)throw new Error(d.error||"Could not load the report.");if(request!==reportRequest)return;
   await initialSchedule;
@@ -491,7 +491,7 @@ async function requestManualWithdrawal(){
  }
  showWithdrawalMessage("Submitting withdrawal…",false);
  const result=await withdrawalPost("/api/withdrawal/confirm",{token:p.token});showWithdrawalMessage(result.message,false);
- $("interval").value="";$("end").value=localInput(Date.now()+60000);currentPage=1;await loadAnalytics();
+ await loadAnalytics(rangeDraft);
  }catch(e){showWithdrawalMessage(e.message)}
  finally{actionFeedback("withdraw",null,false,false)}
 }
