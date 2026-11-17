@@ -3,13 +3,16 @@
 import csv
 import time
 from bisect import bisect_right
-from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from io import StringIO
 
 import requests
 
 from app.data.activity import bitcoin_activity_records, cache_get_many, cache_put_many
+
+FX_LOOKBACK_DAYS = 7
+SECONDS_PER_DAY = 86_400
 
 
 def decimal_text(value):
@@ -32,21 +35,44 @@ def _usd_eur_rates(rows):
     trade_dates = sorted({_parse_datetime(row).date() for row in usd_rows})
     keys = {day: f"fx:USD:EUR:{day.isoformat()}" for day in trade_dates}
     cached = cache_get_many(list(keys.values()))
-    resolved = {
-        day: Decimal(cached[keys[day]][0]["rate"])
-        for day in trade_dates
-        if keys[day] in cached and time.time() - cached[keys[day]][1] < 86400
-    }
+    now = time.time()
+    resolved = {}
+    fallback = {}
+    for day in trade_dates:
+        if keys[day] not in cached:
+            continue
+        value, updated = cached[keys[day]]
+        try:
+            rate = Decimal(str(value["rate"]))
+            reference = date.fromisoformat(value["referenceDate"])
+        except (InvalidOperation, KeyError, TypeError, ValueError):
+            continue
+        if not rate.is_finite() or rate <= 0 or not 0 <= (day - reference).days <= FX_LOOKBACK_DAYS:
+            continue
+        if not isinstance(updated, (float, int)) or not 0 <= updated <= now:
+            continue
+        if now - updated < SECONDS_PER_DAY:
+            resolved[day] = rate
+            continue
+        # A rate observed during the publication window may still be provisional.
+        trade_midnight = datetime.combine(day, datetime.min.time(), UTC).timestamp()
+        if updated - trade_midnight >= FX_LOOKBACK_DAYS * SECONDS_PER_DAY:
+            fallback[day] = rate
     missing = [day for day in trade_dates if day not in resolved]
     if not missing:
         return resolved
-    start_date = min(missing) - timedelta(days=7)
-    response = requests.get(
-        f"https://api.frankfurter.dev/v1/{start_date.isoformat()}..{max(missing).isoformat()}",
-        params={"base": "USD", "symbols": "EUR"},
-        timeout=15,
-    )
-    response.raise_for_status()
+    start_date = min(missing) - timedelta(days=FX_LOOKBACK_DAYS)
+    try:
+        response = requests.get(
+            f"https://api.frankfurter.dev/v1/{start_date.isoformat()}..{max(missing).isoformat()}",
+            params={"base": "USD", "symbols": "EUR"},
+            timeout=15,
+        )
+        response.raise_for_status()
+    except requests.RequestException:
+        if all(day in fallback for day in missing):
+            return resolved | fallback
+        raise
     rates = {
         datetime.strptime(day, "%Y-%m-%d").date(): Decimal(str(value["EUR"]))
         for day, value in response.json().get("rates", {}).items()
