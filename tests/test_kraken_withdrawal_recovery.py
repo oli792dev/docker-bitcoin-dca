@@ -66,6 +66,7 @@ class KrakenWithdrawalRecoveryTests(unittest.TestCase):
         self.assertTrue(record["manual"])
 
     def test_absent_or_ambiguous_evidence_keeps_the_request_pending(self):
+        self.state["pending_withdrawal_context"]["timestamp_ms"] = self.timestamp * 1000 + 1
         for rows in (
             [],
             [dict(self.history_row, key="other")],
@@ -84,7 +85,6 @@ class KrakenWithdrawalRecoveryTests(unittest.TestCase):
             [self.history_row, dict(self.history_row, key="other")],
         ):
             with self.subTest(rows=rows):
-                self.state["pending_withdrawal_context"]["timestamp_ms"] = self.timestamp * 1000 + 1
                 self.api.private.return_value = rows
                 bot.maybe_withdraw_btc(self.api, self.state, self.settings)
                 self.assertIn("pending_withdrawal", self.state)
@@ -138,7 +138,7 @@ class KrakenWithdrawalRecoveryTests(unittest.TestCase):
         self.settings.update(withdrawals_enabled=True, withdraw_threshold=Decimal("100"))
         self.api.balance = Mock(side_effect=[Decimal(".0045"), Decimal(".005"), Decimal(".004")])
         self.api.price = Mock(return_value=Decimal("81000"))
-        self.api.withdrawal_request = Mock(return_value=self.state["last_withdrawal"] | {"asset": "XBT", "amount": ".0039"})
+        self.api.withdrawal_request = Mock(return_value=dict(asset="XBT", amount=".0039", fee=".0001", key="wallet"))
         self.api.withdraw_btc.side_effect = None
         self.api.withdraw_btc.return_value = {"id": "new-withdrawal"}
         for _ in range(2):
