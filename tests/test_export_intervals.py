@@ -42,7 +42,7 @@ class ExportIntervals(unittest.TestCase):
     def test_withdrawal_api_returns_account_scoped_bounds_without_key_identity(self):
         records = [record('a-first', 2, 'TransferOut'), record('b-first', 5, 'TransferOut'),
                    record('a-second', 8, 'TransferOut')]
-        for item, identity in zip(records, ['secret-fingerprint-a', 'secret-fingerprint-b', 'secret-fingerprint-a']):
+        for item, identity in zip(records, ['secret-fingerprint-a', 'secret-fingerprint-b', 'secret-fingerprint-a'], strict=True):
             item['accountIdentity'] = identity
         buys = [
             {**record('a-buy', 1), 'accountIdentity': 'secret-fingerprint-a'},
@@ -51,17 +51,17 @@ class ExportIntervals(unittest.TestCase):
             {**record('b-unverified', 2), 'accountIdentity': 'secret-fingerprint-b', 'purchaseStatus': 'unverified'},
             {**record('b-other-exchange', 3), 'accountIdentity': 'secret-fingerprint-b', 'exchange': 'BITVAVO'},
         ]
-        activity.append_activity_records(buys)
+        activity.append_activity_records(buys + records)
         handler = object.__new__(web_ui.Handler)
         handler.path = '/api/withdrawals'
         handler.settings = {'exchange':'KRAKEN'}
         handler._require_authentication = lambda: True
         results = []
         handler._json = lambda status, data: results.append(data)
-        with patch.object(web_ui, 'withdrawal_records', return_value=records):
-            handler.do_GET()
-        self.assertEqual([r['startTimestamp'] for r in results[0]], [0, 0, stamp(2)])
-        self.assertEqual([r['analysisStartTimestamp'] for r in results[0]], [stamp(1), stamp(4), stamp(2)])
+        handler.do_GET()
+        scoped = [item for item in results[0] if item['txId'] in {'a-first', 'a-second', 'b-first'}]
+        self.assertEqual([r['startTimestamp'] for r in scoped], [0, 0, stamp(2)])
+        self.assertEqual([r['analysisStartTimestamp'] for r in scoped], [stamp(1), stamp(4), stamp(2)])
         self.assertNotIn('secret-fingerprint', str(results))
         self.assertTrue(all(set(r) == {'timestamp','startTimestamp','analysisStartTimestamp','txId','exchange'} for r in results[0]))
 
@@ -174,6 +174,18 @@ class ExportIntervals(unittest.TestCase):
         ):
             self.assertEqual(list(reporting._usd_eur_rates([purchase]).values()), [Decimal(".95")])
         fetch.assert_called_once()
+
+    def test_fx_response_requires_a_recent_reference_for_each_trade(self):
+        purchases = [
+            {**record("usd", day)["row"], "currency": "USD"} for day in (6, 17)
+        ]
+        response = Mock()
+        response.json.return_value = {"rates": {"2026-10-05": {"EUR": ".95"}}}
+        with (
+            patch.object(reporting.requests, "get", return_value=response),
+            self.assertRaisesRegex(ValueError, "2026-10-17"),
+        ):
+            reporting._usd_eur_rates(purchases)
 
     @staticmethod
     def fx_time(day):
