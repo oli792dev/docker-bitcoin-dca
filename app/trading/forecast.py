@@ -158,25 +158,35 @@ def withdrawal_forecast(
     now: datetime,
 ) -> tuple[str | None, str]:
     """Estimate threshold arrival using validated account and order inputs."""
+    target, description, _ = withdrawal_projection(settings, snapshot, monthly_deposit, now)
+    return target, description
+
+
+def withdrawal_projection(
+    settings: Mapping[str, Any],
+    snapshot: Mapping[str, Any],
+    monthly_deposit: str | Decimal,
+    now: datetime,
+) -> tuple[str | None, str, int | None]:
+    """Return the estimated date, status and purchase count from one projection."""
     global _LAST_INVALID
     if not settings.get("withdrawals_enabled"):
-        return None, "Automatic withdrawals disabled"
+        return None, "Automatic withdrawals disabled", None
     if not settings.get("live"):
-        return None, "Unavailable in simulation mode"
+        return None, "Unavailable in simulation mode", None
     try:
         _, balance, price, threshold = _account_inputs(settings, snapshot, monthly_deposit)
         if balance * price >= threshold:
             _LAST_INVALID = None
-            return now.isoformat(), "Threshold reached; awaiting automatic withdrawal check"
+            return now.isoformat(), "Threshold reached; awaiting automatic withdrawal check", None
         inputs = _forecast_inputs(settings, snapshot, monthly_deposit, now)
     except MissingForecastData:
-        return None, "Waiting for account price and order minimums"
+        return None, "Waiting for account price and order minimums", None
     except (ValueError, DecimalException, OverflowError, ZoneInfoNotFoundError) as exc:
         _invalid_input(exc)
-        return None, "Forecast unavailable: invalid account or order data"
+        return None, "Forecast unavailable: invalid account or order data", None
     _LAST_INVALID = None
-    target, description, _ = _project_forecast(settings, inputs)
-    return target, description
+    return _project_forecast(settings, inputs)
 
 
 def _project_forecast(settings: Mapping[str, Any], inputs: ForecastInputs) -> tuple[str | None, str, int | None]:
@@ -226,7 +236,11 @@ def _project_forecast(settings: Mapping[str, Any], inputs: ForecastInputs) -> tu
 
 
 def forecast_details(
-    settings: Mapping[str, Any], snapshot: Mapping[str, Any], now: datetime | None = None
+    settings: Mapping[str, Any],
+    snapshot: Mapping[str, Any],
+    now: datetime | None = None,
+    *,
+    projected_purchases: int | None = None,
 ) -> dict[str, Any] | None:
     """Reporting-only explanation; never creates or advances a purchase schedule."""
     try:
@@ -244,10 +258,11 @@ def forecast_details(
         remaining = max(Decimal(0), threshold / price - balance)
         purchases = 0
         if remaining:
-            inputs = _forecast_inputs(
-                settings, snapshot, settings.get("expected_monthly_deposit") or "0", now or datetime.now(UTC)
-            )
-            _, _, projected_purchases = _project_forecast(settings, inputs)
+            if projected_purchases is None:
+                inputs = _forecast_inputs(
+                    settings, snapshot, settings.get("expected_monthly_deposit") or "0", now or datetime.now(UTC)
+                )
+                _, _, projected_purchases = _project_forecast(settings, inputs)
             if projected_purchases is None:
                 return None
             purchases = projected_purchases
