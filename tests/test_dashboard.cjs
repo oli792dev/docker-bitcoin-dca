@@ -42,6 +42,7 @@ const context={document:{getElementById:get,createElement:()=>new Element()},loc
   const page=Math.max(1,Math.min(pages,Number(parsed.searchParams.get('page'))||1));
   return response({quote:'EUR',exchange:'KRAKEN',configuration:{displayCurrency:configuredDisplayCurrency,liveTrading:true,buyAmount:0,depositDay:1,withdrawalsEnabled:false,withdrawalThreshold:1000},snapshot:{price:80000,balance:'.045',updatedAt:new Date().toISOString()},depositsByCurrency:{EUR:{count:1,amount:'200'}},summary:{depositCount:1,buyCount:45,boughtBtc:'.045',withdrawnBtc:0,withdrawalCount:0,pendingWithdrawalCount:0,netBtc:'.045'},summaryByCurrency:eurOnly?{EUR:{buyVolume:3600,tradeFees:9,withdrawalFees:0}}:{EUR:{buyVolume:1760,tradeFees:4.4,withdrawalFees:0},USD:{buyVolume:2300,tradeFees:5.75,withdrawalFees:0}},activities:records.slice((page-1)*limit,page*limit),pagination:{page,pageSize:limit,total:45,pages}});
  }
+ if(parsed.pathname==='/api/withdrawal/confirm')return response({message:'Withdrawal submitted.'});
  if(parsed.pathname==='/api/withdrawal/preview')return response({jobId:'fictional-job'});
  if(parsed.pathname==='/api/withdrawal/jobs/fictional-job')return response(++checks===1?{state:'queued'}:{state:'completed',result:{token:'single-use'}});
  throw Error('Unexpected URL '+url);
@@ -343,6 +344,21 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  await dashboardPollCallbacks.at(-1)();
  assert.equal(countRequests('/api/analytics'),analyticsRequests+3,'Fallback valuation does not require reloading the report');
  assert.equal(get('periodValue').textContent,'€4,095.00');
+ const chosenInterval=get('interval').children[1].value;
+ get('interval').value=chosenInterval;get('interval').handlers.change();
+ const selectedStart=get('start').value,selectedEnd=get('end').value;
+ vm.runInContext('currentPage=2;reportThroughNow=false',context);
+ const withdrawalReportFrom=get('reportFrom').value;
+ const submittedAction=context.window.DCA_DASHBOARD_ACTIONS.withdraw();await settle();
+ get('confirmationDialog').close('confirm');await submittedAction;
+ assert.equal(requests.filter(url=>url==='/api/withdrawal/confirm').length,1);
+ assert.equal(get('interval').value,chosenInterval);
+ assert.equal(get('start').value,selectedStart);
+ assert.equal(get('end').value,selectedEnd);
+ assert.equal(get('reportFrom').value,withdrawalReportFrom);
+ const withdrawalReport=new URL(requests.filter(url=>url.startsWith('/api/analytics?')).at(-1),'https://example.test');
+ assert.equal(withdrawalReport.searchParams.get('page'),'2');
+ assert.equal(Number(withdrawalReport.searchParams.get('end')),Date.parse(selectedEnd));
  console.log('Dashboard regressions passed: interval dates, server pages, mixed-currency rows/totals and queued preview polling');
 })().catch(e=>{console.error(e);process.exit(1)});
 
