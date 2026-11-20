@@ -10,7 +10,6 @@ const numberFormats={
  integer:new Intl.NumberFormat(locale),
  minutes:new Intl.NumberFormat(locale,{maximumFractionDigits:1}),
 };
-const relativeTimeFormat=new Intl.RelativeTimeFormat(locale,{numeric:"always"});
 const browserTimeZone=Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC";
 function money(v,c){
  try{
@@ -29,17 +28,6 @@ function dateLabel(ms,timeZone,withZone=false){
  return dateFormats.get(key).format(ms);
 }
 let exchangeBtcBalance=null, balanceDisplayPrice=null, balanceDisplayCurrency=null, displayedMarketUpdatedAt=0;
-function renderMarketAge(){
- const el=$('marketDataAge');
- let text='';
- if(displayedMarketUpdatedAt>0){
-  const seconds=Math.max(0,(Date.now()+scheduleClockOffset)/1000-displayedMarketUpdatedAt);
-  const [unit,duration]=seconds>=86400?['day',86400]:seconds>=3600?['hour',3600]:seconds>=60?['minute',60]:['second',1];
-  const age=relativeTimeFormat.format(-Math.floor(seconds/duration),unit);
-  text=t(seconds>600?'Market data is stale · updated {age}':'Market data updated {age}').replace('{age}',age);
- }
- if(el.textContent!==text)el.textContent=text;
-}
 function renderExchangeBtcValue(){
  $("exchangeBtcValue").textContent=t(exchangeBtcBalance!==null&&balanceDisplayPrice>0&&balanceDisplayCurrency===displayCurrency?money(exchangeBtcBalance*balanceDisplayPrice,displayCurrency):"—");
 }
@@ -111,7 +99,6 @@ async function refreshPurchaseSchedule(){
    balanceDisplayPrice=Number(market.price);balanceDisplayCurrency=market.currency;
    $('spot').textContent=money(market.price,market.currency)+'/BTC';
    displayedMarketUpdatedAt=Number(market.updatedAt)||0;
-   renderMarketAge();
   }
   if(lastReportData&&$('periodReport').ariaBusy!=='true'){
    const market=reportAccountMarket(lastReportData);
@@ -158,7 +145,7 @@ async function refreshPurchaseSchedule(){
  }catch(e){if(request===scheduleRequest){activityRevision=undefined;lastAccountMarket=null;$("botStatusLabel").textContent=t("Connection unavailable; showing previous values");updateStatusLight("error")}}
  finally{if(request===scheduleRequest){clearTimeout(scheduleRefreshTimer);scheduleRefreshTimer=setTimeout(refreshDashboard,dashboardRefreshSeconds*1000)}}
 }
-setInterval(()=>{renderPurchaseCountdown();renderMarketAge()},1000);
+setInterval(renderPurchaseCountdown,1000);
 
 function showError(message){$("error").textContent=t(message||"");$("error").classList.toggle("hidden",!message)}
 function logUiEvent(event){
@@ -398,7 +385,6 @@ function updateReportMarket(d,market,newReport=false){
  const ratesChanged=market.currency!==previous?.currency||JSON.stringify(market.rates)!==JSON.stringify(previous?.rates);
  lastReportMarket=market;
  displayedMarketUpdatedAt=market.price>0?market.updatedAt:0;
- renderMarketAge();
  if(!newReport&&!ratesChanged&&market.price===previous?.price)return;
  displayCurrency=market.currency;activityRates=market.rates;
  balanceDisplayPrice=market.price;balanceDisplayCurrency=displayCurrency;renderExchangeBtcValue();

@@ -468,8 +468,6 @@
   "CSV export prepared.": "CSV-Export vorbereitet.",
   "Exchange last checked {date}": "Börse zuletzt geprüft: {date}",
   "Choose dates or a cycle ending at a confirmed withdrawal.": "Wähle eigene Datumsangaben oder einen Zyklus bis zu einer bestätigten Auszahlung.",
-  "Market data updated {age}": "Marktdaten aktualisiert: {age}",
-  "Market data is stale · updated {age}": "Marktdaten sind veraltet · aktualisiert: {age}",
   "Apply period": "Zeitraum übernehmen",
   "Automatic withdrawal disabled": "Automatische Auszahlung deaktiviert",
   "Available fiat balance": "Verfügbares Fiatguthaben",

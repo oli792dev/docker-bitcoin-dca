@@ -336,12 +336,10 @@ const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate)};
  await dashboardPollCallbacks.at(-1)();
  assert.equal(get('periodValue').textContent,'€3,690.00','Price changes still update the report');
  assert.equal(get('activities').children,renderedRows,'BTC spot price does not change historical activity cells');
- assert.match(get('marketDataAge').textContent,/Market data updated/);
- vm.runInContext('scheduleClockOffset=displayedMarketUpdatedAt*1000-Date.now()+650000;renderMarketAge()',context);
- assert.match(get('marketDataAge').textContent,/Market data is stale.*1[01] minutes ago/);
+ assert(!html.includes('id="marketDataAge"'));
  scheduleMarket={...scheduleMarket,updatedAt:scheduleMarket.updatedAt+1};
  await dashboardPollCallbacks.at(-1)();
- assert.match(get('marketDataAge').textContent,/Market data updated/,'An identical price and rates with fresh timestamps clear the stale notice');
+ assert.equal(vm.runInContext('displayedMarketUpdatedAt',context),scheduleMarket.updatedAt,'Fresh timestamps are retained when rates and prices stay the same');
  const currentScheduleMarket=scheduleMarket;
  scheduleMarket={...scheduleMarket,price:'99000',updatedAt:scheduleMarket.updatedAt+2,conversionRatesUpdatedAt:{EUR:scheduleMarket.updatedAt+2,USD:scheduleMarket.updatedAt-1}};
  await dashboardPollCallbacks.at(-1)();
@@ -447,8 +445,6 @@ assert.match(vm.runInContext("money(1234.5,'EUR')",germanContext),/1\.234,50/);
 assert.equal(vm.runInContext("btc('.00006')",germanContext),'0,00006 BTC');
 assert.equal(vm.runInContext('activityRows[0].type',germanContext),'Buy');
 assert.equal(vm.runInContext('activityRows[0].currency',germanContext),'EUR');
-vm.runInContext('displayedMarketUpdatedAt=Date.now()/1000-700;renderMarketAge()',germanContext);
-assert.match(germanElements.marketDataAge.textContent,/Marktdaten sind veraltet.*vor 11 Minuten/);
 console.log('German dashboard passed: labels, pagination, numbers and stable ledger values');
 
 
